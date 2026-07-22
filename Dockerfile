@@ -15,14 +15,15 @@ COPY alembic.ini ./
 COPY data ./data
 COPY run_bot.py ./
 COPY docker-entrypoint.sh ./
+COPY docker-run-bot.sh ./
 
-RUN sed -i 's/\r$//' /app/docker-entrypoint.sh
+RUN sed -i 's/\r$//' /app/docker-entrypoint.sh /app/docker-run-bot.sh
 
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir .
 
 RUN mkdir -p /app/data_csv /app/data /app/.mplconfig && chown -R mergen:mergen /app \
-    && chmod +x /app/docker-entrypoint.sh
+    && chmod +x /app/docker-entrypoint.sh /app/docker-run-bot.sh
 
 ENV MPLCONFIGDIR=/app/.mplconfig
 

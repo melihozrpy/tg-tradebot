@@ -29,7 +29,7 @@ services:
 
   bot:
     build: .
-    restart: "on-failure:5"
+    restart: unless-stopped
     environment:
       DATABASE_URL: sqlite:////app/data/mergen_quant.db
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
@@ -47,15 +47,7 @@ services:
     volumes:
       - mergen_data:/app/data
       - ./data_csv:/app/data_csv:ro
-    command:
-      - sh
-      - -c
-      - |
-        if [ -z "$$TELEGRAM_BOT_TOKEN" ] || [ "$$TELEGRAM_BOT_TOKEN" = "your_bot_token_here" ]; then
-          echo "TELEGRAM_BOT_TOKEN missing. Set it in Coolify Environment Variables."
-          exit 78
-        fi
-        python run_bot.py
+    command: ["/app/docker-run-bot.sh"]
     depends_on:
       - api
 
