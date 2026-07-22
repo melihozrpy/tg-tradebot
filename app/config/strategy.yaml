@@ -1,0 +1,33 @@
+strategy:
+  name: mergen_quant_v1
+  version: "1.0.0"
+
+timeframes:
+  primary: 1d
+  trend: 1d
+  entry: 1d
+
+thresholds:
+  strong_buy_score: 85
+  buy_score: 75
+  watch_score: 65
+  risk_reduce_score: 35
+  sell_risk_score: 20
+  minimum_relative_volume: 1.4
+  minimum_risk_reward: 2.0
+  signal_cooldown_minutes: 120
+
+risk:
+  risk_per_trade_percent: 0.75
+  maximum_daily_loss_percent: 2.0
+  maximum_open_positions: 5
+  maximum_sector_exposure_percent: 30
+  maximum_single_position_percent: 20
+  atr_stop_multiplier: 2.0
+
+filters:
+  require_closed_candle: true
+  require_volume_confirmation: true
+  require_market_regime_confirmation: true
+  allow_averaging_down: false
+  allow_signals_on_stale_data: false

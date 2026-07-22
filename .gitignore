@@ -1,0 +1,45 @@
+# Local secrets and runtime state
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.so
+
+# Databases and user data
+*.db
+*.sqlite
+*.sqlite3
+*.db-*
+*.backup
+*.bak
+
+# Caches, logs and generated charts
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+cache/
+data/cache/
+*.log
+logs/
+*.png
+*.jpg
+*.jpeg
+
+# Build/release output
+*.egg-info/
+build/
+dist/
+release/
+*.zip
+*.sha256
+
+# Local IDE/OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

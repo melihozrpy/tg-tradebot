@@ -1,0 +1,16 @@
+symbols:
+  THYAO:
+    sector_name: Ulastirma
+    sector_index: XULAS.IS
+  TUPRS:
+    sector_name: Kimya Petrol Plastik
+    sector_index: XKMYA.IS
+  SVGYO:
+    sector_name: Gayrimenkul Yatirim Ortakligi
+    sector_index: XGMYO.IS
+  ASELS:
+    sector_name: Metal Ana Sanayi
+    sector_index: XMANA.IS
+  TESTSYM:
+    sector_name: Test Sektörü
+    sector_index: TESTSEC.IS

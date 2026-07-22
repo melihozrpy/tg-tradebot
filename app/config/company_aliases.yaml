@@ -1,0 +1,57 @@
+# MERGEN QUANT V3 - Asama 4: Sirket adi / alternatif isim eslestirme tablosu.
+#
+# GDELT haber aramasi YALNIZCA hisse kodu ile YAPILMAZ (GDELT hisse kodlarini
+# genellikle taniamaz); bunun yerine burada tanimlanan sirket adi ve alternatif
+# isimler (Turkce/Ingilizce, kisaltma, eski unvan vb.) kullanilir.
+#
+# Bir sembol icin burada kayit yoksa, o sembol icin haber aramasi YAPILMAZ ve
+# "sirket eslestirmesi bulunamadi" olarak islenir (asla tahmini/uydurma isimle
+# arama yapilmaz).
+symbols:
+  THYAO:
+    company_name: "Turk Hava Yollari"
+    aliases:
+      - "Turkish Airlines"
+      - "THY"
+      - "Türk Hava Yolları"
+  TUPRS:
+    company_name: "Tupras"
+    aliases:
+      - "Türkiye Petrol Rafinerileri"
+      - "Tüpraş"
+  SVGYO:
+    company_name: "Self Gayrimenkul Yatirim Ortakligi"
+    aliases:
+      - "Self Gayrimenkul"
+      - "Self GYO"
+  ASELS:
+    company_name: "Aselsan"
+    aliases:
+      - "ASELSAN Elektronik Sanayi"
+  GARAN:
+    company_name: "Garanti BBVA"
+    aliases:
+      - "Garanti Bankasi"
+      - "Turkiye Garanti Bankasi"
+  AKBNK:
+    company_name: "Akbank"
+    aliases:
+      - "Akbank T.A.S."
+  EREGL:
+    company_name: "Eregli Demir Celik"
+    aliases:
+      - "Erdemir"
+      - "Ereğli Demir Çelik"
+  BIMAS:
+    company_name: "BIM Magazalar"
+    aliases:
+      - "BİM Birleşik Mağazalar"
+      - "BIM Stores"
+  SASA:
+    company_name: "Sasa Polyester"
+    aliases:
+      - "SASA Polyester Sanayi"
+  KCHOL:
+    company_name: "Koc Holding"
+    aliases:
+      - "Koç Holding"

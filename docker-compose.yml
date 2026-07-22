@@ -1,0 +1,63 @@
+services:
+  api:
+    build: .
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: sqlite:////app/data/mergen_quant.db
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      ADMIN_TELEGRAM_USER_IDS: ${ADMIN_TELEGRAM_USER_IDS:-}
+      TELEGRAM_MODE: ${TELEGRAM_MODE:-polling}
+      APP_ENV: ${APP_ENV:-production}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      MARKET_DATA_PROVIDER: ${MARKET_DATA_PROVIDER:-yfinance}
+      XU100_SYMBOL: ${XU100_SYMBOL:-XU100.IS}
+      CLOSE_SCAN_ENABLED: ${CLOSE_SCAN_ENABLED:-false}
+      GDELT_ENABLED: ${GDELT_ENABLED:-true}
+      GROQ_ENABLED: ${GROQ_ENABLED:-false}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      TIMEZONE_NAME: ${TIMEZONE_NAME:-Europe/Istanbul}
+    expose:
+      - "8000"
+    volumes:
+      - mergen_data:/app/data
+      - ./data_csv:/app/data_csv:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  bot:
+    build: .
+    restart: "on-failure:5"
+    environment:
+      DATABASE_URL: sqlite:////app/data/mergen_quant.db
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      ADMIN_TELEGRAM_USER_IDS: ${ADMIN_TELEGRAM_USER_IDS:-}
+      TELEGRAM_MODE: ${TELEGRAM_MODE:-polling}
+      APP_ENV: ${APP_ENV:-production}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      MARKET_DATA_PROVIDER: ${MARKET_DATA_PROVIDER:-yfinance}
+      XU100_SYMBOL: ${XU100_SYMBOL:-XU100.IS}
+      CLOSE_SCAN_ENABLED: ${CLOSE_SCAN_ENABLED:-false}
+      GDELT_ENABLED: ${GDELT_ENABLED:-true}
+      GROQ_ENABLED: ${GROQ_ENABLED:-false}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      TIMEZONE_NAME: ${TIMEZONE_NAME:-Europe/Istanbul}
+    volumes:
+      - mergen_data:/app/data
+      - ./data_csv:/app/data_csv:ro
+    command:
+      - sh
+      - -c
+      - |
+        if [ -z "$$TELEGRAM_BOT_TOKEN" ] || [ "$$TELEGRAM_BOT_TOKEN" = "your_bot_token_here" ]; then
+          echo "TELEGRAM_BOT_TOKEN missing. Set it in Coolify Environment Variables."
+          exit 78
+        fi
+        python run_bot.py
+    depends_on:
+      - api
+
+volumes:
+  mergen_data:

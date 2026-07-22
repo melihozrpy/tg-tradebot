@@ -1,0 +1,10 @@
+# BIST piyasa kurallari (FAZ 1 icin sabit degerler; FAZ 2+ de dinamik hale getirilebilir)
+market:
+  timezone: Europe/Istanbul
+  session_open: "10:00"
+  session_close: "18:00"
+  lot_step: 1
+  price_tick: 0.01
+
+circuit_breaker:
+  daily_price_limit_percent: 10.0

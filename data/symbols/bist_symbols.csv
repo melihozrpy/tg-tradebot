@@ -1,0 +1,11 @@
+symbol,company_name,sector_name,sector_index,active
+THYAO,Turk Hava Yollari,Ulastirma,XULAS.IS,true
+TUPRS,Tupras,Kimya Petrol Plastik,XKMYA.IS,true
+SVGYO,Self Gayrimenkul,Gayrimenkul Yatirim Ortakligi,XGMYO.IS,true
+ASELS,Aselsan,Metal Ana Sanayi,XMANA.IS,true
+GARAN,Garanti BBVA,Bankacilik,XBANK.IS,true
+AKBNK,Akbank,Bankacilik,XBANK.IS,true
+EREGL,Eregli Demir Celik,Metal Ana Sanayi,XMANA.IS,true
+BIMAS,BIM Magazalar,Ticaret,XTCRT.IS,true
+SASA,Sasa Polyester,Kimya Petrol Plastik,XKMYA.IS,true
+KCHOL,Koc Holding,Holding ve Yatirim,XHOLD.IS,true
