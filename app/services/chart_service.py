@@ -745,8 +745,8 @@ def generate_bist_trade_plan_chart(df: pd.DataFrame, plan) -> str:
         raise ValueError("Grafik için OHLCV verisi boş.")
 
     settings, _ = _chart_settings()
-    background, panel, grid = "#071019", "#0b1520", "#233140"
-    foreground, bullish, bearish = "#d9e5ef", "#00e5a8", "#ff3b69"
+    background, panel, grid = "#040910", "#08131e", "#203448"
+    foreground, bullish, bearish = "#e8f3ff", "#00f5a0", "#ff2d55"
     fig, ax = plt.subplots(figsize=(14, 8), facecolor=background)
     ax.set_facecolor(panel)
     ax.grid(True, color=grid, linewidth=.55, alpha=.52)
@@ -770,6 +770,17 @@ def generate_bist_trade_plan_chart(df: pd.DataFrame, plan) -> str:
             f"  LONG {plan.long.entry_low:.2f}–{plan.long.entry_high:.2f}", color=bullish, fontsize=7, va="center")
     ax.text(1, (plan.short.entry_low + plan.short.entry_high) / 2,
             f"  SHORT {plan.short.entry_low:.2f}–{plan.short.entry_high:.2f}", color=bearish, fontsize=7, va="center")
+
+    buy_price, sell_price = float(plan.long.trigger), float(plan.short.trigger)
+    marker_x = max(len(data) - 22, 1)
+    ax.annotate(f"AL  {buy_price:.2f} TL", xy=(marker_x, buy_price), xytext=(-8, -34),
+                textcoords="offset points", color="#03120c", fontsize=9, fontweight="bold",
+                bbox=dict(boxstyle="round,pad=.42", facecolor=bullish, edgecolor="#7dffd1", linewidth=1.2),
+                arrowprops=dict(arrowstyle="-|>", color=bullish, linewidth=1.7), zorder=15)
+    ax.annotate(f"SAT  {sell_price:.2f} TL", xy=(marker_x + 5, sell_price), xytext=(8, 34),
+                textcoords="offset points", color="#fff4f6", fontsize=9, fontweight="bold",
+                bbox=dict(boxstyle="round,pad=.42", facecolor=bearish, edgecolor="#ff8aa0", linewidth=1.2),
+                arrowprops=dict(arrowstyle="-|>", color=bearish, linewidth=1.7), zorder=15)
 
     from app.analysis.smart_money_engine import detect_smart_money
     smart = detect_smart_money(data)
@@ -807,7 +818,7 @@ def generate_bist_trade_plan_chart(df: pd.DataFrame, plan) -> str:
             transform=ax.transAxes, color="#91a4b7", fontsize=8)
     ax.legend(loc="upper right", fontsize=7, ncol=3, facecolor=panel, edgecolor=grid, labelcolor=foreground)
     _format_trading_axis(ax, data, right_margin=14)
-    fig.text(.012, .012, "MERGEN QUANT • Teknik senaryo • Yatırım tavsiyesi değildir",
+    fig.text(.012, .012, "MONTANA MELİH HİSSE BOT • Teknik senaryo • Yatırım tavsiyesi değildir",
              color="#60758a", fontsize=7)
     fig.subplots_adjust(left=.035, right=.93, top=.91, bottom=.09)
     out_path = os.path.join(tempfile.gettempdir(), f"bist_tv_{plan.symbol}_{uuid.uuid4().hex[:8]}.png")
