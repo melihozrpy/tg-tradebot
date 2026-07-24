@@ -421,6 +421,40 @@ async def _send_analysis_chart(
             delete_chart_file(chart_path)
 
 
+async def cmd_islemplani(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """BIST icin kosullu long/short, TP1-TP5 ve katmanli SL haritasi."""
+    if await _reject_unauthorized(update):
+        return
+    if not context.args:
+        await update.message.reply_text("Kullanım: /islemplani THYAO")
+        return
+    from app.analysis.bist_trade_plan import build_bist_trade_plan, format_bist_trade_plan
+    from app.services.chart_service import delete_chart_file, generate_bist_trade_plan_chart
+
+    symbol = context.args[0].strip().upper().removesuffix(".IS")
+    provider = build_market_data_provider(get_settings())
+    chart_path = None
+    try:
+        end = datetime.now(timezone.utc)
+        df = await asyncio.to_thread(provider.get_ohlcv, symbol, "1d", end - timedelta(days=520), end)
+        plan = await asyncio.to_thread(build_bist_trade_plan, df, symbol)
+        chart_path = await asyncio.to_thread(generate_bist_trade_plan_chart, df, plan)
+        with open(chart_path, "rb") as image:
+            await update.message.reply_photo(
+                photo=image,
+                caption=f"📈 {symbol} • Long/Short işlem haritası • TP1–TP5 • Çok katmanlı SL",
+            )
+        await update.message.reply_text(format_bist_trade_plan(plan))
+    except (DataUnavailableError, ValueError) as exc:
+        await update.message.reply_text(f"⚠️ İşlem planı üretilemedi: {exc}")
+    except Exception as exc:  # noqa: BLE001 - komut botu dusurmemeli
+        logger.exception("Islem plani hatasi symbol=%s", symbol)
+        await update.message.reply_text(f"⚠️ İşlem planı geçici olarak üretilemedi: {exc}")
+    finally:
+        if chart_path:
+            delete_chart_file(chart_path)
+
+
 def _current_user(db, update: Update):
     settings = get_settings()
     return get_or_create_user(
