@@ -66,6 +66,8 @@ def build_telegram_application() -> Application:
     application.add_handler(CommandHandler("haber_detay", handlers_v3.cmd_haber_detay))
     application.add_handler(CommandHandler("haber_radari", handlers_v3.cmd_haber_radari))
     application.add_handler(CommandHandler("ai_aciklama", handlers_v3.cmd_ai_aciklama))
+    application.add_handler(CommandHandler("sirket", handlers_v3.cmd_sirket))
+    application.add_handler(CommandHandler("kap", handlers_v3.cmd_kap))
     application.add_handler(CommandHandler("skor_detay", handlers_v3.cmd_skor_detay))
 
     # ---- V3: Sektor ----
@@ -100,6 +102,8 @@ def build_telegram_application() -> Application:
 
     # ---- V3: Alarmlar ----
     application.add_handler(CommandHandler("alarm_kur", handlers_v3.cmd_alarm_kur))
+    application.add_handler(CommandHandler("alarm", handlers_v3.cmd_alarm))
+    application.add_handler(CommandHandler("alarm_test", handlers_v3.cmd_alarm_test))
     application.add_handler(CommandHandler("alarmlar", handlers_v3.cmd_alarmlar))
     application.add_handler(CommandHandler("alarm_sil", handlers_v3.cmd_alarm_sil))
     application.add_handler(CommandHandler("alarm_durdur", handlers_v3.cmd_alarm_durdur))

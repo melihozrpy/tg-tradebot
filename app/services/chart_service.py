@@ -766,8 +766,25 @@ def generate_bist_trade_plan_chart(df: pd.DataFrame, plan) -> str:
 
     ax.axhspan(plan.long.entry_low, plan.long.entry_high, color=bullish, alpha=.11)
     ax.axhspan(plan.short.entry_low, plan.short.entry_high, color=bearish, alpha=.10)
-    ax.text(1, (plan.long.entry_low + plan.long.entry_high) / 2, "  LONG BÖLGESİ", color=bullish, fontsize=7, va="center")
-    ax.text(1, (plan.short.entry_low + plan.short.entry_high) / 2, "  SHORT BÖLGESİ", color=bearish, fontsize=7, va="center")
+    ax.text(1, (plan.long.entry_low + plan.long.entry_high) / 2,
+            f"  LONG {plan.long.entry_low:.2f}–{plan.long.entry_high:.2f}", color=bullish, fontsize=7, va="center")
+    ax.text(1, (plan.short.entry_low + plan.short.entry_high) / 2,
+            f"  SHORT {plan.short.entry_low:.2f}–{plan.short.entry_high:.2f}", color=bearish, fontsize=7, va="center")
+
+    from app.analysis.smart_money_engine import detect_smart_money
+    smart = detect_smart_money(data)
+    for zone in smart.fvg:
+        color = "#00b8ff" if zone.direction == "bullish" else "#ff8a3d"
+        ax.axhspan(zone.low, zone.high, xmin=max(zone.index / len(data), 0), xmax=1, color=color, alpha=.045)
+        ax.text(zone.index, (zone.low + zone.high) / 2, "FVG", color=color, fontsize=5.5, alpha=.8)
+    for zone in smart.order_blocks:
+        color = bullish if zone.direction == "bullish" else bearish
+        ax.axhspan(zone.low, zone.high, xmin=max(zone.index / len(data), 0), xmax=1, color=color, alpha=.06)
+        ax.text(zone.index, (zone.low + zone.high) / 2, "OB", color=color, fontsize=5.5, alpha=.85)
+    for event in smart.structure:
+        color = bullish if event.direction == "bullish" else bearish
+        ax.scatter(event.index, event.price, marker="^" if event.direction == "bullish" else "v", s=18, color=color, zorder=9)
+        ax.text(event.index, event.price, f" {event.kind}", color=color, fontsize=5.5, va="bottom")
 
     preferred = plan.long if plan.long.score >= plan.short.score else plan.short
     direction_color = bullish if preferred.direction == "LONG" else bearish

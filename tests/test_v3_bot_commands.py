@@ -39,3 +39,9 @@ def test_stage5_seviyeler_command_is_registered():
     application = build_telegram_application()
     commands = _all_registered_commands(application)
     assert "seviyeler" in commands
+
+
+def test_simple_alarm_company_and_kap_commands_are_registered():
+    application = build_telegram_application()
+    commands = _all_registered_commands(application)
+    assert {"alarm", "alarm_test", "sirket", "kap"}.issubset(commands)
