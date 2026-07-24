@@ -2812,3 +2812,87 @@ async def handle_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             await query.message.reply_text("Bu bölüm için /yardim menüsünü kullanabilirsin.")
         return
     await query.message.reply_text("Bu seçenek bulunamadı. /yardim yazabilirsin.")
+
+
+async def cmd_alarm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Örnek: /alarm 9.20 THYAO ASELS TUPRS ses=zil"""
+    if await _reject_unauthorized(update):
+        return
+    if len(context.args) < 2:
+        await update.message.reply_text(
+            "🔔 Basit fiyat alarmı\n\n"
+            "Tek hisse: /alarm 9.20 THYAO\n"
+            "Çoklu: /alarm 9.20 THYAO ASELS TUPRS\n"
+            "Ses: ses=zil, ses=radar veya ses=acil\n"
+            "Tek seferde en fazla 60 hisse eklenebilir."
+        )
+        return
+    try:
+        target = float(context.args[0].replace(",", "."))
+        if target <= 0:
+            raise ValueError
+    except ValueError:
+        await update.message.reply_text("Fiyat geçerli ve sıfırdan büyük olmalı. Örnek: /alarm 9.20 THYAO")
+        return
+    from app.services.alarm_sound_service import normalize_sound
+    sound_arg = next((item.split("=", 1)[1] for item in context.args[1:] if item.casefold().startswith("ses=")), "zil")
+    sound = normalize_sound(sound_arg)
+    symbols = [item.strip().upper().removesuffix(".IS") for item in context.args[1:] if not item.casefold().startswith("ses=")]
+    symbols = list(dict.fromkeys(symbols))
+    if not symbols or len(symbols) > 60 or any(not symbol.isalnum() or len(symbol) > 12 for symbol in symbols):
+        await update.message.reply_text("1–60 arasında geçerli BIST sembolü girmelisin.")
+        return
+    db = _get_db()
+    try:
+        user = _current_user(db, update)
+        created = [create_alert(db, user, symbol, "fiyat", target, sound, cooldown_minutes=1440) for symbol in symbols]
+        preview = ", ".join(alert.symbol for alert in created[:12])
+        suffix = f" ve {len(created) - 12} hisse daha" if len(created) > 12 else ""
+        await update.message.reply_text(
+            f"✅ {len(created)} alarm kuruldu\n"
+            f"Hedef: {target:.2f} TL\nSes: {sound}\n"
+            f"Hisseler: {preview}{suffix}\n\n"
+            "Her hisse hedefe geldiğinde bağımsız bildirim ve ses gönderilir."
+        )
+    finally:
+        db.close()
+
+
+async def cmd_alarm_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if await _reject_unauthorized(update):
+        return
+    from app.services.alarm_sound_service import normalize_sound, send_alarm
+    sound = normalize_sound(context.args[0] if context.args else "zil")
+    await send_alarm(update.get_bot(), update.effective_chat.id, f"🔔 Alarm testi başarılı • Ses: {sound}", sound)
+
+
+async def cmd_sirket(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if await _reject_unauthorized(update):
+        return
+    if not context.args:
+        await update.message.reply_text("Kullanım: /sirket THYAO")
+        return
+    from app.services.company_analysis_service import analyze_company, format_company_analysis
+    try:
+        result = await asyncio.to_thread(analyze_company, context.args[0])
+        await update.message.reply_text(format_company_analysis(result), disable_web_page_preview=True)
+    except Exception as exc:  # noqa: BLE001
+        await update.message.reply_text(f"Şirket temel analizi alınamadı: {exc}")
+
+
+async def cmd_kap(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if await _reject_unauthorized(update):
+        return
+    if not context.args:
+        await update.message.reply_text("Kullanım: /kap THYAO")
+        return
+    from urllib.parse import quote
+    symbol = context.args[0].strip().upper().removesuffix(".IS")
+    url = f"https://www.kap.org.tr/tr/search/{quote(symbol)}/1"
+    await update.message.reply_text(
+        f"📣 {symbol} KAP BİLDİRİMLERİ\n\n"
+        f"Resmî KAP araması: {url}\n\n"
+        "Bot içi otomatik KAP akışı henüz aktif değil. Resmî KAP REST Veri Yayın Servisi, "
+        "Borsa İstanbul ile entegrasyon ve yetkilendirme gerektirir; erişim bilgileri verilmeden bildirim uydurulmaz.",
+        disable_web_page_preview=True,
+    )

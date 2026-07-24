@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.models.database import AlertEvent, PriceAlert, User
 
-VALID_ALERT_TYPES = {"ust", "alt", "hacim", "skor", "skor_altinda", "sinyal", "rejim", "rg", "anomali"}
+VALID_ALERT_TYPES = {"fiyat", "ust", "alt", "hacim", "skor", "skor_altinda", "sinyal", "rejim", "rg", "anomali"}
 
 
 class InvalidAlertError(Exception):
@@ -86,7 +86,12 @@ def evaluate_alert(
     triggered = False
     message = None
 
-    if alert.alert_type == "ust" and current_price is not None and alert.threshold_value is not None:
+    if alert.alert_type == "fiyat" and current_price is not None and alert.threshold_value is not None:
+        tolerance = max(alert.threshold_value * 0.004, 0.02)
+        if abs(current_price - alert.threshold_value) <= tolerance:
+            triggered = True
+            message = f"🔔 {alert.symbol} hedef fiyata geldi: {current_price:.2f} TL (alarm {alert.threshold_value:.2f} TL)."
+    elif alert.alert_type == "ust" and current_price is not None and alert.threshold_value is not None:
         if current_price >= alert.threshold_value:
             triggered = True
             message = f"{alert.symbol}: fiyat {alert.threshold_value} direnc seviyesinin ustunde kapandi ({current_price})."

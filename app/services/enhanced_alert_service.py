@@ -25,6 +25,7 @@ from app.models.database import (
     EnhancedAlarmRule,
     EnhancedAlarmTriggerEvent,
     NewsImpactSnapshot,
+    PriceAlert,
     User,
 )
 
@@ -814,6 +815,9 @@ async def scan_enhanced_alarms(application, db: Session, provider, settings) -> 
     by_symbol: dict[str, list[EnhancedAlarmRule]] = {}
     for rule in rules:
         by_symbol.setdefault(rule.symbol, []).append(rule)
+    simple_alerts = db.query(PriceAlert).filter(PriceAlert.is_active.is_(True)).all()
+    for alert in simple_alerts:
+        by_symbol.setdefault(alert.symbol, [])
     sent = 0
     for symbol, symbol_rules in by_symbol.items():
         try:
@@ -829,6 +833,20 @@ async def scan_enhanced_alarms(application, db: Session, provider, settings) -> 
                 allow_provider_calls=False,
             )
             current_price = price_context.current_price or float(daily_complete.iloc[-1]["close"])
+            # Basit fiyat alarmları da aynı scheduler içinde, sembol bazında bağımsız çalışır.
+            from app.services.alert_service import evaluate_alert
+            from app.services.alarm_sound_service import send_alarm
+            for price_alert in (alert for alert in simple_alerts if alert.symbol == symbol):
+                message = evaluate_alert(db, price_alert, current_price=current_price)
+                if message is None or application is None:
+                    continue
+                user = db.query(User).filter(User.id == price_alert.user_id).first()
+                if user is not None:
+                    await send_alarm(
+                        application.bot, user.telegram_user_id, message,
+                        sound=price_alert.threshold_text or "zil",
+                    )
+                    sent += 1
             levels = compute_timeframe_levels(daily_complete, current_price)
             supports, resistances = find_confluence_zones(levels, current_price)
             snapshot = compute_technical_snapshot(daily_complete, symbol, "1d")
