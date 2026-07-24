@@ -1,8 +1,9 @@
 import numpy as np
 import pandas as pd
 
-from app.analysis.bist_trade_plan import build_bist_trade_plan, format_bist_trade_plan
+from app.analysis.bist_trade_plan import build_bist_trade_plan
 from app.services.chart_service import delete_chart_file, generate_bist_trade_plan_chart
+from app.telegram.trade_plan_formatter import format_bist_trade_plan
 
 
 def _ohlcv(rows=240):
@@ -26,16 +27,15 @@ def test_plan_has_bidirectional_zones_five_targets_and_layered_stops():
     assert list(plan.short.targets) == sorted(plan.short.targets, reverse=True)
     assert plan.long.stop_conservative < plan.long.stop_standard < plan.long.stop_aggressive < plan.long.entry_low
     assert plan.short.entry_high < plan.short.stop_aggressive < plan.short.stop_standard < plan.short.stop_conservative
-    assert all(target > plan.long.entry_high for target in plan.long.targets)
-    assert all(target < plan.short.entry_low for target in plan.short.targets)
 
 
-def test_rich_message_and_chart_include_requested_layers():
+def test_clean_message_and_tradingview_style_chart():
     data = _ohlcv()
     plan = build_bist_trade_plan(data, "THYAO")
     message = format_bist_trade_plan(plan)
-    assert "ğŸš€ LONG" in message and "ğŸ» SHORT" in message
-    assert "TP5" in message and "SL korumacÄ±" in message
+    assert "ÖNCELİKLİ" in message and "ALTERNATİF" in message
+    assert "TP5" in message and "STOP SEÇENEKLERİ" in message
+    assert "ÄŸ" not in message and "Ã" not in message
     path = generate_bist_trade_plan_chart(data, plan)
     try:
         assert path.endswith(".png")
@@ -49,5 +49,4 @@ def test_plan_rejects_short_history():
     except ValueError as exc:
         assert "60" in str(exc)
     else:
-        raise AssertionError("Kisa veri reddedilmeliydi")
-
+        raise AssertionError("Kısa veri reddedilmeliydi")

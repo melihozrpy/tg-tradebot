@@ -428,7 +428,8 @@ async def cmd_islemplani(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     if not context.args:
         await update.message.reply_text("Kullanım: /islemplani THYAO")
         return
-    from app.analysis.bist_trade_plan import build_bist_trade_plan, format_bist_trade_plan
+    from app.analysis.bist_trade_plan import build_bist_trade_plan
+    from app.telegram.trade_plan_formatter import format_bist_trade_plan
     from app.services.chart_service import delete_chart_file, generate_bist_trade_plan_chart
 
     symbol = context.args[0].strip().upper().removesuffix(".IS")
@@ -2733,3 +2734,81 @@ async def cmd_uzungrafik(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 delete_chart_file(path)
         finally:
             db.close()
+
+
+# UTF-8 uyumlu, sade ana panel. Modül sonunda tanımlanarak eski sürümün yerini alır.
+async def cmd_start_v3(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if await _reject_unauthorized(update):
+        return
+    keyboard = [
+        [InlineKeyboardButton("📊 Hisse Analizi", callback_data="menu_analiz"),
+         InlineKeyboardButton("🗺️ İşlem Planı", callback_data="menu_islemplani")],
+        [InlineKeyboardButton("⭐ İzleme Listem", callback_data="menu_liste"),
+         InlineKeyboardButton("🔎 Piyasa Tarama", callback_data="menu_tara")],
+        [InlineKeyboardButton("💼 Portföy", callback_data="menu_portfoy"),
+         InlineKeyboardButton("🎯 Aktif Sinyaller", callback_data="menu_sinyaller")],
+        [InlineKeyboardButton("🌍 Piyasa Özeti", callback_data="menu_piyasa"),
+         InlineKeyboardButton("⚙️ Ayarlar", callback_data="menu_ayarlar")],
+    ]
+    await update.message.reply_text(
+        "🏹 MERGEN QUANT\n"
+        "BIST Analiz ve Risk Asistanı\n\n"
+        "Bir hisseyi incelemek için:\n"
+        "• /analiz THYAO — kısa analiz\n"
+        "• /islemplani THYAO — giriş, stop ve TP1–TP5\n\n"
+        "Aşağıdan bir bölüm seçebilirsin.\n"
+        "ℹ️ Çıktılar teknik senaryodur; yatırım tavsiyesi değildir.",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
+
+
+def _analysis_action_keyboard(symbol: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🗺️ İşlem Planı", callback_data=f"menu_plan_{symbol}"),
+         InlineKeyboardButton("📋 Detaylı Analiz", callback_data=f"detay_{symbol}")],
+        [InlineKeyboardButton("🧱 Destek / Direnç", callback_data=f"menu_stage5e_seviyeler_{symbol}"),
+         InlineKeyboardButton("⏱️ Çoklu Zaman", callback_data=f"menu_stage5e_coklu_{symbol}")],
+        [InlineKeyboardButton("Standart Grafik", callback_data=f"menu_stage5e_grafik_{symbol}"),
+         InlineKeyboardButton("Detaylı Grafik", callback_data=f"menu_stage5e_detaygrafik_{symbol}")],
+        [InlineKeyboardButton("🔔 Alarm Kur", callback_data=f"menu_stage5e_alarm_{symbol}"),
+         InlineKeyboardButton("💼 Portföye Ekle", callback_data=f"menu_stage5e_portfoy_{symbol}")],
+    ])
+
+
+async def handle_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Ana panel butonlarını sade komut yönlendirmelerine çevirir."""
+    query = update.callback_query
+    await query.answer()
+    data = query.data or ""
+    direct = {
+        "menu_analiz": "Bir sembol yaz: /analiz THYAO",
+        "menu_islemplani": "Bir sembol yaz: /islemplani THYAO",
+        "menu_liste": "İzleme listen için /liste yaz.",
+        "menu_tara": "Piyasa taraması için /tara yaz.",
+        "menu_portfoy": "Portföyün için /portfoy yaz.",
+        "menu_sinyaller": "Aktif sinyaller için /aktif_sinyaller yaz.",
+        "menu_piyasa": "Piyasa özeti için /piyasa yaz.",
+        "menu_ayarlar": "Ayarların için /ayarlar yaz.",
+    }
+    if data in direct:
+        await query.message.reply_text(direct[data])
+        return
+    if data.startswith("menu_plan_"):
+        await query.message.reply_text(f"İşlem planı için /islemplani {data.removeprefix('menu_plan_')} yaz.")
+        return
+    if data.startswith("menu_stage5e_"):
+        _, _, action, symbol = data.split("_", 3)
+        commands = {
+            "coklu": "cokluzaman", "seviyeler": "seviyeler", "kisa": "senaryo",
+            "uzun": "uzunsenaryo", "grafik": "grafik", "detaygrafik": "analiz_detay",
+        }
+        if action in commands:
+            await query.message.reply_text(f"/{commands[action]} {symbol}")
+        elif action == "alarm":
+            await query.message.reply_text(f"Alarm örneği: /alarm_kur {symbol} ust 100")
+        elif action == "portfoy":
+            await query.message.reply_text(f"Portföy örneği: /pozisyon_ekle {symbol} 100 50.00")
+        else:
+            await query.message.reply_text("Bu bölüm için /yardim menüsünü kullanabilirsin.")
+        return
+    await query.message.reply_text("Bu seçenek bulunamadı. /yardim yazabilirsin.")

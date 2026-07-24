@@ -738,6 +738,67 @@ def generate_bist_trade_plan_chart(df: pd.DataFrame, plan) -> str:
     return out_path
 
 
+def generate_bist_trade_plan_chart(df: pd.DataFrame, plan) -> str:
+    """Hacimsiz, tek panelli ve TradingView esintili BIST işlem haritası."""
+    data = df.sort_values("timestamp").tail(160).reset_index(drop=True)
+    if data.empty:
+        raise ValueError("Grafik için OHLCV verisi boş.")
+
+    settings, _ = _chart_settings()
+    background, panel, grid = "#071019", "#0b1520", "#233140"
+    foreground, bullish, bearish = "#d9e5ef", "#00e5a8", "#ff3b69"
+    fig, ax = plt.subplots(figsize=(14, 8), facecolor=background)
+    ax.set_facecolor(panel)
+    ax.grid(True, color=grid, linewidth=.55, alpha=.52)
+    for spine in ax.spines.values():
+        spine.set_color(grid)
+    ax.tick_params(colors="#91a4b7", labelsize=8)
+    ax.yaxis.tick_right()
+    ax.yaxis.set_label_position("right")
+
+    tv_theme = ChartTheme("tv", background, panel, foreground, grid, bullish, bearish,
+                          bullish, bearish, "#00b8ff", "#91a4b7")
+    x = _draw_candles(ax, data, tv_theme, width=.72)
+    close = data["close"].astype(float)
+    for period, color, width in ((20, "#ffd43b", 1.15), (50, "#00b8ff", 1.15), (200, "#b26bff", 1.05)):
+        if len(data) >= period:
+            ax.plot(x, ema(close, period), color=color, linewidth=width, label=f"EMA {period}", alpha=.95)
+
+    ax.axhspan(plan.long.entry_low, plan.long.entry_high, color=bullish, alpha=.11)
+    ax.axhspan(plan.short.entry_low, plan.short.entry_high, color=bearish, alpha=.10)
+    ax.text(1, (plan.long.entry_low + plan.long.entry_high) / 2, "  LONG BÖLGESİ", color=bullish, fontsize=7, va="center")
+    ax.text(1, (plan.short.entry_low + plan.short.entry_high) / 2, "  SHORT BÖLGESİ", color=bearish, fontsize=7, va="center")
+
+    preferred = plan.long if plan.long.score >= plan.short.score else plan.short
+    direction_color = bullish if preferred.direction == "LONG" else bearish
+    ax.axhline(plan.current_price, color="#f8fafc", linewidth=1.0, alpha=.9)
+    ax.annotate(f"SON {plan.current_price:.2f}", xy=(len(data) - 1, plan.current_price),
+                xytext=(8, 0), textcoords="offset points", color="#f8fafc", fontsize=7, va="center")
+    ax.axhline(preferred.stop_standard, color=bearish, linewidth=1.0, linestyle="--", alpha=.9)
+    ax.text(len(data) - 1, preferred.stop_standard, f"  SL {preferred.stop_standard:.2f}", color=bearish, fontsize=7, va="center")
+    for index, target in enumerate(preferred.targets, 1):
+        ax.axhline(target, color=direction_color, linewidth=.75, linestyle=":" if index < 3 else "--", alpha=.72)
+        ax.text(len(data) - 1, target, f"  TP{index} {target:.2f}", color=direction_color, fontsize=6.5, va="center")
+    for level in plan.support_levels:
+        ax.axhline(level, color=bullish, linewidth=.5, linestyle=":", alpha=.38)
+    for level in plan.resistance_levels:
+        ax.axhline(level, color=bearish, linewidth=.5, linestyle=":", alpha=.38)
+
+    ax.set_title(f"{plan.symbol}  •  {preferred.direction} ÖNCELİKLİ  •  {preferred.score}/100",
+                 color=foreground, fontsize=14, fontweight="bold", loc="left", pad=14)
+    ax.text(.01, .94, f"RSI {plan.rsi:.1f}   ATR %{plan.atr_percent:.2f}   TREND {plan.trend}",
+            transform=ax.transAxes, color="#91a4b7", fontsize=8)
+    ax.legend(loc="upper right", fontsize=7, ncol=3, facecolor=panel, edgecolor=grid, labelcolor=foreground)
+    _format_trading_axis(ax, data, right_margin=14)
+    fig.text(.012, .012, "MERGEN QUANT • Teknik senaryo • Yatırım tavsiyesi değildir",
+             color="#60758a", fontsize=7)
+    fig.subplots_adjust(left=.035, right=.93, top=.91, bottom=.09)
+    out_path = os.path.join(tempfile.gettempdir(), f"bist_tv_{plan.symbol}_{uuid.uuid4().hex[:8]}.png")
+    fig.savefig(out_path, dpi=max(settings.chart_dpi, 150), facecolor=fig.get_facecolor())
+    plt.close(fig)
+    return out_path
+
+
 def generate_intraday_chart(
     df_intraday: pd.DataFrame,
     symbol: str,
