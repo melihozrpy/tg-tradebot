@@ -4,7 +4,7 @@ import logging
 
 from fastapi import FastAPI
 
-from app.api import routes_analysis, routes_backtest, routes_health, routes_portfolio
+from app.api import routes_analysis, routes_backtest, routes_dashboard, routes_health, routes_portfolio
 from app.config.settings import get_settings, get_strategy_config
 from app.models.database import init_db
 from app.utils.logging_filters import install_sensitive_data_filter
@@ -26,6 +26,7 @@ app.include_router(routes_health.router)
 app.include_router(routes_analysis.router)
 app.include_router(routes_backtest.router)
 app.include_router(routes_portfolio.router)
+app.include_router(routes_dashboard.router)
 
 
 @app.on_event("startup")
