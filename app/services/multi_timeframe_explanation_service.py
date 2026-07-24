@@ -56,7 +56,7 @@ def _inspect(df: pd.DataFrame, label: str) -> TimeframeInsight:
                             _zone_text(smart.order_blocks, "güncel order block yok"), structure_text)
 
 
-def build_multi_timeframe_explanation(provider, symbol: str, *, timezone_name="Europe/Istanbul", now=None):
+def build_multi_timeframe_package(provider, symbol: str, *, timezone_name="Europe/Istanbul", now=None):
     end = now or datetime.now(timezone.utc)
     if end.tzinfo is None:
         end = end.replace(tzinfo=timezone.utc)
@@ -70,7 +70,14 @@ def build_multi_timeframe_explanation(provider, symbol: str, *, timezone_name="E
             insights.append(_inspect(frames[label], label))
         except (ValueError, IndexError, KeyError) as exc:
             errors.append(f"{label}: {exc}")
-    return tuple(insights), tuple(errors)
+    return (tuple(insights), tuple(errors)), frames
+
+
+def build_multi_timeframe_explanation(provider, symbol: str, *, timezone_name="Europe/Istanbul", now=None):
+    result, _ = build_multi_timeframe_package(
+        provider, symbol, timezone_name=timezone_name, now=now,
+    )
+    return result
 
 
 def format_multi_timeframe_explanation(symbol: str, result) -> str:

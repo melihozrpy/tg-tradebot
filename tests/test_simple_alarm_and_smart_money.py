@@ -48,9 +48,29 @@ def test_company_analysis_is_rule_based_and_fail_closed():
             "longBusinessSummary": "Makine üretir.", "revenueGrowth": .18,
             "profitMargins": .12, "debtToEquity": 45, "freeCashflow": 5_000_000,
             "returnOnEquity": .22,
+            "trailingPE": 9.5, "priceToBook": 1.8, "enterpriseToEbitda": 6.2,
+            "totalDebt": 40_000_000, "totalCash": 15_000_000,
         }
+        periods = pd.to_datetime(["2025-03-31", "2025-06-30", "2025-09-30", "2025-12-31"])
+        quarterly_income_stmt = pd.DataFrame(
+            [[90_000_000, 100_000_000, 115_000_000, 135_000_000],
+             [8_000_000, 10_000_000, 13_000_000, 18_000_000],
+             [14_000_000, 16_000_000, 19_000_000, 25_000_000]],
+            index=["Total Revenue", "Net Income", "EBITDA"], columns=periods,
+        )
+        quarterly_balance_sheet = pd.DataFrame(
+            [[40_000_000] * 4], index=["Total Debt"], columns=periods,
+        )
+        quarterly_cashflow = pd.DataFrame(
+            [[7_000_000, 8_000_000, 9_000_000, 12_000_000]],
+            index=["Operating Cash Flow"], columns=periods,
+        )
     result = analyze_company("ORNEK", ticker_factory=lambda _symbol: FakeTicker())
     text = format_company_analysis(result)
     assert result.status == "GÜÇLÜ"
     assert "Yükselişi destekleyebilecek" in text
     assert "Resmî KAP" in text
+    assert "SON ÇEYREK DEĞİŞİMLERİ" in text
+    assert "Ciro:" in text and "Net kâr:" in text
+    assert "F/K: 9.50x" in text and "Net borç:" in text
+    assert result.financial_period == "2025-12-31"
