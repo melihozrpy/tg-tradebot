@@ -2896,3 +2896,36 @@ async def cmd_kap(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "Borsa İstanbul ile entegrasyon ve yetkilendirme gerektirir; erişim bilgileri verilmeden bildirim uydurulmaz.",
         disable_web_page_preview=True,
     )
+
+
+async def cmd_komutlar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if await _reject_unauthorized(update):
+        return
+    await update.message.reply_text(
+        "📚 MERGEN QUANT KOMUTLARI\n"
+        "━━━━━━━━━━━━━━━━━━\n\n"
+        "📊 ANALİZ\n"
+        "/analiz THYAO — kısa teknik analiz\n"
+        "/islemplani THYAO — long/short, stop ve TP1–TP5\n"
+        "/sirket THYAO — şirketi ve finansal durumunu anlatır\n"
+        "/kap THYAO — resmî KAP aramasını açar\n"
+        "/seviyeler THYAO — destek ve dirençleri gösterir\n"
+        "/cokluzaman THYAO — farklı zaman dilimlerini karşılaştırır\n\n"
+        "🔔 ALARMLAR\n"
+        "/alarm 9.20 THYAO — fiyat alarmı kurar\n"
+        "/alarm 9.20 THYAO ASELS ses=radar — çoklu alarm kurar\n"
+        "/alarm_test zil — alarm sesini dener\n"
+        "/alarmlar — açık alarmları listeler\n"
+        "/alarm_sil 12 — alarmı siler\n\n"
+        "⭐ TAKİP VE PİYASA\n"
+        "/ekle THYAO — izleme listesine ekler\n"
+        "/liste — izleme listesini gösterir\n"
+        "/tara — listedeki hisseleri tarar\n"
+        "/piyasa — piyasa genişliğini gösterir\n"
+        "/aksam_raporu — kapanış raporunu hemen üretir\n\n"
+        "💼 PORTFÖY\n"
+        "/portfoy — portföy özetini gösterir\n"
+        "/pozisyon_ekle THYAO 100 250 — pozisyon ekler\n"
+        "/portfoy_risk — toplam portföy riskini gösterir\n\n"
+        "ℹ️ Komutu sembolle birlikte yaz. Örnek: /analiz THYAO"
+    )

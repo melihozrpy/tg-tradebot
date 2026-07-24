@@ -90,7 +90,12 @@ def evaluate_alert(
         tolerance = max(alert.threshold_value * 0.004, 0.02)
         if abs(current_price - alert.threshold_value) <= tolerance:
             triggered = True
-            message = f"🔔 {alert.symbol} hedef fiyata geldi: {current_price:.2f} TL (alarm {alert.threshold_value:.2f} TL)."
+            message = (
+                f"🔔 ALARM ÇALIYOR — {alert.symbol}\n\n"
+                f"İstenilen fiyata geldi.\n"
+                f"Hedef: {alert.threshold_value:.2f} TL\n"
+                f"Güncel: {current_price:.2f} TL"
+            )
     elif alert.alert_type == "ust" and current_price is not None and alert.threshold_value is not None:
         if current_price >= alert.threshold_value:
             triggered = True

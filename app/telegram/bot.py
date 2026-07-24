@@ -28,6 +28,7 @@ def build_telegram_application() -> Application:
     # ---- V2 komutlari (korunuyor) ----
     application.add_handler(CommandHandler("help", handlers.cmd_help))
     application.add_handler(CommandHandler("yardim", handlers.cmd_help))
+    application.add_handler(CommandHandler("komutlar", handlers_v3.cmd_komutlar))
     application.add_handler(CommandHandler("ekle", handlers.cmd_ekle))
     application.add_handler(CommandHandler("sil", handlers.cmd_sil))
     application.add_handler(CommandHandler("liste", handlers.cmd_liste))
@@ -212,6 +213,40 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
         settings.close_scan_time,
         settings.timezone_name,
     )
+
+    if getattr(settings, "daily_brief_enabled", False):
+        async def _daily_brief_job() -> None:
+            from app.data.provider_factory import build_market_data_provider
+            from app.models.database import User, get_session_factory
+            from app.services.daily_market_report_service import build_daily_market_report, format_daily_market_report
+
+            db = get_session_factory()()
+            try:
+                provider = build_market_data_provider(settings)
+                report = await asyncio.to_thread(build_daily_market_report, provider, settings)
+                text = format_daily_market_report(report)
+                if application is not None:
+                    for user in db.query(User).filter(User.kill_switch_active.is_(False)).all():
+                        try:
+                            await application.bot.send_message(chat_id=user.telegram_user_id, text=text)
+                        except Exception as exc:  # noqa: BLE001
+                            logger.warning("Günlük brifing gönderilemedi user=%s: %s", user.id, exc)
+            except Exception as exc:  # noqa: BLE001
+                logger.error("Günlük piyasa brifingi üretilemedi: %s", exc)
+            finally:
+                db.close()
+
+        try:
+            brief_hour, brief_minute = settings.daily_brief_time.split(":")
+            scheduler.add_job(
+                _daily_brief_job,
+                CronTrigger(day_of_week="mon-fri", hour=int(brief_hour), minute=int(brief_minute)),
+                id="daily_market_brief",
+                coalesce=True,
+                max_instances=1,
+            )
+        except (TypeError, ValueError):
+            logger.warning("DAILY_BRIEF_TIME formatı geçersiz: %s", settings.daily_brief_time)
 
     # V3.2 (Asama 3, bolum 7): gun ici otomatik anomali taramasi + grafik.
     # Piyasa saatlerinde (Pzt-Cuma, 10:00-18:00) her 30 dakikada bir calisir.
