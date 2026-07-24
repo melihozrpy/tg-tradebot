@@ -687,6 +687,57 @@ def generate_professional_daily_chart(
     )
 
 
+def generate_bist_trade_plan_chart(df: pd.DataFrame, plan) -> str:
+    """Long/short giris, TP1-TP5 ve katmanli stop seviyelerini canli grafikte gosterir."""
+    data = df.sort_values("timestamp").tail(140).reset_index(drop=True)
+    if data.empty:
+        raise ValueError("Grafik icin OHLCV verisi bos.")
+    settings, theme = _chart_settings()
+    fig, (ax, ax_vol) = plt.subplots(
+        2, 1, figsize=(settings.chart_width, settings.chart_height),
+        gridspec_kw={"height_ratios": [5, 1]}, sharex=True,
+    )
+    _style_axes(fig, (ax, ax_vol), theme)
+    x = _draw_candles(ax, data, theme)
+    close = data["close"].astype(float)
+    for period, color in ((20, "#22d3ee"), (50, "#f59e0b"), (200, "#a78bfa")):
+        if len(data) >= period:
+            ax.plot(x, ema(close, period), color=color, linewidth=1.0, label=f"EMA{period}")
+    ax.axhspan(plan.long.entry_low, plan.long.entry_high, color="#10b981", alpha=.18, label="LONG GIRIS")
+    ax.axhspan(plan.short.entry_low, plan.short.entry_high, color="#f43f5e", alpha=.16, label="SHORT GIRIS")
+    for value in plan.support_levels:
+        ax.axhline(value, color="#34d399", linestyle="--", linewidth=.65, alpha=.55)
+    for value in plan.resistance_levels:
+        ax.axhline(value, color="#fb7185", linestyle="--", linewidth=.65, alpha=.55)
+    for prefix, side, color in (("L", plan.long, "#2dd4bf"), ("S", plan.short, "#fb7185")):
+        ax.axhline(side.trigger, color=color, linestyle="-.", linewidth=1.1)
+        ax.text(len(data) - 1, side.trigger, f" {prefix} TETIK {side.trigger:.2f}", color=color, fontsize=6)
+        for index, target in enumerate(side.targets, 1):
+            ax.axhline(target, color=color, linestyle=":", linewidth=.6, alpha=.7)
+            ax.text(0, target, f" {prefix}-TP{index} {target:.2f}", color=color, fontsize=5.5)
+        for label, stop in (("A", side.stop_aggressive), ("S", side.stop_standard), ("K", side.stop_conservative)):
+            ax.axhline(stop, color="#ef4444", linestyle=":", linewidth=.7, alpha=.65)
+            ax.text(len(data) - 1, stop, f" {prefix}-SL-{label} {stop:.2f}", color="#ef4444", fontsize=5.3)
+    ax.text(
+        .01, .98,
+        f"FIYAT {plan.current_price:.2f} TL | ATR %{plan.atr_percent:.2f} | RSI {plan.rsi:.1f}\n"
+        f"LONG {plan.long.score}/100 | SHORT {plan.short.score}/100",
+        transform=ax.transAxes, va="top", color=theme.foreground, fontsize=8,
+        bbox={"boxstyle": "round", "facecolor": theme.panel, "edgecolor": theme.accent, "alpha": .92},
+    )
+    ax.set_title(f"MERGEN QUANT • {plan.symbol} • LONG / SHORT ISLEM HARITASI", fontweight="bold", loc="left")
+    ax.legend(loc="upper right", fontsize=6, ncol=3, framealpha=.35)
+    up = data["close"] >= data["open"]
+    ax_vol.bar(x, data["volume"], color=np.where(up, theme.up, theme.down), width=.68, alpha=.75)
+    ax_vol.plot(x, data["volume"].rolling(20).mean(), color="#fbbf24", linewidth=.8)
+    _format_trading_axis(ax_vol, data)
+    fig.tight_layout()
+    out_path = os.path.join(tempfile.gettempdir(), f"bist_plan_{plan.symbol}_{uuid.uuid4().hex[:8]}.png")
+    fig.savefig(out_path, dpi=settings.chart_dpi, facecolor=fig.get_facecolor())
+    plt.close(fig)
+    return out_path
+
+
 def generate_intraday_chart(
     df_intraday: pd.DataFrame,
     symbol: str,

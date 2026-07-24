@@ -42,6 +42,7 @@ def build_telegram_application() -> Application:
     application.add_handler(CommandHandler("start", handlers_v3.cmd_start_v3))
     application.add_handler(CommandHandler("analiz", handlers_v3.cmd_analiz_v3))
     application.add_handler(CommandHandler("analiz_detay", handlers_v3.cmd_analiz_detay))
+    application.add_handler(CommandHandler("islemplani", handlers_v3.cmd_islemplani))
     application.add_handler(CommandHandler("gunici", handlers_v3.cmd_gunici))
     application.add_handler(CommandHandler("anomali", handlers_v3.cmd_anomali))
     application.add_handler(CommandHandler("anomaliler", handlers_v3.cmd_anomaliler))

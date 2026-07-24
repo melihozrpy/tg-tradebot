@@ -266,6 +266,7 @@ def format_help_message() -> str:
 /liste - Izleme listeni goster
 /analiz SEMBOL - Anlik teknik analiz ve sinyal (kisa ozet)
 /analiz_detay SEMBOL - Detayli analiz (karar, likidite, zaman dilimi, S/D)
+/islemplani SEMBOL - Long/short bolgeleri, TP1-TP5 ve cok katmanli SL haritasi
 /gunici SEMBOL - Gun ici on analiz (kesin sinyal degildir)
 /zaman_dilimleri SEMBOL - Coklu zaman dilimi uyum analizi
 /cokluzaman SEMBOL - Haftalik/gunluk/4s/1s/15dk/5dk agirlikli analiz
