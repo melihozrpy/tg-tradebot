@@ -112,6 +112,9 @@ class Settings(BaseSettings):
     enhanced_alarm_scan_minutes: int = Field(default=15)
     enhanced_alarm_default_cooldown_minutes: int = Field(default=120)
     breakout_minimum_volume_ratio: float = Field(default=1.2)
+    daily_brief_enabled: bool = Field(default=True)
+    daily_brief_time: str = Field(default="09:10")
+    tcmb_policy_rate_percent: float | None = Field(default=None)
 
     # ---- V3: kamuya acik bildirim (KAP yerine) ----
     public_disclosure_provider: str = Field(default="disabled")

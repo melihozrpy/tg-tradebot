@@ -220,6 +220,9 @@ python run_bot.py
 | `ENHANCED_ALARM_SCAN_ENABLED` | Gelişmiş alarm scheduler işi | `true` |
 | `ENHANCED_ALARM_SCAN_MINUTES` | Gelişmiş alarm tarama aralığı | `15` |
 | `ENHANCED_ALARM_DEFAULT_COOLDOWN_MINUTES` | Yeni alarm varsayılan cooldown | `120` |
+| `DAILY_BRIEF_ENABLED` | Hafta içi otomatik dünkü piyasa özeti | `true` |
+| `DAILY_BRIEF_TIME` | Günlük brifing gönderim saati (TR) | `09:10` |
+| `TCMB_POLICY_RATE_PERCENT` | Brifingde gösterilecek doğrulanmış politika faizi; bağlı değilse boş | boş |
 | `CHART_DPI` | Grafik çıktı çözünürlüğü | `120` |
 | `CHART_WIDTH` / `CHART_HEIGHT` | Grafik boyutu (inç) | `13` / `11` |
 | `CHART_THEME` | `light` veya `dark` | `light` |
