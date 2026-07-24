@@ -613,6 +613,17 @@ async def cmd_analiz_v3(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             )
 
         await update.message.reply_text(short_text, reply_markup=_analysis_action_keyboard(symbol))
+        try:
+            from app.services.multi_timeframe_explanation_service import (
+                build_multi_timeframe_explanation, format_multi_timeframe_explanation,
+            )
+            multi = await asyncio.to_thread(
+                build_multi_timeframe_explanation, provider, symbol,
+                timezone_name=settings.timezone_name,
+            )
+            await update.message.reply_text(format_multi_timeframe_explanation(symbol, multi))
+        except Exception as exc:  # noqa: BLE001 - ana analiz bundan bağımsız çalışır
+            logger.warning("Çoklu zaman açıklaması üretilemedi symbol=%s: %s", symbol, exc)
     except AnalysisUnavailableErrorV3 as exc:
         logger.warning("Analiz üretilemedi symbol=%s: %s", symbol, exc)
         await update.message.reply_text(sanitize_provider_error(exc))
@@ -2741,22 +2752,26 @@ async def cmd_start_v3(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     if await _reject_unauthorized(update):
         return
     keyboard = [
-        [InlineKeyboardButton("📊 Hisse Analizi", callback_data="menu_analiz"),
-         InlineKeyboardButton("🗺️ İşlem Planı", callback_data="menu_islemplani")],
+        [InlineKeyboardButton("📊 Teknik Analiz", callback_data="menu_analiz"),
+         InlineKeyboardButton("🎯 AL / SAT Planı", callback_data="menu_islemplani")],
+        [InlineKeyboardButton("🏢 Temel Analiz", callback_data="menu_fundamental_prompt"),
+         InlineKeyboardButton("🔔 Alarm Kur", callback_data="menu_alarm_prompt")],
         [InlineKeyboardButton("⭐ İzleme Listem", callback_data="menu_liste"),
-         InlineKeyboardButton("🔎 Piyasa Tarama", callback_data="menu_tara")],
+         InlineKeyboardButton("🔎 Piyasa Tara", callback_data="menu_tara")],
         [InlineKeyboardButton("💼 Portföy", callback_data="menu_portfoy"),
          InlineKeyboardButton("🎯 Aktif Sinyaller", callback_data="menu_sinyaller")],
         [InlineKeyboardButton("🌍 Piyasa Özeti", callback_data="menu_piyasa"),
-         InlineKeyboardButton("⚙️ Ayarlar", callback_data="menu_ayarlar")],
+         InlineKeyboardButton("📚 Komut Rehberi", callback_data="menu_commands")],
     ]
     await update.message.reply_text(
-        "🏹 MERGEN QUANT\n"
-        "BIST Analiz ve Risk Asistanı\n\n"
-        "Bir hisseyi incelemek için:\n"
-        "• /analiz THYAO — kısa analiz\n"
-        "• /islemplani THYAO — giriş, stop ve TP1–TP5\n\n"
-        "Aşağıdan bir bölüm seçebilirsin.\n"
+        "🏔️✨ MONTANA MELİH HİSSE BOT ✨📈\n"
+        "BIST Teknik • Temel Analiz • Alarm Asistanı\n\n"
+        "🧭 Hızlı başlangıç:\n"
+        "• /analiz THYAO — teknik + 5dk/15dk/1s/4s\n"
+        "• /islemplani THYAO — AL/SAT, stop ve TP1–TP5\n"
+        "• /sirket THYAO — şirket ve bilanço analizi\n"
+        "• /alarm 9.20 THYAO — fiyat alarmı\n\n"
+        "📚 Bütün seçenekler: /komutlar\n"
         "ℹ️ Çıktılar teknik senaryodur; yatırım tavsiyesi değildir.",
         reply_markup=InlineKeyboardMarkup(keyboard),
     )
@@ -2768,6 +2783,8 @@ def _analysis_action_keyboard(symbol: str) -> InlineKeyboardMarkup:
          InlineKeyboardButton("📋 Detaylı Analiz", callback_data=f"detay_{symbol}")],
         [InlineKeyboardButton("🧱 Destek / Direnç", callback_data=f"menu_stage5e_seviyeler_{symbol}"),
          InlineKeyboardButton("⏱️ Çoklu Zaman", callback_data=f"menu_stage5e_coklu_{symbol}")],
+        [InlineKeyboardButton("🏢 Temel Analiz", callback_data=f"menu_fundamental_{symbol}"),
+         InlineKeyboardButton("📣 KAP Bildirimleri", callback_data=f"menu_kap_{symbol}")],
         [InlineKeyboardButton("Standart Grafik", callback_data=f"menu_stage5e_grafik_{symbol}"),
          InlineKeyboardButton("Detaylı Grafik", callback_data=f"menu_stage5e_detaygrafik_{symbol}")],
         [InlineKeyboardButton("🔔 Alarm Kur", callback_data=f"menu_stage5e_alarm_{symbol}"),
@@ -2783,6 +2800,9 @@ async def handle_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     direct = {
         "menu_analiz": "Bir sembol yaz: /analiz THYAO",
         "menu_islemplani": "Bir sembol yaz: /islemplani THYAO",
+        "menu_fundamental_prompt": "Şirketi bilanço, borç, kârlılık ve riskleriyle incelemek için: /sirket THYAO",
+        "menu_alarm_prompt": "Fiyat alarmı örneği: /alarm 9.20 THYAO",
+        "menu_commands": "Tüm özellikleri açıklayan rehber için /komutlar yaz.",
         "menu_liste": "İzleme listen için /liste yaz.",
         "menu_tara": "Piyasa taraması için /tara yaz.",
         "menu_portfoy": "Portföyün için /portfoy yaz.",
@@ -2795,6 +2815,12 @@ async def handle_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         return
     if data.startswith("menu_plan_"):
         await query.message.reply_text(f"İşlem planı için /islemplani {data.removeprefix('menu_plan_')} yaz.")
+        return
+    if data.startswith("menu_fundamental_"):
+        await query.message.reply_text(f"Temel analiz için /sirket {data.removeprefix('menu_fundamental_')} yaz.")
+        return
+    if data.startswith("menu_kap_"):
+        await query.message.reply_text(f"KAP bildirimleri için /kap {data.removeprefix('menu_kap_')} yaz.")
         return
     if data.startswith("menu_stage5e_"):
         _, _, action, symbol = data.split("_", 3)
@@ -2902,10 +2928,10 @@ async def cmd_komutlar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     if await _reject_unauthorized(update):
         return
     await update.message.reply_text(
-        "📚 MERGEN QUANT KOMUTLARI\n"
+        "🏔️📚 MONTANA MELİH BOT • KOMUT REHBERİ\n"
         "━━━━━━━━━━━━━━━━━━\n\n"
         "📊 ANALİZ\n"
-        "/analiz THYAO — kısa teknik analiz\n"
+        "/analiz THYAO — teknik analiz + 5dk/15dk/1s/4s okuması\n"
         "/islemplani THYAO — long/short, stop ve TP1–TP5\n"
         "/sirket THYAO — şirketi ve finansal durumunu anlatır\n"
         "/kap THYAO — resmî KAP aramasını açar\n"
