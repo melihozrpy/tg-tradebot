@@ -738,6 +738,56 @@ def generate_bist_trade_plan_chart(df: pd.DataFrame, plan) -> str:
     return out_path
 
 
+def generate_multi_timeframe_chart(frames: dict[str, pd.DataFrame], symbol: str) -> str:
+    """5dk, 15dk, 1s ve 4s mumlarını tek, telefonda okunabilir dört panoda çizer."""
+    settings, _ = _chart_settings()
+    background, panel, grid = "#040910", "#08131e", "#203448"
+    bullish, bearish, foreground = "#00f5a0", "#ff2d55", "#e8f3ff"
+    theme = ChartTheme("montana", background, panel, foreground, grid, bullish, bearish,
+                       bullish, bearish, "#00c8ff", "#8aa0b5")
+    fig, axes = plt.subplots(2, 2, figsize=(14, 9), facecolor=background)
+    from app.analysis.smart_money_engine import detect_smart_money
+    for ax, label in zip(axes.flat, ("5 dk", "15 dk", "1 saat", "4 saat")):
+        data = frames.get(label, pd.DataFrame()).sort_values("timestamp").tail(90).reset_index(drop=True)
+        ax.set_facecolor(panel); ax.grid(True, color=grid, linewidth=.45, alpha=.48)
+        for spine in ax.spines.values(): spine.set_color(grid)
+        ax.tick_params(colors="#8aa0b5", labelsize=7); ax.yaxis.tick_right()
+        if data.empty:
+            ax.text(.5, .5, "Veri yok", transform=ax.transAxes, ha="center", color=foreground)
+            continue
+        x = _draw_candles(ax, data, theme, width=.68)
+        close = data["close"].astype(float)
+        if len(data) >= 20: ax.plot(x, ema(close, 20), color="#ffd43b", linewidth=1, label="EMA20")
+        if len(data) >= 50: ax.plot(x, ema(close, 50), color="#00c8ff", linewidth=1, label="EMA50")
+        smart = detect_smart_money(data)
+        for zone in smart.fvg:
+            color = "#00c8ff" if zone.direction == "bullish" else "#ff8a3d"
+            ax.axhspan(zone.low, zone.high, xmin=max(zone.index / len(data), 0), xmax=1, color=color, alpha=.10)
+            ax.text(zone.index, zone.high, "FVG", color=color, fontsize=6)
+        for zone in smart.order_blocks:
+            color = bullish if zone.direction == "bullish" else bearish
+            ax.axhspan(zone.low, zone.high, xmin=max(zone.index / len(data), 0), xmax=1, color=color, alpha=.10)
+            ax.text(zone.index, zone.low, "OB", color=color, fontsize=6)
+        for event in smart.structure:
+            color = bullish if event.direction == "bullish" else bearish
+            ax.scatter(event.index, event.price, color=color, s=20, marker="^" if event.direction == "bullish" else "v")
+            ax.text(event.index, event.price, event.kind, color=color, fontsize=6)
+        direction = "YUKARI" if close.iloc[-1] > ema(close, 20).iloc[-1] else "AŞAĞI"
+        color = bullish if direction == "YUKARI" else bearish
+        ax.set_title(f"{label.upper()}  •  {direction}  •  {close.iloc[-1]:.2f} TL",
+                     color=color, fontweight="bold", fontsize=10, loc="left")
+        _format_trading_axis(ax, data, right_margin=5)
+    fig.suptitle(f"MONTANA MELİH • {symbol.upper()} ÇOKLU ZAMAN HARİTASI",
+                 color=foreground, fontsize=15, fontweight="bold", x=.03, ha="left")
+    fig.text(.03, .015, "FVG • Order Block • BOS/MSS • EMA20/50 | Yatırım tavsiyesi değildir",
+             color="#7890a6", fontsize=8)
+    fig.subplots_adjust(left=.035, right=.96, top=.91, bottom=.07, hspace=.25, wspace=.08)
+    out_path = os.path.join(tempfile.gettempdir(), f"montana_mtf_{symbol}_{uuid.uuid4().hex[:8]}.png")
+    fig.savefig(out_path, dpi=max(settings.chart_dpi, 150), facecolor=fig.get_facecolor())
+    plt.close(fig)
+    return out_path
+
+
 def generate_bist_trade_plan_chart(df: pd.DataFrame, plan) -> str:
     """Hacimsiz, tek panelli ve TradingView esintili BIST işlem haritası."""
     data = df.sort_values("timestamp").tail(160).reset_index(drop=True)

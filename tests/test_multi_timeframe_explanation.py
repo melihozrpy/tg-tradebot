@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 
 from app.services.multi_timeframe_explanation_service import (
-    build_multi_timeframe_explanation,
+    build_multi_timeframe_explanation, build_multi_timeframe_package,
     format_multi_timeframe_explanation,
 )
 
@@ -43,3 +43,16 @@ def test_montana_brand_and_buy_sell_chart_labels_are_present():
     assert "MONTANA MELİH HİSSE BOT" in handlers
     assert 'f"AL  {buy_price:.2f} TL"' in chart
     assert 'f"SAT  {sell_price:.2f} TL"' in chart
+
+
+def test_four_panel_multi_timeframe_chart_is_generated():
+    from app.services.chart_service import delete_chart_file, generate_multi_timeframe_chart
+    result, frames = build_multi_timeframe_package(
+        FakeProvider(), "THYAO", now=datetime(2026, 5, 15, 20, tzinfo=timezone.utc),
+    )
+    path = generate_multi_timeframe_chart(frames, "THYAO")
+    try:
+        assert len(result[0]) == 4
+        assert __import__("os").path.getsize(path) > 20_000
+    finally:
+        delete_chart_file(path)

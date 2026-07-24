@@ -86,11 +86,11 @@ def _parse_dates(args: list[str]) -> tuple[datetime, datetime]:
 
 def _run_keyboard(run_id: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("Detayli Metrikler", callback_data=f"stage5g_btmetric_{run_id}"),
-         InlineKeyboardButton("Islem Listesi", callback_data=f"stage5g_bttrades_{run_id}")],
-        [InlineKeyboardButton("Rejim Sonuclari", callback_data=f"stage5g_btregime_{run_id}"),
-         InlineKeyboardButton("Puan Kalibrasyonu", callback_data="stage5g_calibration_all")],
-        [InlineKeyboardButton("Equity Grafigi", callback_data=f"stage5g_btequity_{run_id}")],
+        [InlineKeyboardButton("📊 Detaylı Metrikler", callback_data=f"stage5g_btmetric_{run_id}"),
+         InlineKeyboardButton("📋 İşlem Listesi", callback_data=f"stage5g_bttrades_{run_id}")],
+        [InlineKeyboardButton("🌦️ Piyasa Rejimleri", callback_data=f"stage5g_btregime_{run_id}"),
+         InlineKeyboardButton("🎯 Puan Kalibrasyonu", callback_data="stage5g_calibration_all")],
+        [InlineKeyboardButton("📈 Getiri Grafiği", callback_data=f"stage5g_btequity_{run_id}")],
     ])
 
 
@@ -99,34 +99,38 @@ def _format_run(record: BacktestRun) -> str:
     costs = json.loads(record.transaction_cost_config or "{}")
     warning = metrics.get("sample_warning") or "Ornek yeterli."
     return (
-        "MERGEN QUANT - BACKTEST\n\n"
-        f"Sembol: {record.symbol}\n"
-        f"Donem: {record.start_date:%Y-%m-%d} / {record.end_date:%Y-%m-%d}\n"
-        f"Islem: {metrics.get('trade_count', 0)}\n"
-        f"Net getiri: %{metrics.get('total_return_percent', 0):g}\n"
+        "🏔️🧪 MONTANA MELİH • BACKTEST RAPORU\n"
+        "━━━━━━━━━━━━━━━━━━\n\n"
+        f"📌 Sembol: {record.symbol}\n"
+        f"🗓️ Dönem: {record.start_date:%Y-%m-%d} → {record.end_date:%Y-%m-%d}\n"
+        f"🔁 İşlem sayısı: {metrics.get('trade_count', 0)}\n\n"
+        f"💰 Net getiri: %{metrics.get('total_return_percent', 0):g}\n"
         f"XU100: %{metrics.get('benchmark_return_percent', 0) or 0:g}\n"
-        f"Benchmark farki: %{metrics.get('alpha_vs_benchmark_percent', 0) or 0:g}\n"
-        f"Kazanma orani: %{metrics.get('win_rate_percent', 0):g}\n"
-        f"Profit factor: {metrics.get('profit_factor', 0)}\n"
-        f"Maksimum dusus: %{metrics.get('max_drawdown_percent', 0):g}\n"
-        f"Islem basi beklenti: {metrics.get('expected_value', 0):g} TRY\n"
+        f"Endeks üzeri fark: %{metrics.get('alpha_vs_benchmark_percent', 0) or 0:g}\n"
+        f"✅ Kazanma oranı: %{metrics.get('win_rate_percent', 0):g}\n"
+        f"🎯 TP1 / TP2 / TP3: %{metrics.get('target_1_hit_rate_percent', 0):g} / "
+        f"%{metrics.get('target_2_hit_rate_percent', 0):g} / %{metrics.get('target_3_hit_rate_percent', 0):g}\n"
+        f"🛑 Stop oranı: %{metrics.get('stop_rate_percent', 0):g}\n"
+        f"⚖️ Profit factor: {metrics.get('profit_factor', 0)}\n"
+        f"📉 Maksimum düşüş: %{metrics.get('max_drawdown_percent', 0):g}\n"
+        f"İşlem başı beklenti: {metrics.get('expected_value', 0):g} TL\n\n"
         f"Masraflar: komisyon {costs.get('commission_bps', 0)} bps, "
         f"spread {costs.get('spread_bps', 0)} bps, slippage {costs.get('slippage_bps', 0)} bps\n"
-        f"Ornek yeterliligi: {warning}\n"
+        f"Örnek yeterliliği: {warning}\n"
         f"Run ID: {record.run_id}\n\n"
-        "Gecmis performans gelecek sonucu garanti etmez."
+        "ℹ️ Geçmiş performans gelecek sonucu garanti etmez."
     )
 
 
 async def cmd_backtest(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not context.args:
-        await update.message.reply_text("Kullanim: /backtest SEMBOL [YYYY-AA-GG YYYY-AA-GG]")
+        await update.message.reply_text("Kullanım: /backtest SEMBOL [YYYY-AA-GG YYYY-AA-GG]")
         return
     try:
         symbol = normalize_symbol(context.args[0])
         start, end = _parse_dates(context.args)
     except Exception:
-        await update.message.reply_text("Sembol veya tarih formati gecersiz. Ornek: /backtest THYAO 2024-01-01 2026-01-01")
+        await update.message.reply_text("Sembol veya tarih formatı geçersiz. Örnek: /backtest THYAO 2024-01-01 2026-01-01")
         return
     settings = get_settings()
     strategy_config = get_strategy_config()
@@ -166,7 +170,9 @@ async def cmd_backtest(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             provider=provider.name, on_complete=notify,
         )
         await update.message.reply_text(
-            f"Backtest baslatildi. Bot kullanilmaya devam edilebilir.\nRun ID: {run_id}",
+            f"🧪 {symbol} backtest başlatıldı.\n"
+            "Son iki yıl, komisyon + spread + fiyat kaymasıyla test ediliyor. Botu kullanmaya devam edebilirsin.\n"
+            f"Run ID: {run_id}",
             reply_markup=InlineKeyboardMarkup([[
                 InlineKeyboardButton("Backtest Iptal", callback_data=f"stage5g_btcancel_{run_id}")
             ]]),

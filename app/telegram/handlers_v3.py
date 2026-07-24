@@ -615,13 +615,20 @@ async def cmd_analiz_v3(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await update.message.reply_text(short_text, reply_markup=_analysis_action_keyboard(symbol))
         try:
             from app.services.multi_timeframe_explanation_service import (
-                build_multi_timeframe_explanation, format_multi_timeframe_explanation,
+                build_multi_timeframe_package, format_multi_timeframe_explanation,
             )
-            multi = await asyncio.to_thread(
-                build_multi_timeframe_explanation, provider, symbol,
+            from app.services.chart_service import delete_chart_file, generate_multi_timeframe_chart
+            multi, frames = await asyncio.to_thread(
+                build_multi_timeframe_package, provider, symbol,
                 timezone_name=settings.timezone_name,
             )
             await update.message.reply_text(format_multi_timeframe_explanation(symbol, multi))
+            mtf_chart = await asyncio.to_thread(generate_multi_timeframe_chart, frames, symbol)
+            try:
+                with open(mtf_chart, "rb") as image:
+                    await update.message.reply_photo(image, caption=f"⏱️ {symbol} • 5dk / 15dk / 1s / 4s")
+            finally:
+                delete_chart_file(mtf_chart)
         except Exception as exc:  # noqa: BLE001 - ana analiz bundan bağımsız çalışır
             logger.warning("Çoklu zaman açıklaması üretilemedi symbol=%s: %s", symbol, exc)
     except AnalysisUnavailableErrorV3 as exc:
@@ -891,6 +898,17 @@ async def cmd_zaman_dilimleri(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
         text = format_multi_timeframe(result, symbol, price_context=price_context)
         await update.message.reply_text(text)
+        from app.services.multi_timeframe_explanation_service import build_multi_timeframe_package
+        from app.services.chart_service import delete_chart_file, generate_multi_timeframe_chart
+        _, frames = await asyncio.to_thread(
+            build_multi_timeframe_package, provider, symbol, timezone_name=settings.timezone_name,
+        )
+        chart_path = await asyncio.to_thread(generate_multi_timeframe_chart, frames, symbol)
+        try:
+            with open(chart_path, "rb") as image:
+                await update.message.reply_photo(image, caption=f"⏱️ {symbol} • Çoklu zaman teknik haritası")
+        finally:
+            delete_chart_file(chart_path)
     finally:
         db.close()
 
@@ -2760,6 +2778,8 @@ async def cmd_start_v3(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
          InlineKeyboardButton("🔎 Piyasa Tara", callback_data="menu_tara")],
         [InlineKeyboardButton("💼 Portföy", callback_data="menu_portfoy"),
          InlineKeyboardButton("🎯 Aktif Sinyaller", callback_data="menu_sinyaller")],
+        [InlineKeyboardButton("🧪 Backtest", callback_data="menu_backtest_prompt"),
+         InlineKeyboardButton("📈 Test Sonuçları", callback_data="menu_backtest_summary")],
         [InlineKeyboardButton("🌍 Piyasa Özeti", callback_data="menu_piyasa"),
          InlineKeyboardButton("📚 Komut Rehberi", callback_data="menu_commands")],
     ]
@@ -2785,6 +2805,8 @@ def _analysis_action_keyboard(symbol: str) -> InlineKeyboardMarkup:
          InlineKeyboardButton("⏱️ Çoklu Zaman", callback_data=f"menu_stage5e_coklu_{symbol}")],
         [InlineKeyboardButton("🏢 Temel Analiz", callback_data=f"menu_fundamental_{symbol}"),
          InlineKeyboardButton("📣 KAP Bildirimleri", callback_data=f"menu_kap_{symbol}")],
+        [InlineKeyboardButton("🧪 2 Yıllık Backtest", callback_data=f"menu_backtest_{symbol}"),
+         InlineKeyboardButton("📈 Backtest Sonuçları", callback_data="menu_backtest_summary")],
         [InlineKeyboardButton("Standart Grafik", callback_data=f"menu_stage5e_grafik_{symbol}"),
          InlineKeyboardButton("Detaylı Grafik", callback_data=f"menu_stage5e_detaygrafik_{symbol}")],
         [InlineKeyboardButton("🔔 Alarm Kur", callback_data=f"menu_stage5e_alarm_{symbol}"),
@@ -2803,6 +2825,8 @@ async def handle_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         "menu_fundamental_prompt": "Şirketi bilanço, borç, kârlılık ve riskleriyle incelemek için: /sirket THYAO",
         "menu_alarm_prompt": "Fiyat alarmı örneği: /alarm 9.20 THYAO",
         "menu_commands": "Tüm özellikleri açıklayan rehber için /komutlar yaz.",
+        "menu_backtest_prompt": "Bir hissenin son iki yılını test etmek için: /backtest THYAO",
+        "menu_backtest_summary": "Son backtest sonuçları için /backtest_ozet yaz.",
         "menu_liste": "İzleme listen için /liste yaz.",
         "menu_tara": "Piyasa taraması için /tara yaz.",
         "menu_portfoy": "Portföyün için /portfoy yaz.",
@@ -2821,6 +2845,12 @@ async def handle_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         return
     if data.startswith("menu_kap_"):
         await query.message.reply_text(f"KAP bildirimleri için /kap {data.removeprefix('menu_kap_')} yaz.")
+        return
+    if data.startswith("menu_backtest_") and data != "menu_backtest_summary":
+        await query.message.reply_text(
+            f"🧪 İki yıllık geçmiş testi başlatmak için /backtest {data.removeprefix('menu_backtest_')} yaz. "
+            "Komisyon, spread ve fiyat kayması hesaba katılır."
+        )
         return
     if data.startswith("menu_stage5e_"):
         _, _, action, symbol = data.split("_", 3)
@@ -2937,6 +2967,10 @@ async def cmd_komutlar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "/kap THYAO — resmî KAP aramasını açar\n"
         "/seviyeler THYAO — destek ve dirençleri gösterir\n"
         "/cokluzaman THYAO — farklı zaman dilimlerini karşılaştırır\n\n"
+        "🧪 GEÇMİŞ PERFORMANS\n"
+        "/backtest THYAO — son 2 yılı masraflarla test eder\n"
+        "/backtest THYAO 2023-01-01 2026-01-01 — özel dönem\n"
+        "/backtest_ozet — son testleri ve başarı oranlarını gösterir\n\n"
         "🔔 ALARMLAR\n"
         "/alarm 9.20 THYAO — fiyat alarmı kurar\n"
         "/alarm 9.20 THYAO ASELS ses=radar — çoklu alarm kurar\n"
