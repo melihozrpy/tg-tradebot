@@ -9,7 +9,13 @@ from apscheduler.triggers.interval import IntervalTrigger
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler
 
 from app.config.settings import get_settings
-from app.telegram import handlers, handlers_stage5g, handlers_v3
+from app.telegram import (
+    handlers,
+    handlers_stage5g,
+    handlers_v3,
+    ultra_backtest_handlers,
+    ultra_signal_handlers,
+)
 
 logger = logging.getLogger("mergen_quant.telegram.bot")
 
@@ -90,6 +96,7 @@ def build_telegram_application() -> Application:
     application.add_handler(CommandHandler("sinyal", handlers_v3.cmd_sinyal))
     application.add_handler(CommandHandler("sinyal_gecmisi", handlers_v3.cmd_sinyal_gecmisi))
     application.add_handler(CommandHandler("performans", handlers_v3.cmd_performans))
+    ultra_signal_handlers.register_ultra_signal_handlers(application)
 
     # ---- V3: Portfoy genisletmeleri ----
     application.add_handler(CommandHandler("pozisyon_ekle", handlers_v3.cmd_pozisyon_ekle))
@@ -101,15 +108,16 @@ def build_telegram_application() -> Application:
     application.add_handler(CommandHandler("nakit_ayarla", handlers_v3.cmd_nakit_ayarla))
     application.add_handler(CommandHandler("sermaye_ayarla", handlers_v3.cmd_sermaye_ayarla))
 
-    # ---- V3: Alarmlar ----
-    application.add_handler(CommandHandler("alarm_kur", handlers_v3.cmd_alarm_kur))
-    application.add_handler(CommandHandler("alarm", handlers_v3.cmd_alarm))
+    # ---- Kalici fiyat alarmlari (0008) ----
+    # Yeni handler seti sahiplik, toplu ice aktarma, OCR, public referans ve
+    # onay akisini tek yerde kaydeder. Ayni komutlarin eski handler'lara da
+    # kaydolmasi python-telegram-bot grup sirasina bagli belirsizlik yaratirdi.
+    from app.telegram.alarm_handlers import register_alarm_handlers
+
+    register_alarm_handlers(application)
+    # Geriye uyumlu, yeni handler setiyle cakismayan eski kisayollar.
     application.add_handler(CommandHandler("alarm_test", handlers_v3.cmd_alarm_test))
-    application.add_handler(CommandHandler("alarmlar", handlers_v3.cmd_alarmlar))
-    application.add_handler(CommandHandler("alarm_sil", handlers_v3.cmd_alarm_sil))
-    application.add_handler(CommandHandler("alarm_durdur", handlers_v3.cmd_alarm_durdur))
     application.add_handler(CommandHandler("alarm_ac", handlers_v3.cmd_alarm_ac))
-    application.add_handler(CommandHandler("alarm_detay", handlers_v3.cmd_alarm_detay))
 
     # ---- V3: Grafikler ----
     application.add_handler(CommandHandler("grafik", handlers_v3.cmd_grafik))
@@ -129,6 +137,7 @@ def build_telegram_application() -> Application:
     application.add_handler(CommandHandler("sinyalbasari", handlers_stage5g.cmd_sinyalbasari))
     application.add_handler(CommandHandler("kalibrasyon", handlers_stage5g.cmd_kalibrasyon))
     application.add_handler(CommandHandler("neden", handlers_stage5g.cmd_neden))
+    ultra_backtest_handlers.register_ultra_backtest_handlers(application)
 
     # ---- V3: Inline buton callback'leri ----
     application.add_handler(CallbackQueryHandler(handlers_v3.handle_detail_callback, pattern=r"^detay_"))
@@ -139,7 +148,7 @@ def build_telegram_application() -> Application:
     return application
 
 
-def _build_evening_scan_scheduler(settings, application: Application | None = None) -> AsyncIOScheduler | None:
+def _build_evening_scan_scheduler(settings, application: Application | None = None) -> AsyncIOScheduler:
     """Kapanis sonrasi otomatik tarama icin APScheduler nesnesini olusturur.
 
     Onemli: Bu fonksiyon scheduler'i OLUSTURUR ama BASLATMAZ. AsyncIOScheduler.start()
@@ -149,25 +158,22 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
     application.post_init callback'ine tasinmistir (bkz. _register_scheduler_lifecycle),
     o an event loop kesin olarak calisir durumdadir.
 
-    Config uzerinden acilip kapatilabilir (CLOSE_SCAN_ENABLED=false ile
-    devre disi birakilabilir).
+    CLOSE_SCAN_ENABLED yalnizca kapanis taramasini acip kapatir. Fiyat alarmi,
+    teslimat outbox'i ve diger bagimsiz zamanlanmis isler her durumda ayni
+    scheduler uzerinde calismaya devam eder.
 
     `application` verilirse (gercek calisma zamaninda), aksam taramasi ve gun
     ici anomali taramasi sonuclarina gore kullanicilara OTOMATIK Telegram
     bildirimi + grafik gonderilir (bolum 8). Testlerde application=None
     gecilir; bu durumda taramalar sessizce calisir, hicbir mesaj gonderilmez.
     """
-    if not settings.close_scan_enabled:
-        logger.info("Otomatik aksam taramasi devre disi (CLOSE_SCAN_ENABLED=false).")
-        return None
-
-    try:
-        hour_str, minute_str = settings.close_scan_time.split(":")
-    except ValueError:
-        logger.warning("CLOSE_SCAN_TIME formati hatali (%s); otomatik tarama kurulmadi.", settings.close_scan_time)
-        return None
-
     scheduler = AsyncIOScheduler(timezone=settings.timezone_name)
+
+    if not settings.close_scan_enabled:
+        logger.info(
+            "Otomatik aksam taramasi devre disi (CLOSE_SCAN_ENABLED=false); "
+            "diger scheduler isleri calismaya devam edecek."
+        )
 
     async def _job() -> None:
         from app.data.provider_factory import build_market_data_provider
@@ -207,12 +213,30 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
         finally:
             db.close()
 
-    scheduler.add_job(_job, CronTrigger(hour=int(hour_str), minute=int(minute_str)))
-    logger.info(
-        "Otomatik aksam taramasi %s (%s) icin hazirlandi (event loop baslayinca aktif olacak).",
-        settings.close_scan_time,
-        settings.timezone_name,
-    )
+    if settings.close_scan_enabled:
+        try:
+            hour_str, minute_str = settings.close_scan_time.split(":")
+            hour, minute = int(hour_str), int(minute_str)
+            if not 0 <= hour <= 23 or not 0 <= minute <= 59:
+                raise ValueError
+        except (AttributeError, TypeError, ValueError):
+            logger.warning(
+                "CLOSE_SCAN_TIME formati hatali (%s); yalnizca kapanis taramasi kurulmadi.",
+                getattr(settings, "close_scan_time", None),
+            )
+        else:
+            scheduler.add_job(
+                _job,
+                CronTrigger(hour=hour, minute=minute),
+                id="evening_close_scan",
+                coalesce=True,
+                max_instances=1,
+            )
+            logger.info(
+                "Otomatik aksam taramasi %s (%s) icin hazirlandi (event loop baslayinca aktif olacak).",
+                settings.close_scan_time,
+                settings.timezone_name,
+            )
 
     if getattr(settings, "daily_brief_enabled", False):
         async def _daily_brief_job() -> None:
@@ -279,6 +303,139 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
             _intraday_job, CronTrigger(day_of_week="mon-fri", hour="10-18", minute="*/30")
         )
         logger.info("Gun ici otomatik anomali taramasi hazirlandi (Pzt-Cuma 10:00-18:00, 30dk).")
+
+    # Kullanici fiyat alarmlari kapanis taramasindan bagimsizdir. Monitor ag
+    # erisimini worker thread'de yapar; teslimat ayri bir outbox isi oldugu icin
+    # Telegram gecici olarak hata verse bile tetik olayi kaybolmaz.
+    if getattr(settings, "user_price_alerts_enabled", True):
+        async def _user_price_alert_monitor_job() -> None:
+            def _run_monitor_cycle() -> dict:
+                from app.alerts.monitor import run_alarm_monitor_cycle
+                from app.data.provider_factory import build_market_data_provider
+                from app.models.database import get_session_factory
+
+                db = get_session_factory()()
+                try:
+                    provider = build_market_data_provider(settings)
+                    return run_alarm_monitor_cycle(db, provider, settings)
+                except Exception:
+                    db.rollback()
+                    raise
+                finally:
+                    db.close()
+
+            try:
+                result = await asyncio.to_thread(_run_monitor_cycle)
+                if result.get("triggered") or result.get("repeats_queued"):
+                    logger.info("Fiyat alarm monitor sonucu: %s", result)
+            except Exception as exc:  # noqa: BLE001 - diger scheduler islerini durdurmamali
+                logger.error("Fiyat alarm monitor dongusu hata verdi: %s", exc)
+
+        async def _user_price_alert_delivery_job() -> None:
+            if application is None:
+                return
+            from app.alerts.delivery import deliver_alarm_outbox
+            from app.models.database import get_session_factory
+
+            db = get_session_factory()()
+            try:
+                result = await deliver_alarm_outbox(application, db, settings)
+                if result.get("sent") or result.get("retry") or result.get("failed"):
+                    logger.info("Fiyat alarm teslimat sonucu: %s", result)
+            except Exception as exc:  # noqa: BLE001 - outbox bir sonraki dongude tekrar denenir
+                db.rollback()
+                logger.error("Fiyat alarm teslimat dongusu hata verdi: %s", exc)
+            finally:
+                db.close()
+
+        scheduler.add_job(
+            _user_price_alert_monitor_job,
+            IntervalTrigger(
+                seconds=max(5, int(getattr(settings, "user_price_alert_poll_seconds", 30)))
+            ),
+            id="user_price_alert_monitor",
+            coalesce=True,
+            max_instances=1,
+            replace_existing=True,
+        )
+        scheduler.add_job(
+            _user_price_alert_delivery_job,
+            IntervalTrigger(
+                seconds=max(
+                    1,
+                    int(getattr(settings, "user_price_alert_delivery_poll_seconds", 5)),
+                )
+            ),
+            id="user_price_alert_delivery",
+            coalesce=True,
+            max_instances=1,
+            replace_existing=True,
+        )
+        logger.info("Kalici fiyat alarm monitor ve teslimat isleri scheduler'a eklendi.")
+
+    # Veri kaynağından bağımsız, DB-backed BIST sinyal yaşam döngüsü. Quote
+    # güncellik/işlem/timestamp alanlarından biri eksikse monitor fail-closed
+    # davranır; gecikmeli kapanış fiyatıyla giriş, TP veya stop üretmez.
+    if getattr(settings, "signal_monitor_enabled", False):
+        async def _bist_signal_monitor_job() -> None:
+            def _run_signal_cycle() -> dict:
+                from app.data.provider_factory import build_market_data_provider
+                from app.models.database import get_session_factory
+                from app.services.bist_signal_monitor_service import run_signal_monitor_cycle
+
+                db = get_session_factory()()
+                try:
+                    provider = build_market_data_provider(settings)
+                    return run_signal_monitor_cycle(db, provider, settings)
+                except Exception:
+                    db.rollback()
+                    raise
+                finally:
+                    db.close()
+
+            try:
+                result = await asyncio.to_thread(_run_signal_cycle)
+                if result.get("updated") or result.get("queued") or result.get("errors"):
+                    logger.info("BIST sinyal monitor sonucu: %s", result)
+            except Exception as exc:  # noqa: BLE001 - scheduler yaşamaya devam eder
+                logger.error("BIST sinyal monitor döngüsü hata verdi: %s", exc)
+
+        async def _bist_signal_delivery_job() -> None:
+            if application is None:
+                return
+            from app.models.database import get_session_factory
+            from app.services.bist_signal_monitor_service import deliver_signal_event_outbox
+
+            db = get_session_factory()()
+            try:
+                result = await deliver_signal_event_outbox(application, db, settings)
+                if result.get("sent") or result.get("retry") or result.get("failed"):
+                    logger.info("BIST sinyal teslimat sonucu: %s", result)
+            except Exception as exc:  # noqa: BLE001
+                db.rollback()
+                logger.error("BIST sinyal teslimat döngüsü hata verdi: %s", exc)
+            finally:
+                db.close()
+
+        scheduler.add_job(
+            _bist_signal_monitor_job,
+            IntervalTrigger(
+                seconds=max(1, int(getattr(settings, "signal_monitor_interval_seconds", 5)))
+            ),
+            id="bist_signal_monitor",
+            coalesce=True,
+            max_instances=1,
+            replace_existing=True,
+        )
+        scheduler.add_job(
+            _bist_signal_delivery_job,
+            IntervalTrigger(seconds=5),
+            id="bist_signal_delivery",
+            coalesce=True,
+            max_instances=1,
+            replace_existing=True,
+        )
+        logger.info("BIST sinyal monitor ve olay teslimat işleri scheduler'a eklendi.")
 
     if getattr(settings, "enhanced_alarm_scan_enabled", False):
         async def _enhanced_alarm_job() -> None:
@@ -379,7 +536,7 @@ def _register_scheduler_lifecycle(application: Application, settings) -> None:
         app.bot_data["scheduler_started"] = True
         from app.services.health_service import mark_runtime_health
         mark_runtime_health("scheduler", "running")
-        logger.info("Otomatik aksam taramasi scheduler'i basariyla baslatildi.")
+        logger.info("Arka plan scheduler'i basariyla baslatildi.")
 
     async def _on_post_shutdown(app: Application) -> None:
         sched = app.bot_data.get("scheduler")

@@ -23,10 +23,13 @@ def _build_app() -> Application:
     return Application.builder().token("test-token").build()
 
 
-def test_scheduler_disabled_creates_nothing():
+def test_close_scan_disabled_keeps_independent_scheduler_jobs():
     settings = _fake_settings(close_scan_enabled=False)
     scheduler = _build_evening_scan_scheduler(settings)
-    assert scheduler is None
+    assert scheduler is not None
+    job_ids = {job.id for job in scheduler.get_jobs()}
+    assert "evening_close_scan" not in job_ids
+    assert {"user_price_alert_monitor", "user_price_alert_delivery"} <= job_ids
 
 
 def test_scheduler_includes_intraday_anomaly_job_by_default():
@@ -36,7 +39,13 @@ def test_scheduler_includes_intraday_anomaly_job_by_default():
     settings = _fake_settings(close_scan_enabled=True)
     scheduler = _build_evening_scan_scheduler(settings)
     assert scheduler is not None
-    assert len(scheduler.get_jobs()) == 2
+    job_ids = {job.id for job in scheduler.get_jobs()}
+    assert {
+        "evening_close_scan",
+        "user_price_alert_monitor",
+        "user_price_alert_delivery",
+    } <= job_ids
+    assert len(scheduler.get_jobs()) == 4
 
 
 def test_scheduler_is_not_started_before_event_loop_runs():
@@ -74,12 +83,13 @@ def test_scheduler_starts_once_event_loop_is_running():
     asyncio.run(_run())
 
 
-def test_scheduler_lifecycle_noop_when_disabled():
+def test_scheduler_lifecycle_is_registered_when_only_close_scan_is_disabled():
     application = _build_app()
     settings = _fake_settings(close_scan_enabled=False)
     _register_scheduler_lifecycle(application, settings)
 
-    assert application.bot_data["scheduler"] is None
-    # post_init/post_shutdown Application uzerinde atanmamis olmali (varsayilan None).
-    assert application.post_init is None
-    assert application.post_shutdown is None
+    scheduler = application.bot_data["scheduler"]
+    assert scheduler is not None
+    assert "user_price_alert_monitor" in {job.id for job in scheduler.get_jobs()}
+    assert application.post_init is not None
+    assert application.post_shutdown is not None

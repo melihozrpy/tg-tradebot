@@ -587,7 +587,7 @@ def _render_professional_daily_chart(
         )
 
     mode_label = "Standart" if not detailed else "Detaylı"
-    ax_price.set_title(f"MERGEN QUANT — {symbol.upper()} {mode_label} Teknik Analiz", fontsize=13, fontweight="bold", loc="left")
+    ax_price.set_title(f"MONTANA MELİH HİSSE BOT — {symbol.upper()} {mode_label} Teknik Analiz", fontsize=13, fontweight="bold", loc="left")
     ax_price.set_ylabel("Fiyat", fontsize=8)
     handles, labels = ax_price.get_legend_handles_labels()
     if handles:
@@ -725,7 +725,7 @@ def generate_bist_trade_plan_chart(df: pd.DataFrame, plan) -> str:
         transform=ax.transAxes, va="top", color=theme.foreground, fontsize=8,
         bbox={"boxstyle": "round", "facecolor": theme.panel, "edgecolor": theme.accent, "alpha": .92},
     )
-    ax.set_title(f"MERGEN QUANT • {plan.symbol} • LONG / SHORT ISLEM HARITASI", fontweight="bold", loc="left")
+    ax.set_title(f"MONTANA MELİH HİSSE BOT • {plan.symbol} • LONG / SHORT İŞLEM HARİTASI", fontweight="bold", loc="left")
     ax.legend(loc="upper right", fontsize=6, ncol=3, framealpha=.35)
     up = data["close"] >= data["open"]
     ax_vol.bar(x, data["volume"], color=np.where(up, theme.up, theme.down), width=.68, alpha=.75)
@@ -984,7 +984,7 @@ def generate_intraday_chart(
             bbox={"boxstyle": "round,pad=0.14", "facecolor": theme.panel, "edgecolor": color, "alpha": 0.85},
         )
 
-    ax_price.set_title(f"MERGEN QUANT — {symbol.upper()} Gün İçi Teknik Analiz (15dk)", fontsize=12, fontweight="bold", loc="left")
+    ax_price.set_title(f"MONTANA MELİH HİSSE BOT — {symbol.upper()} Gün İçi Teknik Analiz (15dk)", fontsize=12, fontweight="bold", loc="left")
     ax_price.set_ylabel("Fiyat", fontsize=8)
     ax_price.legend(loc="upper right", fontsize=6.5, ncol=3, framealpha=0.35)
 

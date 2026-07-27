@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 import pandas as pd
 
 from app.data.base_provider import BaseMarketDataProvider, DataFreshness
-from app.models.database import Signal, SignalStateEnum, SignalTypeEnum
+from app.models.database import Signal, SignalStateEnum, SignalTypeEnum, User
 from app.services.signal_lifecycle_service import update_open_signals
 
 
@@ -117,3 +117,20 @@ def test_already_hit_target_1_does_not_re_trigger(db_session):
     update_open_signals(db_session, provider)
     db_session.refresh(sig)
     assert sig.state == SignalStateEnum.TARGET_1_HIT  # degismedi (henuz target_2/stop yok)
+
+
+def test_legacy_tracker_never_mutates_user_owned_ultra_signal(db_session):
+    user = User(telegram_user_id=887700, total_capital=100_000)
+    db_session.add(user)
+    db_session.commit()
+    sig = _make_signal(db_session, stop=45.0, target_1=55.0)
+    sig.user_id = user.id
+    sig.state = SignalStateEnum.ACTIVE
+    db_session.commit()
+    future = _bars([{"open": 50, "high": 56.0, "low": 44.0, "close": 50.0, "volume": 1000}])
+
+    result = update_open_signals(db_session, _FixedFutureProvider(future))
+
+    db_session.refresh(sig)
+    assert result["checked"] == 0
+    assert sig.state == SignalStateEnum.ACTIVE

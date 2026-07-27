@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import sqlite3
 import subprocess
+import sys
 import time
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
@@ -32,8 +33,7 @@ def _alembic(target, revision):
     env = os.environ.copy()
     env["DATABASE_URL"] = f"sqlite:///{target.as_posix()}"
     completed = subprocess.run(
-        [str((target.parent.parent / ".venv" / "Scripts" / "python.exe")) if False else str(os.path.abspath(".venv/Scripts/python.exe")),
-         "-m", "alembic", "upgrade", revision],
+        [sys.executable, "-m", "alembic", "upgrade", revision],
         cwd=os.path.abspath("."), env=env, capture_output=True, text=True, timeout=60,
     )
     assert completed.returncode == 0, completed.stderr
@@ -61,14 +61,14 @@ def test_55_fresh_migration_reaches_stage5g_head(migrated_databases):
         names = {row[0] for row in connection.execute("select name from sqlite_master where type='table'")}
         version = connection.execute("select version_num from alembic_version").fetchone()[0]
     assert REQUIRED_TABLES.issubset(names)
-    assert version == "0007_stage5g_backtest_paper_validation"
+    assert version == "0008_ultra_bist_alerts_signals"
 
 
 def test_56_existing_database_migration_reaches_stage5g_head(migrated_databases):
     _, existing = migrated_databases
     with sqlite3.connect(existing) as connection:
         version = connection.execute("select version_num from alembic_version").fetchone()[0]
-    assert version == "0007_stage5g_backtest_paper_validation"
+    assert version == "0008_ultra_bist_alerts_signals"
 
 
 def test_57_existing_user_record_is_preserved_by_migration(migrated_databases):
@@ -82,7 +82,7 @@ def test_58_fastapi_smoke_passes():
     with TestClient(app) as client:
         response = client.get("/")
     assert response.status_code == 200
-    assert response.json()["name"] == "MERGEN QUANT"
+    assert response.json()["name"] == "MONTANA MELİH HİSSE BOT"
 
 
 def test_59_stage5g_telegram_commands_are_registered():

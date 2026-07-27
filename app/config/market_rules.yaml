@@ -1,4 +1,5 @@
-# BIST piyasa kurallari (FAZ 1 icin sabit degerler; FAZ 2+ de dinamik hale getirilebilir)
+# BIST piyasa kurallari. Fiyat adimi ve gunluk limit gibi islem-kritik
+# degerlerde lisansli/veri-zamanli saglayici kaydi esastir.
 market:
   timezone: Europe/Istanbul
   session_open: "10:00"
@@ -6,5 +7,8 @@ market:
   lot_step: 1
   price_tick: 0.01
 
-circuit_breaker:
-  daily_price_limit_percent: 10.0
+price_limits:
+  # BIST fiyat marjlari pazar/urun/islem yontemine gore degisebilir. Evrensel
+  # bir %10 varsayimi yapilmaz; ust/alt limitler enstruman bazinda saglayicidan
+  # alinmalidir.
+  daily_price_limit_percent: null

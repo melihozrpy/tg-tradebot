@@ -1,7 +1,7 @@
 [project]
 name = "mergen-quant"
 version = "3.0.0"
-description = "MERGEN QUANT - Akilli BIST Analiz ve Risk Sistemi (Telegram hisse analiz, tarama, sinyal takip, portfoy risk ve backtest botu, ucretsiz veri)"
+description = "Montana Melih Hisse Bot - BIST analiz, alarm, sinyal, portfoy risk ve backtest sistemi"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.111.0",
@@ -19,6 +19,9 @@ dependencies = [
     "PyYAML>=6.0.1",
     "yfinance>=0.2.40",
     "matplotlib>=3.8.0",
+    "Pillow>=10.3.0",
+    "openpyxl>=3.1.5",
+    "pytesseract>=0.3.13",
 ]
 
 [project.optional-dependencies]

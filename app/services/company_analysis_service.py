@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from datetime import date
+from typing import TYPE_CHECKING, Any
 from urllib.parse import quote
+
+if TYPE_CHECKING:
+    from app.fundamentals import FundamentalDataProvider, FundamentalSnapshot
 
 
 @dataclass(frozen=True)
@@ -22,6 +26,30 @@ class CompanyAnalysis:
     financial_period: str | None
     kap_url: str
     source: str = "Yahoo Finance (gecikmeli/ikincil kaynak)"
+    decision_summary: str = "Veri yeterliliği ve riskler birlikte değerlendirilmelidir."
+    data_warnings: tuple[str, ...] = ()
+
+
+def _decision_summary(status: str, evidence_count: int) -> str:
+    if evidence_count < 3:
+        return (
+            "Karar üretmek için doğrulanmış finansal kalem sayısı yetersiz. Yeni bilanço ve KAP bildirimleri "
+            "gelmeden temel görünüm kesinleştirilemez."
+        )
+    if status == "GÜÇLÜ":
+        return (
+            "Büyüme, kârlılık, nakit ve borç göstergelerinin birlikte verdiği temel görünüm olumlu. "
+            "Bu tek başına AL sinyali değildir; fiyatlama, sektör karşılaştırması, teknik teyit ve güncel KAP akışı gerekir."
+        )
+    if status == "RİSKLİ":
+        return (
+            "Borçluluk, marj, büyüme veya nakit üretimindeki zayıflıklar aşağı yönlü baskı riski oluşturuyor. "
+            "Risk kalemleri düzelmeden yalnız düşük fiyat/çarpan gerekçesiyle alım sonucu çıkarılmamalı."
+        )
+    return (
+        "Olumlu ve olumsuz finansal göstergeler dengede. Yön için yeni dönem sonuçları, sektör kıyası, "
+        "değerleme ve güncel KAP haberleri birlikte izlenmeli."
+    )
 
 
 def _number(value: Any) -> float | None:
@@ -56,10 +84,141 @@ def _trend_line(label: str, values) -> str | None:
     return f"{label}: {latest / 1_000_000:.1f} mn TL • çeyreklik %{change:+.1f}"
 
 
-def analyze_company(symbol: str, ticker_factory=None) -> CompanyAnalysis:
+def _trend_line_pair(label: str, latest: Any, previous: Any) -> str | None:
+    latest_value, previous_value = _number(latest), _number(previous)
+    if latest_value is None or previous_value is None:
+        return None
+    change = ((latest_value / abs(previous_value)) - 1) * 100 if previous_value else 0.0
+    return f"{label}: {latest_value / 1_000_000:.1f} mn TL • dönemsel %{change:+.1f}"
+
+
+def _analysis_from_snapshot(snapshot: "FundamentalSnapshot") -> CompanyAnalysis:
+    from app.fundamentals.ratios import comparable_growth_period
+
+    latest = snapshot.latest_period
+    previous = comparable_growth_period(latest, snapshot.periods)
+    calculated = snapshot.ratios.as_dict()
+    metrics: dict[str, float | None] = {
+        key: _number(value)
+        for key, value in calculated.items()
+    }
+    metrics.update(
+        {
+            "market_cap": _number(latest.value("market_cap")),
+            "total_debt": _number(latest.value("total_debt")),
+            "total_cash": _number(latest.value("cash_and_equivalents")),
+        }
+    )
+    trends = tuple(
+        filter(
+            None,
+            (
+                _trend_line_pair("Ciro", latest.value("revenue"), previous.value("revenue") if previous else None),
+                _trend_line_pair("Net kâr", latest.value("net_income"), previous.value("net_income") if previous else None),
+                _trend_line_pair("FAVÖK", latest.value("ebitda"), previous.value("ebitda") if previous else None),
+                _trend_line_pair(
+                    "Faaliyet nakdi",
+                    latest.value("operating_cash_flow"),
+                    previous.value("operating_cash_flow") if previous else None,
+                ),
+            ),
+        )
+    )
+
+    positives: list[str] = []
+    risks: list[str] = []
+    score = 50
+    growth = metrics.get("revenue_growth")
+    if growth is not None:
+        (positives if growth > .10 else risks).append(f"Ciro büyümesi %{growth * 100:+.1f}")
+        score += 12 if growth > .10 else -8 if growth < 0 else 0
+    margin = metrics.get("profit_margin")
+    if margin is not None:
+        (positives if margin > .08 else risks).append(f"Net kâr marjı %{margin * 100:.1f}")
+        score += 10 if margin > .08 else -8 if margin < .02 else 0
+    sector_text = f"{snapshot.sector or ''} {snapshot.industry or ''}".casefold()
+    is_bank = any(token in sector_text for token in ("banka", "banking", "bank"))
+    data_warnings: list[str] = []
+    debt = metrics.get("debt_to_equity")
+    if debt is not None:
+        if is_bank:
+            data_warnings.append(
+                "Banka bilançosunda sanayi şirketi Borç/Özsermaye eşiği kullanılmadı; bankacılık rasyoları ayrıca gerekir."
+            )
+        else:
+            (risks if debt > 150 else positives).append(f"Borç/özsermaye %{debt:.1f}")
+            score += -15 if debt > 150 else 8 if debt < 60 else 0
+    cash = metrics.get("free_cash_flow")
+    if cash is not None:
+        (positives if cash > 0 else risks).append(
+            "Serbest nakit akışı pozitif" if cash > 0 else "Serbest nakit akışı negatif"
+        )
+        score += 10 if cash > 0 else -12
+    roe = metrics.get("return_on_equity")
+    if roe is not None:
+        (positives if roe > .15 else risks).append(f"Özsermaye kârlılığı %{roe * 100:.1f}")
+        score += 10 if roe > .15 else -5 if roe < .05 else 0
+    evidence_count = sum(
+        metrics.get(key) is not None
+        for key in ("revenue_growth", "profit_margin", "debt_to_equity", "free_cash_flow", "return_on_equity")
+    )
+    score = max(0, min(100, score))
+    status = (
+        "VERİ YETERSİZ"
+        if evidence_count < 3
+        else "GÜÇLÜ" if score >= 70 else "DENGELİ" if score >= 50 else "RİSKLİ"
+    )
+    period_age = (date.today() - latest.period_end).days
+    stale_limit = 550 if latest.period_type.value == "annual" else 220
+    if period_age > stale_limit:
+        data_warnings.append(f"Son finansal dönem {period_age} günlük; güncellik eşiğini aşıyor.")
+    if not snapshot.provenance.source_url:
+        data_warnings.append("Kaynak belge bağlantısı sağlanmadı.")
+
+    valuation_lines: list[str] = []
+    for label, key in (("F/K", "trailing_pe"), ("PD/DD", "price_to_book"), ("FD/FAVÖK", "enterprise_to_ebitda")):
+        if metrics.get(key) is not None:
+            valuation_lines.append(f"{label}: {metrics[key]:.2f}x")
+    if metrics.get("net_debt") is not None:
+        valuation_lines.append(f"Net borç: {metrics['net_debt'] / 1_000_000:.1f} mn TL")
+
+    consolidation = "konsolide" if latest.consolidated is True else "solo" if latest.consolidated is False else "türü belirsiz"
+    revision = latest.revision or "revizyon bilgisi yok"
+    source = (
+        f"{snapshot.provenance.provider} • {snapshot.provenance.trust.value} • "
+        f"{latest.period_end.isoformat()} • {revision} • {consolidation} • {latest.currency}"
+    )
+    return CompanyAnalysis(
+        symbol=snapshot.symbol,
+        name=snapshot.company_name,
+        sector=snapshot.sector or "Veri yok",
+        industry=snapshot.industry or "Veri yok",
+        summary=(snapshot.summary or "Şirket faaliyet özeti veri kaynağında bulunamadı.")[:700],
+        status=status,
+        score=score,
+        positives=tuple(positives),
+        risks=tuple(risks),
+        metrics=metrics,
+        quarterly_trends=trends,
+        valuation_lines=tuple(valuation_lines),
+        financial_period=latest.period_end.isoformat(),
+        kap_url=f"https://www.kap.org.tr/tr/search/{quote(snapshot.symbol)}/1",
+        source=source,
+        decision_summary=_decision_summary(status, evidence_count),
+        data_warnings=tuple(data_warnings),
+    )
+
+
+def analyze_company(
+    symbol: str,
+    ticker_factory=None,
+    fundamental_provider: "FundamentalDataProvider | None" = None,
+) -> CompanyAnalysis:
     import yfinance as yf
 
     normalized = symbol.strip().upper().removesuffix(".IS")
+    if fundamental_provider is not None:
+        return _analysis_from_snapshot(fundamental_provider.fetch(normalized))
     ticker = (ticker_factory or yf.Ticker)(f"{normalized}.IS")
     info = dict(getattr(ticker, "info", {}) or {})
     if not info:
@@ -118,8 +277,16 @@ def analyze_company(symbol: str, ticker_factory=None) -> CompanyAnalysis:
     if roe is not None:
         (positives if roe > .15 else risks).append(f"Özsermaye kârlılığı %{roe * 100:.1f}")
         score += 10 if roe > .15 else -5 if roe < .05 else 0
+    evidence_count = sum(
+        metrics.get(key) is not None
+        for key in ("revenue_growth", "profit_margin", "debt_to_equity", "free_cash_flow", "return_on_equity")
+    )
     score = max(0, min(100, score))
-    status = "GÜÇLÜ" if score >= 70 else "DENGELİ" if score >= 50 else "RİSKLİ"
+    status = (
+        "VERİ YETERSİZ"
+        if evidence_count < 3
+        else "GÜÇLÜ" if score >= 70 else "DENGELİ" if score >= 50 else "RİSKLİ"
+    )
     valuation_lines = []
     for label, key, suffix in (("F/K", "trailing_pe", "x"), ("PD/DD", "price_to_book", "x"),
                                ("FD/FAVÖK", "enterprise_to_ebitda", "x")):
@@ -135,6 +302,8 @@ def analyze_company(symbol: str, ticker_factory=None) -> CompanyAnalysis:
         status=status, score=score, positives=tuple(positives), risks=tuple(risks), metrics=metrics,
         quarterly_trends=trends, valuation_lines=tuple(valuation_lines), financial_period=financial_period,
         kap_url=f"https://www.kap.org.tr/tr/search/{quote(normalized)}/1",
+        decision_summary=_decision_summary(status, evidence_count),
+        data_warnings=("Yahoo verisi gecikmeli/ikincil kaynaktır; KAP veya lisanslı kaynakla doğrulanmalıdır.",),
     )
 
 
@@ -144,6 +313,7 @@ def format_company_analysis(result: CompanyAnalysis) -> str:
     trends = "\n".join(f"• {item}" for item in result.quarterly_trends) or "• Çeyreklik tablo verisi bulunamadı"
     valuations = "\n".join(f"• {item}" for item in result.valuation_lines) or "• Çarpan verisi bulunamadı"
     period = result.financial_period or "veri kaynağında yok"
+    warnings = "\n".join(f"• {item}" for item in result.data_warnings) or "• Ek veri kalite uyarısı yok"
     return (
         f"🏢 {result.name} ({result.symbol})\n"
         f"Sektör: {result.sector} / {result.industry}\n\n"
@@ -153,8 +323,10 @@ def format_company_analysis(result: CompanyAnalysis) -> str:
         f"⚠️ Baskı yaratabilecek riskler\n{risks}\n\n"
         f"📊 SON ÇEYREK DEĞİŞİMLERİ\n{trends}\n\n"
         f"💰 DEĞERLEME VE BORÇLULUK\n{valuations}\n\n"
+        f"🧭 NE ANLAMA GELİYOR?\n{result.decision_summary}\n\n"
+        f"🔎 VERİ KALİTESİ\n{warnings}\n\n"
         f"🗓️ Son finansal dönem: {period}\n"
         f"Kaynak: {result.source}\n\n"
         f"🔗 Resmî KAP araması: {result.kap_url}\n\n"
-        "Not: Bu değerlendirme eksik/gecikmeli ikincil veriye dayanabilir; kesin al/sat kararı değildir."
+        "Not: Kaynak ne kadar güçlü olursa olsun bu değerlendirme kesin al/sat kararı veya fiyat yönü garantisi değildir."
     )

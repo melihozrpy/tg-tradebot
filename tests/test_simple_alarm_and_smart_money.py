@@ -39,6 +39,28 @@ def test_smart_money_detects_fvg_and_structure():
     result = detect_smart_money(df)
     assert result.fvg
     assert all(event.kind in {"BOS", "MSS"} for event in result.structure)
+    assert all(event.confirmation_index == event.index for event in result.structure)
+    assert all(event.origin_index + 3 == event.confirmation_index for event in result.structure)
+    assert all(zone.confirmation_index == zone.index for zone in result.order_blocks)
+    assert all(zone.origin_index < zone.confirmation_index for zone in result.order_blocks)
+
+
+def test_structure_event_is_not_visible_before_confirmation_candle():
+    rows = 90
+    base = 20 + np.sin(np.arange(rows) / 4) * 2 + np.linspace(0, 4, rows)
+    df = pd.DataFrame({
+        "timestamp": pd.date_range("2025-01-01", periods=rows, freq="B", tz="UTC"),
+        "open": base,
+        "close": base + .3,
+        "high": base + .8,
+        "low": base - .6,
+        "volume": 1_000_000,
+    })
+    result = detect_smart_money(df, swing_window=3)
+    assert result.structure
+    event = result.structure[-1]
+    before_confirmation = detect_smart_money(df.iloc[:event.confirmation_index], swing_window=3)
+    assert not any(item.origin_index == event.origin_index for item in before_confirmation.structure)
 
 
 def test_company_analysis_is_rule_based_and_fail_closed():

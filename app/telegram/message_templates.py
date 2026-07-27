@@ -244,7 +244,7 @@ def format_daily_report(
     risk_text = ", ".join(rising_risk_symbols) if rising_risk_symbols else "-"
     portfolio_line = f"{portfolio_daily_change:+.2f}%" if portfolio_daily_change is not None else "pozisyon yok"
 
-    return f"""🏹 MERGEN QUANT — GÜNLÜK RAPOR
+    return f"""🏔️ MONTANA MELİH HİSSE BOT — GÜNLÜK RAPOR
 
 Piyasa rejimi: {market_regime}
 XU100 performansi: {xu100_line}
@@ -259,7 +259,7 @@ Sistem/veri sagligi: {"OK" if system_health_ok else "SORUNLU - loglara bakin"}
 
 
 def format_help_message() -> str:
-    return """MERGEN QUANT — Komutlar
+    return """🏔️ MONTANA MELİH HİSSE BOT — Komutlar
 
 /ekle SEMBOL - Izleme listesine hisse ekle (orn: /ekle THYAO)
 /sil SEMBOL - Izleme listesinden hisse cikar

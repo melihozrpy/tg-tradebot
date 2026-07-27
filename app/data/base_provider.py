@@ -30,6 +30,10 @@ class BaseMarketDataProvider(ABC):
     """Tum piyasa veri saglayicilarinin uygulamasi gereken soyut arayuz."""
 
     name: str = "base"
+    # Only a contracted adapter that validates exchange transaction metadata
+    # may opt in. Free/delayed OHLC providers remain analysis-only even when
+    # their timestamps happen to be recent.
+    supports_verified_live_transactions: bool = False
 
     @abstractmethod
     def get_quote(self, symbol: str) -> dict:

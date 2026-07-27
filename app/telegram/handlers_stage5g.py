@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import math
+import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -55,32 +56,86 @@ def _current_user(db, update: Update):
 
 def _backtest_config() -> BacktestConfig:
     settings = get_settings()
+    commission_rate = settings.backtest_commission_rate
+    commission_bps = (
+        float(commission_rate) * 10_000.0
+        if commission_rate is not None
+        else settings.backtest_commission_bps
+    )
+    minimum_cost = (
+        float(settings.backtest_commission_minimum)
+        if settings.backtest_commission_minimum is not None
+        else settings.backtest_minimum_cost
+    )
     return BacktestConfig(
         initial_capital=settings.backtest_initial_capital,
         max_position_pct=settings.backtest_max_position_pct,
         entry_model=settings.backtest_entry_model,
         intrabar_policy=settings.backtest_intrabar_policy,
         transaction_costs=TransactionCostConfig(
-            commission_bps=settings.backtest_commission_bps,
+            commission_bps=commission_bps,
             slippage_bps=settings.backtest_slippage_bps,
             spread_bps=settings.backtest_spread_bps,
             bsmv_bps=settings.backtest_bsmv_bps,
-            minimum_cost=settings.backtest_minimum_cost,
+            minimum_cost=minimum_cost,
+            commission_tax_rate=float(settings.backtest_commission_tax_rate or 0.0),
+        ),
+        target_allocations=(
+            settings.default_tp1_allocation / 100.0,
+            settings.default_tp2_allocation / 100.0,
+            settings.default_tp3_allocation / 100.0,
         ),
         minimum_history_bars=MIN_BARS_FOR_FULL_ANALYSIS,
         minimum_sample_size=settings.backtest_minimum_sample_size,
+        require_complete_bar_flag=True,
     )
 
 
-def _parse_dates(args: list[str]) -> tuple[datetime, datetime]:
-    if len(args) >= 3:
+_BACKTEST_TIMEFRAME_ALIASES = {
+    "5d": "5m", "5m": "5m",
+    "15d": "15m", "15m": "15m",
+    "1s": "1h", "1h": "1h",
+    "4s": "4h", "4h": "4h",
+    "1g": "1d", "1d": "1d",
+    "1hf": "1wk", "1w": "1wk", "1wk": "1wk",
+}
+
+
+def _parse_backtest_window(
+    args: list[str],
+    *,
+    default_timeframe: str,
+) -> tuple[str, datetime, datetime]:
+    """Accept both legacy ISO dates and Turkish timeframe/period syntax."""
+
+    if len(args) >= 3 and re.fullmatch(r"\d{4}-\d{2}-\d{2}", args[1]):
         start = datetime.strptime(args[1], "%Y-%m-%d").replace(tzinfo=timezone.utc)
         end = datetime.strptime(args[2], "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        timeframe = default_timeframe
+    elif len(args) >= 3:
+        timeframe = _BACKTEST_TIMEFRAME_ALIASES.get(args[1].strip().casefold(), "")
+        period = re.fullmatch(r"(\d+)(g|d|y|a|w|hf)", args[2].strip().casefold())
+        if not timeframe or period is None:
+            raise ValueError("Zaman dilimi veya dönem geçersiz.")
+        amount = int(period.group(1))
+        days = amount * {"g": 1, "d": 1, "w": 7, "hf": 7, "a": 30, "y": 365}[period.group(2)]
+        if not 1 <= days <= 3650:
+            raise ValueError("Backtest dönemi 1 gün ile 10 yıl arasında olmalı.")
+        end = datetime.now(timezone.utc)
+        start = end - timedelta(days=days)
     else:
+        timeframe = default_timeframe
         end = datetime.now(timezone.utc)
         start = end - timedelta(days=730)
     if start >= end:
-        raise ValueError("Baslangic tarihi bitis tarihinden once olmali.")
+        raise ValueError("Başlangıç tarihi bitiş tarihinden önce olmalı.")
+    return timeframe, start, end
+
+
+def _parse_dates(args: list[str]) -> tuple[datetime, datetime]:
+    """Legacy helper retained for existing integrations/tests."""
+
+    _, start, end = _parse_backtest_window(args, default_timeframe="1d")
     return start, end
 
 
@@ -124,18 +179,25 @@ def _format_run(record: BacktestRun) -> str:
 
 async def cmd_backtest(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not context.args:
-        await update.message.reply_text("Kullanım: /backtest SEMBOL [YYYY-AA-GG YYYY-AA-GG]")
-        return
-    try:
-        symbol = normalize_symbol(context.args[0])
-        start, end = _parse_dates(context.args)
-    except Exception:
-        await update.message.reply_text("Sembol veya tarih formatı geçersiz. Örnek: /backtest THYAO 2024-01-01 2026-01-01")
+        await update.message.reply_text(
+            "Kullanım: /backtest THYAO 1g 5y\n"
+            "Alternatif: /backtest THYAO 2024-01-01 2026-01-01"
+        )
         return
     settings = get_settings()
     strategy_config = get_strategy_config()
+    try:
+        symbol = normalize_symbol(context.args[0])
+        timeframe, start, end = _parse_backtest_window(
+            context.args,
+            default_timeframe=strategy_config["timeframes"]["primary"],
+        )
+    except Exception:
+        await update.message.reply_text(
+            "Sembol, zaman dilimi veya dönem geçersiz. Örnek: /backtest THYAO 1g 5y"
+        )
+        return
     provider = build_market_data_provider(settings)
-    timeframe = strategy_config["timeframes"]["primary"]
     db = get_session_factory()()
     try:
         user = _current_user(db, update)
@@ -171,7 +233,8 @@ async def cmd_backtest(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         )
         await update.message.reply_text(
             f"🧪 {symbol} backtest başlatıldı.\n"
-            "Son iki yıl, komisyon + spread + fiyat kaymasıyla test ediliyor. Botu kullanmaya devam edebilirsin.\n"
+            f"Zaman: {timeframe} | Dönem: {start:%Y-%m-%d} → {end:%Y-%m-%d}\n"
+            "Komisyon + spread + fiyat kayması dahil; botu kullanmaya devam edebilirsin.\n"
             f"Run ID: {run_id}",
             reply_markup=InlineKeyboardMarkup([[
                 InlineKeyboardButton("Backtest Iptal", callback_data=f"stage5g_btcancel_{run_id}")
@@ -191,11 +254,24 @@ async def cmd_backtest_ozet(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             return
         lines = ["BACKTEST OZETI", ""]
         lines.extend(f"{item.run_id} | {item.symbol} | {item.run_status} | %{item.progress_percent or 0:.0f}" for item in runs)
-        buttons = [
-            [InlineKeyboardButton(f"#{item.id} Detay", callback_data=f"stage5g_paper_detail_{item.id}"),
-             InlineKeyboardButton(f"#{item.id} Kapat", callback_data=f"stage5g_paper_closeask_{item.id}")]
-            for item in trades[:3]
-        ]
+        buttons = []
+        for item in runs[:3]:
+            if not item.run_id:
+                continue
+            if item.run_status in {"PENDING", "RUNNING"} and item.run_id.startswith("btjob_"):
+                buttons.append([
+                    InlineKeyboardButton(
+                        f"{item.symbol} İptal",
+                        callback_data=f"stage5g_btcancel_{item.run_id}",
+                    )
+                ])
+            elif item.run_status not in {"PENDING", "RUNNING"}:
+                buttons.append([
+                    InlineKeyboardButton(
+                        f"{item.symbol} Detay",
+                        callback_data=f"stage5g_btmetric_{item.run_id}",
+                    )
+                ])
         await update.message.reply_text(
             "\n".join(lines), reply_markup=InlineKeyboardMarkup(buttons) if buttons else None
         )

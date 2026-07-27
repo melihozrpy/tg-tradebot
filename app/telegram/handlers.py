@@ -64,7 +64,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if await _reject_unauthorized(update):
         return
     await update.message.reply_text(
-        "MERGEN QUANT - Akilli BIST Analiz ve Risk Sistemi'ne hos geldin.\n"
+        "🏔️ MONTANA MELİH HİSSE BOT • Akıllı BIST Analiz ve Risk Sistemi'ne hoş geldin.\n"
         "Bu bot yatirim tavsiyesi vermez; kural tabanli, aciklanabilir analiz uretir.\n"
         "Komutlar icin /yardim yazabilirsin."
     )

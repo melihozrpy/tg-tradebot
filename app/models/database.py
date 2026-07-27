@@ -4,6 +4,7 @@ import enum
 from datetime import datetime, timezone
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     Column,
     DateTime,
@@ -11,10 +12,13 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Integer,
+    Numeric,
+    Index,
     String,
     Text,
     UniqueConstraint,
     create_engine,
+    event,
 )
 from sqlalchemy.orm import DeclarativeBase, relationship, sessionmaker
 
@@ -38,7 +42,9 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True)
-    telegram_user_id = Column(Integer, unique=True, nullable=False, index=True)
+    # Telegram user/chat identifiers are signed 64-bit values.  PostgreSQL
+    # INTEGER is only 32-bit and already rejects valid modern Telegram IDs.
+    telegram_user_id = Column(BigInteger, unique=True, nullable=False, index=True)
     username = Column(String(128), nullable=True)
     is_admin = Column(Boolean, default=False, nullable=False)
     total_capital = Column(Float, default=100000.0, nullable=False)
@@ -131,6 +137,16 @@ class SignalStateEnum(str, enum.Enum):
     INVALIDATED = "INVALIDATED"
     EXPIRED = "EXPIRED"
     CANCELLED = "CANCELLED"
+    PENDING_ENTRY = "PENDING_ENTRY"
+    TP1_HIT = "TP1_HIT"
+    TP2_HIT = "TP2_HIT"
+    TP3_HIT = "TP3_HIT"
+    STOPPED = "STOPPED"
+    CLOSED_MANUALLY = "CLOSED_MANUALLY"
+    EXIT_PENDING = "EXIT_PENDING"
+    UNFILLED = "UNFILLED"
+    SUSPENDED = "SUSPENDED"
+    CORPORATE_ACTION_ADJUSTED = "CORPORATE_ACTION_ADJUSTED"
 
 
 class SignalTypeEnum(str, enum.Enum):
@@ -169,9 +185,32 @@ class Signal(Base):
     strategy_version = Column(String(16), nullable=False)
     data_timestamp = Column(DateTime(timezone=True), nullable=False)
     provider = Column(String(32), nullable=False)
+    source = Column(String(48), nullable=True)
     idempotency_key = Column(String(128), unique=True, nullable=False, index=True)
     created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    side = Column(String(8), nullable=False, default="BUY")
+    entry_order_type = Column(String(24), nullable=True)
+    planned_entry_price = Column(Numeric(18, 6), nullable=True)
+    raw_planned_entry_price = Column(Numeric(18, 6), nullable=True)
+    actual_entry_price = Column(Numeric(18, 6), nullable=True)
+    requested_quantity = Column(Numeric(18, 4), nullable=True)
+    filled_quantity = Column(Numeric(18, 4), nullable=True)
+    remaining_quantity = Column(Numeric(18, 4), nullable=True)
+    average_fill_price = Column(Numeric(18, 6), nullable=True)
+    current_stop_price = Column(Numeric(18, 6), nullable=True)
+    invalidation_price = Column(Numeric(18, 6), nullable=True)
+    valid_from = Column(DateTime(timezone=True), nullable=True)
+    activated_at = Column(DateTime(timezone=True), nullable=True)
+    closed_at = Column(DateTime(timezone=True), nullable=True)
+    expires_at = Column(DateTime(timezone=True), nullable=True)
+    fill_method = Column(String(48), nullable=True)
+    fill_source = Column(String(48), nullable=True)
+    price_adjustment_mode = Column(String(24), nullable=True)
+    market_rule_version = Column(String(32), nullable=True)
+    monitoring_enabled = Column(Boolean, nullable=False, default=True)
+    row_version = Column(Integer, nullable=False, default=1)
 
     reasons = relationship("SignalReason", back_populates="signal", cascade="all, delete-orphan")
     events = relationship("SignalEvent", back_populates="signal", cascade="all, delete-orphan")
@@ -700,7 +739,7 @@ class SectorMappingRecord(Base):
     symbol = Column(String(16), nullable=False, index=True)
     sector_name = Column(String(128), nullable=False)
     sector_index = Column(String(16), nullable=False)
-    set_by_telegram_user_id = Column(Integer, nullable=True)
+    set_by_telegram_user_id = Column(BigInteger, nullable=True)
     created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
 
 
@@ -749,8 +788,98 @@ class SignalEvent(Base):
     trading_date = Column(DateTime(timezone=True), nullable=True)
     note = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+    event_type = Column(String(48), nullable=True)
+    planned_price = Column(Numeric(18, 6), nullable=True)
+    execution_price = Column(Numeric(18, 6), nullable=True)
+    requested_quantity = Column(Numeric(18, 4), nullable=True)
+    executed_quantity = Column(Numeric(18, 4), nullable=True)
+    provider = Column(String(48), nullable=True)
+    source = Column(String(48), nullable=True)
+    candle_open_time = Column(DateTime(timezone=True), nullable=True)
+    metadata_json = Column(Text, nullable=True)
+    unique_dedup_key = Column(String(160), nullable=True, unique=True, index=True)
 
     signal = relationship("Signal", back_populates="events")
+
+
+class SignalTarget(Base):
+    __tablename__ = "signal_targets"
+    __table_args__ = (UniqueConstraint("signal_id", "target_number", name="uq_signal_target_number"),)
+
+    id = Column(Integer, primary_key=True)
+    signal_id = Column(Integer, ForeignKey("signals.id"), nullable=False, index=True)
+    target_number = Column(Integer, nullable=False)
+    raw_target_price = Column(Numeric(18, 6), nullable=True)
+    target_price = Column(Numeric(18, 6), nullable=False)
+    allocation_percent = Column(Numeric(7, 4), nullable=False)
+    target_quantity = Column(Numeric(18, 4), nullable=True)
+    status = Column(String(24), nullable=False, default="PENDING")
+    reached_at = Column(DateTime(timezone=True), nullable=True)
+    executed_at = Column(DateTime(timezone=True), nullable=True)
+    execution_price = Column(Numeric(18, 6), nullable=True)
+    realized_quantity = Column(Numeric(18, 4), nullable=True)
+    gross_pnl = Column(Numeric(20, 6), nullable=True)
+    costs = Column(Numeric(20, 6), nullable=True)
+    net_pnl = Column(Numeric(20, 6), nullable=True)
+    notification_sent_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class SignalEventDelivery(Base):
+    __tablename__ = "signal_event_deliveries"
+    __table_args__ = (
+        UniqueConstraint("signal_event_id", name="uq_signal_event_delivery_event"),
+        Index("ix_signal_event_delivery_due", "status", "scheduled_for"),
+        Index("ix_signal_event_delivery_recovery", "status", "attempted_at"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    signal_event_id = Column(Integer, ForeignKey("signal_events.id"), nullable=False)
+    signal_id = Column(Integer, ForeignKey("signals.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    telegram_user_id = Column(BigInteger, nullable=False, index=True)
+    chat_id = Column(BigInteger, nullable=False)
+    status = Column(String(24), nullable=False, default="PENDING", index=True)
+    scheduled_for = Column(DateTime(timezone=True), nullable=False, index=True)
+    attempted_at = Column(DateTime(timezone=True), nullable=True)
+    sent_at = Column(DateTime(timezone=True), nullable=True)
+    telegram_message_id = Column(BigInteger, nullable=True)
+    attempt_count = Column(Integer, nullable=False, default=0)
+    next_retry_at = Column(DateTime(timezone=True), nullable=True)
+    error_code = Column(String(64), nullable=True)
+    # Snapshot at enqueue time: a delayed delivery must not be formatted from
+    # a Signal row that has meanwhile advanced to another TP/state.
+    payload_text = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class SignalTransitionErrorAudit(Base):
+    """Durable audit record for a rejected signal lifecycle transition.
+
+    The runtime rolls its state transaction back first and then commits this
+    immutable row in a fresh transaction, so a failed transition cannot partly
+    mutate the signal while its rejection silently disappears.
+    """
+
+    __tablename__ = "signal_transition_error_audits"
+    __table_args__ = (
+        UniqueConstraint("dedup_key", name="uq_signal_transition_error_audit_key"),
+        Index("ix_signal_transition_error_audit_signal_time", "signal_id", "event_time"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    signal_id = Column(Integer, ForeignKey("signals.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    previous_status = Column(String(32), nullable=False)
+    attempted_status = Column(String(32), nullable=False)
+    event_type = Column(String(48), nullable=False)
+    event_time = Column(DateTime(timezone=True), nullable=False)
+    dedup_key = Column(String(160), nullable=False)
+    reason = Column(Text, nullable=False)
+    provider = Column(String(48), nullable=True)
+    source = Column(String(48), nullable=True)
+    metadata_json = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
 
 
 class SignalPerformance(Base):
@@ -824,6 +953,169 @@ class AlertEvent(Base):
     triggered_value = Column(Float, nullable=True)
     message = Column(Text, nullable=True)
     triggered_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+# ---------------------------------------------------------------------------
+# Kalıcı kullanıcı fiyat alarmları (0008). Eski price_alerts korunur; yeni
+# alan normalleştirilmiş yaşam döngüsü, outbox ve toplu/OCR içe aktarma sunar.
+# ---------------------------------------------------------------------------
+
+
+class UserPriceAlert(Base):
+    __tablename__ = "user_price_alerts"
+    __table_args__ = (
+        Index("ix_user_price_alert_status_symbol", "status", "normalized_symbol"),
+        Index("ix_user_price_alert_user_status", "user_id", "status"),
+        UniqueConstraint("user_id", "public_id", name="uq_user_price_alert_public_id"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    public_id = Column(String(16), nullable=False, unique=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    telegram_user_id = Column(BigInteger, nullable=False, index=True)
+    chat_id = Column(BigInteger, nullable=False)
+    symbol = Column(String(16), nullable=False)
+    normalized_symbol = Column(String(16), nullable=False, index=True)
+    exchange = Column(String(16), nullable=False, default="BIST")
+    condition_type = Column(String(32), nullable=False)
+    target_price = Column(Numeric(18, 6), nullable=False)
+    base_price = Column(Numeric(18, 6), nullable=True)
+    percentage_value = Column(Numeric(12, 6), nullable=True)
+    near_tolerance = Column(Numeric(18, 6), nullable=True)
+    status = Column(String(24), nullable=False, default="ACTIVE", index=True)
+    mode = Column(String(24), nullable=False, default="PERSISTENT")
+    repeat_interval_seconds = Column(Integer, nullable=False, default=60)
+    sound_mode = Column(String(24), nullable=False, default="FIRST_TRIGGER")
+    sound_name = Column(String(16), nullable=False, default="zil")
+    market_hours_only = Column(Boolean, nullable=False, default=True)
+    note = Column(Text, nullable=True)
+    rearm_enabled = Column(Boolean, nullable=False, default=True)
+    reset_band_value = Column(Numeric(18, 6), nullable=True)
+    last_observed_price = Column(Numeric(18, 6), nullable=True)
+    previous_valid_price = Column(Numeric(18, 6), nullable=True)
+    previous_price_timestamp = Column(DateTime(timezone=True), nullable=True)
+    last_price_timestamp = Column(DateTime(timezone=True), nullable=True)
+    last_provider = Column(String(48), nullable=True)
+    last_freshness_seconds = Column(Integer, nullable=True)
+    last_evaluated_at = Column(DateTime(timezone=True), nullable=True)
+    last_triggered_at = Column(DateTime(timezone=True), nullable=True)
+    acknowledged_at = Column(DateTime(timezone=True), nullable=True)
+    snoozed_until = Column(DateTime(timezone=True), nullable=True, index=True)
+    next_delivery_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    trigger_count = Column(Integer, nullable=False, default=0)
+    source_type = Column(String(16), nullable=False, default="TEXT")
+    import_job_id = Column(Integer, nullable=True, index=True)
+    row_version = Column(Integer, nullable=False, default=1)
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class PriceAlertTrigger(Base):
+    __tablename__ = "price_alert_triggers"
+    __table_args__ = (UniqueConstraint("idempotency_key", name="uq_price_alert_trigger_key"),)
+
+    id = Column(Integer, primary_key=True)
+    alert_id = Column(Integer, ForeignKey("user_price_alerts.id"), nullable=False, index=True)
+    trigger_sequence = Column(Integer, nullable=False)
+    triggered_price = Column(Numeric(18, 6), nullable=False)
+    target_price_snapshot = Column(Numeric(18, 6), nullable=False)
+    condition_type_snapshot = Column(String(32), nullable=False)
+    detected_at = Column(DateTime(timezone=True), nullable=False)
+    data_timestamp = Column(DateTime(timezone=True), nullable=False)
+    provider = Column(String(48), nullable=False)
+    freshness_seconds = Column(Integer, nullable=False)
+    status = Column(String(24), nullable=False, default="OPEN")
+    acknowledged_at = Column(DateTime(timezone=True), nullable=True)
+    closed_at = Column(DateTime(timezone=True), nullable=True)
+    idempotency_key = Column(String(180), nullable=False, unique=True, index=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class PriceAlertDelivery(Base):
+    __tablename__ = "price_alert_deliveries"
+    __table_args__ = (
+        UniqueConstraint("idempotency_key", name="uq_price_alert_delivery_key"),
+        Index("ix_price_alert_delivery_due", "status", "scheduled_for"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    trigger_id = Column(Integer, ForeignKey("price_alert_triggers.id"), nullable=False, index=True)
+    alert_id = Column(Integer, ForeignKey("user_price_alerts.id"), nullable=False, index=True)
+    telegram_user_id = Column(BigInteger, nullable=False, index=True)
+    chat_id = Column(BigInteger, nullable=False)
+    delivery_type = Column(String(24), nullable=False, default="TEXT")
+    scheduled_for = Column(DateTime(timezone=True), nullable=False, index=True)
+    attempted_at = Column(DateTime(timezone=True), nullable=True)
+    sent_at = Column(DateTime(timezone=True), nullable=True)
+    telegram_message_id = Column(BigInteger, nullable=True)
+    attempt_count = Column(Integer, nullable=False, default=0)
+    status = Column(String(24), nullable=False, default="PENDING", index=True)
+    error_code = Column(String(64), nullable=True)
+    error_message_sanitized = Column(Text, nullable=True)
+    next_retry_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    idempotency_key = Column(String(180), nullable=False, unique=True, index=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class AlarmImportJob(Base):
+    __tablename__ = "alarm_import_jobs"
+    id = Column(Integer, primary_key=True)
+    public_id = Column(String(18), nullable=False, unique=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    telegram_user_id = Column(BigInteger, nullable=False, index=True)
+    chat_id = Column(BigInteger, nullable=False)
+    source_type = Column(String(16), nullable=False)
+    status = Column(String(24), nullable=False, default="PREVIEW")
+    total_rows = Column(Integer, nullable=False, default=0)
+    valid_rows = Column(Integer, nullable=False, default=0)
+    invalid_rows = Column(Integer, nullable=False, default=0)
+    duplicate_rows = Column(Integer, nullable=False, default=0)
+    confirmed_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False, index=True)
+
+
+class AlarmImportRow(Base):
+    __tablename__ = "alarm_import_rows"
+    __table_args__ = (UniqueConstraint("import_job_id", "row_number", name="uq_alarm_import_row_number"),)
+    id = Column(Integer, primary_key=True)
+    import_job_id = Column(Integer, ForeignKey("alarm_import_jobs.id"), nullable=False, index=True)
+    row_number = Column(Integer, nullable=False)
+    raw_text = Column(Text, nullable=True)
+    parsed_symbol = Column(String(16), nullable=True)
+    parsed_price = Column(Numeric(18, 6), nullable=True)
+    parsed_condition = Column(String(32), nullable=True)
+    base_price = Column(Numeric(18, 6), nullable=True)
+    percentage_value = Column(Numeric(12, 6), nullable=True)
+    near_tolerance = Column(Numeric(18, 6), nullable=True)
+    sound_name = Column(String(16), nullable=True)
+    parsed_mode = Column(String(24), nullable=True)
+    repeat_interval_seconds = Column(Integer, nullable=True)
+    note = Column(Text, nullable=True)
+    confidence = Column(Float, nullable=True)
+    status = Column(String(24), nullable=False)
+    validation_error = Column(Text, nullable=True)
+    user_corrected = Column(Boolean, nullable=False, default=False)
+    created_alert_id = Column(Integer, ForeignKey("user_price_alerts.id"), nullable=True)
+
+
+class UserAlarmSetting(Base):
+    __tablename__ = "user_alarm_settings"
+    user_id = Column(Integer, ForeignKey("users.id"), primary_key=True)
+    default_repeat_interval_seconds = Column(Integer, nullable=False, default=60)
+    default_alarm_mode = Column(String(24), nullable=False, default="PERSISTENT")
+    default_sound_mode = Column(String(24), nullable=False, default="FIRST_TRIGGER")
+    default_sound_name = Column(String(16), nullable=False, default="zil")
+    group_simultaneous_alerts = Column(Boolean, nullable=False, default=True)
+    market_hours_only = Column(Boolean, nullable=False, default=True)
+    quiet_hours_enabled = Column(Boolean, nullable=False, default=False)
+    quiet_hours_start = Column(String(8), nullable=True)
+    quiet_hours_end = Column(String(8), nullable=True)
+    timezone = Column(String(48), nullable=False, default="Europe/Istanbul")
+    max_active_alerts = Column(Integer, nullable=False, default=500)
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
 
 
 class ChartRequest(Base):
@@ -1026,7 +1318,16 @@ class ProviderHealthLog(Base):
 def build_engine(database_url: str | None = None):
     url = database_url or get_settings().database_url
     connect_args = {"check_same_thread": False} if url.startswith("sqlite") else {}
-    return create_engine(url, connect_args=connect_args)
+    engine = create_engine(url, connect_args=connect_args)
+    if url.startswith("sqlite"):
+        @event.listens_for(engine, "connect")
+        def _enable_sqlite_foreign_keys(dbapi_connection, _connection_record) -> None:
+            cursor = dbapi_connection.cursor()
+            try:
+                cursor.execute("PRAGMA foreign_keys=ON")
+            finally:
+                cursor.close()
+    return engine
 
 
 _engine = None
@@ -1400,6 +1701,34 @@ class CorporateActionRecord(Base):
     new_share_count = Column(Float, nullable=True)
     source = Column(String(48), nullable=True)
     payload_json = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class MarketSessionEvent(Base):
+    """Provider-originated BIST session interruption/resumption audit row.
+
+    These rows are deliberately separate from ``SignalEvent``: one exchange
+    session event may affect many signals, while a signal event remains the
+    immutable per-signal lifecycle audit.  ``unique_dedup_key`` lets a future
+    licensed/reference-data ingestor persist the same provider event exactly
+    once after a worker restart.
+    """
+
+    __tablename__ = "market_session_events"
+    __table_args__ = (
+        UniqueConstraint("unique_dedup_key", name="uq_market_session_event_dedup_key"),
+        Index("ix_market_session_event_symbol_started", "symbol", "started_at"),
+        Index("ix_market_session_event_type_started", "event_type", "started_at"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    symbol = Column(String(16), nullable=False, index=True)
+    event_type = Column(String(48), nullable=False)
+    started_at = Column(DateTime(timezone=True), nullable=False)
+    ended_at = Column(DateTime(timezone=True), nullable=True)
+    source = Column(String(48), nullable=False)
+    metadata_json = Column(Text, nullable=True)
+    unique_dedup_key = Column(String(160), nullable=False)
     created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
 
 

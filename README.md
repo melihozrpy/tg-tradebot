@@ -1,10 +1,11 @@
-# MERGEN QUANT — Akıllı BIST Analiz ve Risk Sistemi
+# 🏔️ Montana Melih Hisse Bot — BIST Analiz, Alarm ve Risk Sistemi
 
-Ücretsiz veri kaynaklarıyla çalışan, BIST hisselerini izleyen, tarayan,
-sinyal geçmişini takip eden, portföy riski hesaplayan ve backtest yapan
-Telegram botu ve API. Uygulama adı, paket adı (`mergen-quant`), veritabanı
-dosya adı (`mergen_quant.db`), Docker kullanıcı/servis adları ve logger
-isimleri dahil proje genelinde MERGEN QUANT markasına tam olarak geçirilmiştir.
+BIST hisselerini izleyen; açıklanabilir teknik/temel analiz, çoklu fiyat alarmı,
+sinyal yaşam döngüsü, portföy riski ve point-in-time backtest sunan Telegram botu
+ve API. Kullanıcıya görünen aktif marka **Montana Melih Hisse Bot**'tur. Geriye
+uyumluluk için Python paket adı (`mergen-quant`), veritabanı dosyası
+(`mergen_quant.db`), Docker kullanıcısı ve logger adları gibi iç teknik
+tanımlayıcılar kasıtlı olarak korunur.
 
 > ⚠️ **Yasal uyarı**: Bu sistem yatırım tavsiyesi vermez. Çıktılar kural
 > tabanlı, açıklanabilir analiz sonuçlarıdır. Tüm yatırım kararlarının
@@ -12,20 +13,30 @@ isimleri dahil proje genelinde MERGEN QUANT markasına tam olarak geçirilmişti
 > zaman eklenmemiştir ve eklenmeyecektir** — yalnızca analiz, uyarı,
 > tarama, alarm, backtest ve paper trading vardır.
 >
-> Bu proje yalnızca **ücretsiz** araçlarla çalışır: yfinance, Telegram Bot
-> API, yerel CSV/JSON dosyaları ve kamuya açık veriler. Ücretli API,
-> ücretli veri sağlayıcı veya broker entegrasyonu **yoktur**.
+> Kesin ve düşük gecikmeli üretim alarmı için sözleşmeli/lisanslı Borsa İstanbul
+> piyasa verisi gerekir. Yahoo/yfinance yalnızca kaynağı ve veri zamanı açıkça
+> gösterilen **gecikmeli fallback** olabilir; resmî veri yerine geçmez. Temel veri
+> katmanı, yetkili OAuth ile Fintables MCP veya sözleşmeli KAP REST adaptörünü
+> destekler. Web kazıma, hesap paylaşımı ve broker'a canlı emir gönderimi yoktur.
+
+Yeni alarm, sinyal ve veri kaynağı kurulumunun tamamı için
+[`docs/ULTRA_BIST_ALARM_SIGNAL_DATA.md`](docs/ULTRA_BIST_ALARM_SIGNAL_DATA.md)
+dosyasına bakın.
 
 ---
 
-## MERGEN QUANT — Aşama 5d + Veri Güvenilirliği (bu teslimat)
+## Montana Melih Hisse Bot — Aşama 5d + Veri Güvenilirliği
 
 **Aşama 5d (tamamlandı):**
 
 - Kalıcı kurallar, tamamlanmış mum doğrulaması, kapanış/hacim/ATR/likidite
   teyidi, aynı mum dedup ve cooldown içeren gelişmiş alarm sistemi.
-- yfinance ana kaynak → ayrı Yahoo Chart adapter → izin verilen yaştaki
-  yerel disk cache sıralaması; retry/backoff ve circuit breaker.
+- Yerleşik yfinance → Yahoo Chart → izin verilen yaştaki yerel disk cache
+  fallback sıralaması; retry/backoff ve circuit breaker. Bu zincir lisanslı
+  gerçek-zaman BIST kaynağının yerine geçmez.
+- Sözleşmeli quote/OHLCV/market-state gateway'leri için fail-closed
+  `licensed_rest` piyasa veri adaptörü ve talep-anı `/kap SEMBOL` sorgusu için
+  ayrı lisanslı KAP disclosure adaptörü. Otomatik KAP push aktif değildir.
 - `HEALTHY`, `DEGRADED`, `STALE`, `INCOMPLETE`, `INVALID`, `PROVIDER_DOWN`
   durumlarını ve 0–100 puanı üreten genişletilmiş veri kalite motoru.
 - Swing/pivot/EMA/VWAP/volume-profile/gap/Fibonacci/Bollinger gibi doğrulanmış
@@ -36,7 +47,7 @@ isimleri dahil proje genelinde MERGEN QUANT markasına tam olarak geçirilmişti
   `/health/data`, `/health/providers`, `/health/scheduler` uçları.
 - Additive Alembic migration: `0005_stage5d_reliability_alerts_charts`.
 
-**Aşama 5a (tamamlandı):** marka MERGEN QUANT, çok-zamanlı (günlük/haftalık/
+**Aşama 5a (tamamlandı):** çok-zamanlı (günlük/haftalık/
 aylık) destek-direnç ve çakışan güçlü bölge motorları (`/seviyeler SEMBOL`).
 
 **Aşama 5b (tamamlandı):** düşüş/yükseliş senaryo bölgeleri
@@ -96,10 +107,12 @@ hesaplanır; Groq/LLM fiyat, stop, hedef veya AL/SAT/TUT kararı üretmez.
     gönderim sonrası geçici dosyalar **güvenli şekilde silinir**.
 11. **Gelişmiş backtest** — XU100 ve buy&hold karşılaştırması, 2y/5y periyot.
 12. **Piyasa genişliği** — yerel sembol evreni (`data/symbols/bist_symbols.csv`)
-    üzerinden ücretsiz hesaplama, `/piyasa`.
-13. **Kamuya açık bildirim arayüzü** — KAP'ın ücretli API'si kullanılmaz;
-    yalnızca arayüz + varsayılan `disabled` sağlayıcı mevcuttur (sahte
-    bildirim üretilmez).
+    üzerinden hesaplama, `/piyasa`.
+13. **Temel veri ve bildirim sağlayıcıları** — Fintables MCP için yetkili OAuth,
+    KAP REST için sözleşmeli API adaptörleri vardır ve kimlik bilgisi yoksa
+    fail-closed çalışır. KAP disclosure sorgusu varsayılan olarak `disabled`
+    kalır; `/kap SEMBOL` isteğe bağlı okuma yapar, otomatik push yapmaz. Web
+    kazıma veya sahte bildirim üretilmez.
 14. **8 kategorili gelişmiş skor sistemi** — Trend(20) + Momentum(10) +
     Hacim(15) + Destek/Direnç(15) + XU100 gücü(15) + Sektör gücü(10) +
     Piyasa rejimi(10) + Risk/Getiri(5). `/skor_detay SEMBOL`.
@@ -123,15 +136,15 @@ hesaplanır; Groq/LLM fiyat, stop, hedef veya AL/SAT/TUT kararı üretmez.
 
 1. Depoyu güncelleyin / yeni ZIP'i açın (mevcut `.env` ve veritabanı
    dosyanızı silmeyin).
-2. Yeni bağımlılıkları kurun: `pip install -e ".[dev]"` (yfinance, alembic,
-   matplotlib, apscheduler eklendi).
+2. Yeni bağımlılıkları kurun: `pip install -e ".[dev]"` (alarm içe aktarma ve
+   OCR için Pillow, openpyxl ve pytesseract dahil).
 3. `.env.example`'daki yeni V3 değişkenlerini mevcut `.env` dosyanıza
    ekleyin (özellikle `XU100_SYMBOL`, `CLOSE_SCAN_TIME`, `CACHE_ENABLED`).
 4. Migration'ı çalıştırın: `alembic upgrade head` — mevcut verileriniz
    **silinmez**, yalnızca V3 için gereken yeni tablolar eklenir.
-5. `MARKET_DATA_PROVIDER=yfinance` kullanıyorsanız hiçbir ek işlem gerekmez;
-   V2'deki analiz mantığı V3'te de korunur, üzerine gün içi/kapanış ayrımı,
-   XU100 gücü, sektör gücü ve gelişmiş skor eklenmiştir.
+5. Üretimde `MARKET_DATA_PROVIDER=licensed_rest` ile sözleşmeli gateway adresi,
+   API anahtarı ve gerçek endpoint şemalarını tanımlayın. `yfinance` yalnızca
+   geliştirme/gecikmeli fallback kullanımında ek kimlik bilgisi istemez.
 6. Mevcut Telegram komutlarınız (`/analiz`, `/portfoy`, `/backtest`, vb.)
    **aynı isimle** çalışmaya devam eder; V3 onları geliştirilmiş biçimde
    çalıştırır. Yeni komutlar (bkz. aşağıdaki tam liste) otomatik eklenmiştir.
@@ -193,7 +206,15 @@ python run_bot.py
 |---|---|---|
 | `TELEGRAM_BOT_TOKEN` | BotFather'dan alınan token | (zorunlu) |
 | `ADMIN_TELEGRAM_USER_IDS` | Virgülle ayrılmış whitelist ID'leri | boş = herkese açık |
-| `MARKET_DATA_PROVIDER` | `yfinance` (önerilen), `csv`, `mock` (yalnızca test) | `yfinance` |
+| `MARKET_DATA_PROVIDER` | `licensed_rest` (sözleşmeli üretim), `yfinance` (yalnız gecikmeli fallback), `csv`, `mock` (yalnız test) | `mock` |
+| `LICENSED_MARKET_DATA_BASE_URL` | Sözleşmeli BIST veri gateway HTTPS taban adresi | boş |
+| `LICENSED_MARKET_DATA_API_KEY` | Lisanslı piyasa veri API anahtarı; gizli değer | boş |
+| `LICENSED_MARKET_DATA_API_KEY_HEADER` | Sağlayıcının API anahtarı header adı | `X-API-Key` |
+| `LICENSED_MARKET_DATA_QUOTE_PATH` | `{symbol}` içeren quote path şablonu | `/quote/{symbol}` |
+| `LICENSED_MARKET_DATA_OHLCV_PATH` | `{symbol}` içeren OHLCV path şablonu | `/ohlcv/{symbol}` |
+| `LICENSED_MARKET_DATA_MARKET_STATE_PATH` | Timestamp'li piyasa açık/kapalı durumu path'i | `/market-state` |
+| `LICENSED_MARKET_DATA_PROVIDER_NAME` | Çıktı provenance alanında gösterilecek sağlayıcı adı | `licensed_rest` |
+| `LICENSED_MARKET_DATA_TIMEOUT_SECONDS` | Lisanslı REST istek zaman aşımı | `10` |
 | `XU100_SYMBOL` | XU100 endeksi için yfinance sembolü | `XU100.IS` |
 | `INTRADAY_PREVIEW_ENABLED` | Gün içi ön analiz açık/kapalı | `true` |
 | `CONFIRMED_CLOSE_REQUIRED` | Kesin sinyal için kapanış onayı şart mı | `true` |
@@ -220,6 +241,28 @@ python run_bot.py
 | `ENHANCED_ALARM_SCAN_ENABLED` | Gelişmiş alarm scheduler işi | `true` |
 | `ENHANCED_ALARM_SCAN_MINUTES` | Gelişmiş alarm tarama aralığı | `15` |
 | `ENHANCED_ALARM_DEFAULT_COOLDOWN_MINUTES` | Yeni alarm varsayılan cooldown | `120` |
+| `USER_PRICE_ALERTS_ENABLED` | Kullanıcı tanımlı kalıcı fiyat alarmı motoru | `true` |
+| `USER_PRICE_ALERT_POLL_SECONDS` | Fiyat alarmı değerlendirme aralığı | `30` |
+| `USER_PRICE_ALERT_DEFAULT_REPEAT_SECONDS` | Sürekli alarm varsayılan tekrar aralığı | `60` |
+| `USER_PRICE_ALERT_STALE_AFTER_SECONDS` | Bu yaşı geçen fiyatın alarmı tetiklemesini engeller | `180` |
+| `USER_PRICE_ALERT_MAX_ACTIVE_PER_USER` | Kullanıcı başına etkin alarm üst sınırı | `500` |
+| `USER_PRICE_ALERT_MAX_BULK_IMPORT` | Tek içe aktarmada satır üst sınırı | `250` |
+| `USER_PRICE_ALERT_AUDIO_ENABLED` | Telegram sesli alarm gönderimi | `true` |
+| `USER_PRICE_ALERT_OCR_ENABLED` | Görselden alarm OCR akışı | `true` |
+| `USER_PRICE_ALERT_OCR_LANGUAGE` | Tesseract dil kümesi | `tur+eng` |
+| `FUNDAMENTAL_PROVIDER` | `disabled`, `fintables_mcp`, `kap_rest`, `yahoo`, `auto` | `disabled` |
+| `FUNDAMENTAL_CROSS_CHECK_ENABLED` | Yetkili ikinci kaynakla temel veri kontrolü | `false` |
+| `FUNDAMENTAL_CROSS_CHECK_STRICT` | Tolerans dışı farkta kesin yorumu engeller | `true` |
+| `FUNDAMENTAL_ALLOW_YAHOO_FALLBACK` | Yahoo temel verisini açıkça düşük güvenli fallback olarak etkinleştirir | `false` |
+| `FINTABLES_MCP_URL` | Yetkili Fintables MCP uç noktası | `https://evo.fintables.com/mcp` |
+| `FINTABLES_MCP_BEARER_TOKEN` | Fintables OAuth erişim belirteci; gizli değer | boş |
+| `KAP_PROVIDER` | Bot içi disclosure okuma: `disabled` veya `kap_rest` | `disabled` |
+| `KAP_REST_BASE_URL` | Sözleşmeli KAP REST/gateway taban adresi | boş |
+| `KAP_REST_API_KEY` | Sözleşmeli KAP REST API anahtarı; gizli değer | boş |
+| `KAP_REST_ENDPOINT_PATH` | Sözleşmedeki/gateway'deki temel veri path şablonu | `/fundamentals/{symbol}` |
+| `KAP_REST_DISCLOSURES_PATH` | Sözleşmedeki bildirim listesi path'i | `/disclosures` |
+| `KAP_REST_DISCLOSURE_DETAIL_PATH` | `{id}` içeren bildirim detayı path şablonu | `/disclosureDetail/{id}` |
+| `KAP_REST_SYMBOL_QUERY_PARAM` | Bildirim listesinde sembol filtre parametresi | `symbol` |
 | `DAILY_BRIEF_ENABLED` | Hafta içi otomatik dünkü piyasa özeti | `true` |
 | `DAILY_BRIEF_TIME` | Günlük brifing gönderim saati (TR) | `09:10` |
 | `TCMB_POLICY_RATE_PERCENT` | Brifingde gösterilecek doğrulanmış politika faizi; bağlı değilse boş | boş |
@@ -228,21 +271,42 @@ python run_bot.py
 | `CHART_THEME` | `light` veya `dark` | `light` |
 | `CHART_CACHE_TTL_MINUTES` | Render edilmiş grafik cache süresi | `30` |
 | `CHART_CACHE_DIR` | Grafik cache dizini | `./data/cache/charts` |
-| `PUBLIC_DISCLOSURE_PROVIDER` | `disabled` (varsayılan) veya `rss` | `disabled` |
+| `PUBLIC_DISCLOSURE_PROVIDER` | Eski/kamuya açık RSS arayüzü; lisanslı `KAP_PROVIDER` ile aynı değildir | `disabled` |
 | `SECTOR_MAP_PATH` | Sektör eşleştirme dosyası | `app/config/sector_map.yaml` |
 | `BIST_SYMBOLS_CSV_PATH` | Yerel sembol evreni CSV'si | `data/symbols/bist_symbols.csv` |
 | `PERFORMANCE_MINIMUM_SAMPLE_SIZE` | Performans raporu için min. örnek | `20` |
 | `SIGNAL_EXPIRY_TRADING_DAYS` | Kaç işlem gününde sinyal EXPIRED olur | `10` |
 | `CONSERVATIVE_EXECUTION` | Aynı mumda stop+hedef çakışmasında muhafazakâr seçim | `true` |
+| `SIGNAL_MONITOR_ENABLED` | DB-backed ultra BIST sinyal izleyicisi | `true` |
+| `SIGNAL_MONITOR_INTERVAL_SECONDS` | Ultra sinyal quote tarama aralığı | `5` |
+| `ALLOW_DELAYED_DATA_FOR_LIVE_TRIGGER` | Gecikmeli verinin giriş/TP/stop değiştirmesine izin verir | `false` |
+| `MAX_MARKET_DATA_STALENESS_SECONDS` | Canlı quote azami yaşı; boşsa runtime 15 sn kullanır | boş |
 
 Tüm V3 özellikleri bu değişkenler üzerinden **açılıp kapatılabilir**.
 
+Güvenli varsayılanlar fail-closed'dur: uygulama geliştirmede `mock` ile açılabilir
+ama `APP_ENV=production` iken `mock` reddedilir; `licensed_rest` boş/uygunsuz
+adres veya anahtarla provider oluşturmaz; `KAP_PROVIDER=disabled` bildirim
+uydurmaz. Path/query varsayılanları resmî endpoint iddiası değil, normalize
+gateway sözleşmesi örneğidir.
+
 ---
 
-## yfinance ve fallback sınırlamaları
+## Piyasa verisi ve Yahoo fallback sınırları
 
-- Ücretsiz, gecikmeli/gecikmesiz garanti verilmeyen bir kaynaktır; resmi
-  BIST/Takasbank verisi yerine geçmez.
+- Yerleşik üretim adaptörü `MARKET_DATA_PROVIDER=licensed_rest` ile seçilir.
+  Geçerli HTTPS `LICENSED_MARKET_DATA_BASE_URL` ve API anahtarı yoksa provider
+  kurulmaz; eski kapanış, Yahoo veya mock veriye sessizce geçmez (**fail-closed**).
+- `QUOTE_PATH`, `OHLCV_PATH` ve `MARKET_STATE_PATH` varsayılanları örnek gateway
+  sözleşmesidir; Borsa İstanbul'un herkese açık endpoint'i oldukları iddia edilmez.
+  Path, query ve JSON alanları sözleşmeli sağlayıcının/gateway'in gerçek şemasına
+  göre ayarlanmalıdır. Quote yanıtında saat dilimli timestamp ve `is_live`, OHLCV
+  yanıtında saat dilimli timestamp ile `is_complete` alanı zorunludur.
+- Yahoo/yfinance gecikme, tamlık, süreklilik veya yeniden dağıtım garantisi
+  vermeyen bir fallback'tir; resmî BIST/Takasbank verisi yerine geçmez.
+- Üretimde kesin fiyat alarmı, intraday sinyal yaşam döngüsü ve gerçekleşme
+  doğrulaması için Borsa İstanbul ile veri dağıtım yetkisi bulunan bir
+  sağlayıcıyla sözleşme yapılmalı ve lisanslı adaptör kullanılmalıdır.
 - Sağlayıcının izin verdiği pencere içinde günlük, haftalık ve 5m/15m/1h
   gün içi zaman dilimleri kullanılabilir; ücretsiz kaynaklarda gecikme veya
   dönemsel kısıt olabilir.
@@ -255,6 +319,13 @@ Tüm V3 özellikleri bu değişkenler üzerinden **açılıp kapatılabilir**.
   circuit breaker vardır. Ana kaynak çalışmazsa ayrı Yahoo Chart adapter
   denenir; o da çalışmazsa yalnızca yaş sınırını aşmamış disk cache kullanılır.
 - Fallback/cache kaynağı veri kalite çıktısı ve Telegram mesajında açıkça yazılır.
+- Eski veya kaynağı belirsiz veri alarmı tetiklemez; üretim sistemi fail-closed
+  davranır. “Tam doğru ve güncel” ifadesi ancak sözleşmeli kaynağın SLA'sı,
+  timestamp'i ve kalite kapıları birlikte doğrulanabildiğinde kullanılabilir.
+
+`licensed_rest` seçiliyken lisanslı servis hatası Yahoo zincirine otomatik
+düşürülmez. Bilinçli gecikmeli analiz isteniyorsa provider ayrıca `yfinance`
+olarak seçilmeli ve çıktı fallback/gecikmeli diye etiketlenmelidir.
 
 ---
 
@@ -384,7 +455,16 @@ stoplar gerçekleşirse oluşacak maksimum zarar senaryosu.
 
 Aynı alarm aynı tamamlanmış mum ve durum için tekrar gönderilmez. Kalıcı
 tetik kayıtları yeniden başlatma sonrasında dedup/cooldown durumunu korur;
-tek sembol hatası diğer sembollerin taramasını durdurmaz.
+tek sembol hatası diğer sembollerin taramasını durdurmaz. Teslimat worker'ı
+due outbox satırını `PENDING/RETRY` durumundan `SENDING` durumuna koşullu tek
+SQL compare-and-set (CAS) güncellemesiyle claim eder; iki worker aynı satırı
+görse bile yalnız biri gönderir. Yarım kalan `SENDING` claim'i 5 dakikalık lease
+sonrası retry'a alınır.
+Telegram gönderimi kabul edip worker `SENT` commit'inden önce çökerse dış servis
+uçtan uca exactly-once garantisi veremediği için retry'da yinelenen mesaj yine
+mümkündür; outbox olayı ve bu operasyonel sınırı izleyin.
+Bu koruma Telegram polling ve bütün scheduler işlerinin çok-replica dağıtık
+lock'u değildir; polling deployment'ında yine tek bot replica kullanın.
 
 ---
 
@@ -428,9 +508,15 @@ değerlendirmesi için yeterli sinyal bulunmuyor." yazar.
 
 ```
 /backtest SVGYO
-/backtest SVGYO 2y
-/backtest SVGYO 5y
+/backtest SVGYO 1g 5y
+/backtest SVGYO 2024-01-01 2026-01-01
 ```
+
+Yeni sözdizimi `SEMBOL ZAMAN_DILIMI DONEM` biçimindedir; `5d/5m`, `15d/15m`,
+`1s/1h`, `4s/4h`, `1g/1d` ve `1hf/1w/1wk` zaman dilimleri ile en fazla 10 yıllık
+`g/d/w/hf/a/y` dönemleri kabul edilir. Eski iki ISO tarih sözdizimi geriye
+uyumludur; yalnız sembol verilirse varsayılan timeframe ve iki yıllık dönem
+kullanılır.
 
 XU100 karşılaştırması ve buy&hold getirisi otomatik eklenir (XU100 verisi
 alınamazsa backtest yine de çalışır, yalnızca karşılaştırma alanı boş
@@ -500,6 +586,8 @@ tablolar oluşturulur, mevcut tablolara **dokunulmaz**.
 /guc SEMBOL         Donemsel (1hafta/1ay/3ay/6ay) XU100 ve sektor goreceli guc
 /gunici SEMBOL      Gun ici on analiz (kesinlesmis sinyal degildir)
 /veri_durumu [SEMBOL] Veri/provider/cache kalite durumu
+/sirket SEMBOL      Yetkili kaynaktan temel sirket analizi
+/kap SEMBOL         KAP bildirimleri veya resmi KAP arama baglantisi
 /tara               Izleme listesini tara
 /tara_liste         Tarama listesini goster
 /tarama_durumu      Son tarama durumu
@@ -507,9 +595,15 @@ tablolar oluşturulur, mevcut tablolara **dokunulmaz**.
 /tarama_ayarlari    Tarama ayarlarini goster
 /sinyaller          Son sinyaller
 /aktif_sinyaller    Acik sinyaller
-/sinyal SEMBOL      Son sinyal detayi
+/sinyal ID|SEMBOL   ID ile kayit veya sembolun son sinyal detayi
 /sinyal_gecmisi SEMBOL  Sinyal gecmisi
 /performans [gun]   Basari raporu
+/takip ID           Analiz planini PENDING_ENTRY olarak sanal takibe al
+/takip_birak ID     Izlemeyi durdur; kaydi/olay gecmisini silmez
+/sinyal_iptal ID    Yalniz PENDING_ENTRY planini iptal et
+/stop_girise ID     Acik sanal pozisyonun stopunu girise tasi
+/pozisyon_kapat ID  Dogrulanmis guncel fiyatla sanal takibi kapat
+/aktif_pozisyonlar  Acik sanal takip pozisyonlarini listele
 /portfoy            Portfoy ozeti
 /portfoy_risk       Portfoy risk gorunumu
 /pozisyon_ekle SEMBOL LOT MALIYET
@@ -528,12 +622,185 @@ tablolar oluşturulur, mevcut tablolara **dokunulmaz**.
 /grafik SEMBOL [6ay|1yil]
 /rs_grafik SEMBOL
 /piyasa / /genislik  Piyasa genisligi
-/backtest SEMBOL [2y|5y]
+/backtest SEMBOL [ZAMAN_DILIMI DONEM | BASLANGIC_TARIHI BITIS_TARIHI]
+/backtest_signal ID  Kayitli sinyal planini tarihsel mumlarla salt-okunur replay et
+/backtest_gecmisi   Kayitli backtest ozetleri
+/backtest_stats     Kullaniciya ait toplu backtest istatistikleri
+/backtest_watchlist ZAMAN_DILIMI DONEM
+/backtest_sector ENDEKS ZAMAN_DILIMI DONEM
+/backtest_bist30 ZAMAN_DILIMI DONEM
+/backtest_bist50 ZAMAN_DILIMI DONEM
+/backtest_bist100 ZAMAN_DILIMI DONEM
 /ayarlar [ANAHTAR DEGER]
 /durum              Sistem/veri sagligi
 /acil_durdur        Kill switch (tum analiz/tarama/alarm durur)
 /devam_et           Kill switch'i kapat
 ```
+
+### `/kap SEMBOL` davranışı
+
+- Varsayılan `KAP_PROVIDER=disabled` durumunda bot bildirim verisi uydurmaz;
+  yalnız ilgili sembolün resmî KAP arama bağlantısını verir.
+- `KAP_PROVIDER=kap_rest` ve sözleşmeli erişim eksiksizse komut, adapterdan
+  alınan en yeni doğrulanabilir bildirimlerden en fazla 10 tanesini; yayın zamanı,
+  temkinli anahtar-kelime sınıflandırması ve kaynak bağlantısıyla gösterir.
+- REST hata verirse, yanıt şeması doğrulanamazsa veya sonuç boşsa fail-closed
+  davranır ve kullanıcıyı resmî KAP aramasına yönlendirir.
+- `KAP_REST_DISCLOSURES_PATH`, `KAP_REST_DISCLOSURE_DETAIL_PATH` ve
+  `KAP_REST_SYMBOL_QUERY_PARAM` sözleşmeli API/gateway şemasına göre
+  ayarlanmalıdır; README'deki varsayılanlar resmî endpoint garantisi değildir.
+- Bu sürümde otomatik KAP push bildirimi/scheduler işi aktif değildir. `/kap`
+  kullanıcı isteğiyle çalışan sorgudur; classification yatırım tavsiyesi değildir.
+
+### Ultra BIST sanal sinyal takibi
+
+`/takip ID`, analiz sinyalini kullanıcıya ait yeni bir `PENDING_ENTRY` planı
+olarak kaydeder; giriş gerçekten gerçekleşmeden `ACTIVE` demez. Plan BUY/long
+olmalı, stop ve TP1–TP3 seviyelerinin tamamı bulunmalı ve risk/nakit hesabı en az
+bir lot üretmelidir. Aynı kullanıcıya ait plan için komut izlemeyi yeniden açar;
+başka kullanıcıya ait sinyali sahiplenmez.
+
+- `/takip_birak ID` yalnız `monitoring_enabled` bayrağını kapatır; kayıt ve olay
+  geçmişi silinmez. Nihai durumdaki sinyal yeniden açılamaz.
+- `/sinyal_iptal ID` yalnız `PENDING_ENTRY` planını `CANCELLED` yapar ve kalıcı
+  olay/bildirim oluşturur.
+- `/stop_girise ID` yalnız gerçekleşmiş açık sanal pozisyonda kullanılabilir;
+  stop aşağı taşınamaz.
+- `/pozisyon_kapat ID` yalnız kullanıcıya ait açık sanal pozisyonu doğrulanmış
+  güncel işlem fiyatıyla kapatır. Veri kalite kapısından geçmezse kapanış
+  yapılmaz; broker'a gerçek emir gönderilmez.
+- `/aktif_pozisyonlar`, `ACTIVE`, `TP1_HIT`, `TP2_HIT` ve `EXIT_PENDING`
+  durumlarını lot, giriş ve güncel stopla listeler.
+
+Canlı izleyici market kapalıysa veya kullanıcı kill-switch'i açıksa işlem yapmaz.
+Aynı sembolü tur başına bir kez çeker. Quote; saat dilimli timestamp, açıkça
+`is_live=true`, `is_fresh=true`, `valid_transaction=true`, desteklenen
+`trading_state` ve işlem miktarı taşımıyorsa reddedilir. Timestamp gelecekte
+5 saniyeden fazla olamaz ve `MAX_MARKET_DATA_STALENESS_SECONDS` sınırını aşamaz
+(boş ayarda runtime 15 saniye kullanır). Gecikmeli/eksik quote giriş, TP, stop
+veya manuel kapanış üretmez. Olaylar DB dedup anahtarı ve teslimat outbox'ıyla
+yeniden başlatmada çoğaltılmadan sürdürülür.
+
+Bu kill-switch kuralı fiyat-temelli giriş/TP/stop geçişleri içindir; aşağıdaki
+wall-clock expiration plan ömrünü uzatmamak için quote/market/izleme bayrağından
+bağımsız yürür.
+
+Takibe alınan planın `expires_at` zamanı timeframe'e göre kaydedilir: 5dk için
+3 saat, 15dk için 6 saat, 1s için 3 gün, 4s için 7 gün, günlük için 8 gün,
+haftalık için 28 gün; bilinmeyen timeframe için 8 gün. Bunlar resmî işlem
+takvimi yerine temkinli wall-clock yaklaşık değerleridir. Sinyal monitor işi
+açıksa deadline, quote veya açık piyasa gerektirmeden değerlendirilir; kullanıcı
+quote takibini durdurmuş olsa da süresi dolan `PENDING_ENTRY`, tekil
+`SIGNAL_EXPIRED` event/outbox kaydıyla `EXPIRED` olur ve monitoring kapanır.
+`SIGNAL_MONITOR_ENABLED=false` tüm bu scheduler işini kapattığından otomatik
+expiration da çalışmaz. Deployment smoke testinde geçiş ve restart sonrası
+tekil bildirim yine doğrulanmalıdır.
+
+### BIST seans, fiyat limiti ve sermaye işlemi sınırları
+
+Merkezi BIST fiyat-adımı servisi günlük tavan/taban yüzdesini evrensel `%10`
+varsaymaz. `daily_price_limits` hesabı için sözleşmeli quote/reference-data
+kaynağından enstrüman/pazar bazlı yüzde açıkça verilmelidir; değer yoksa hesap
+fail-closed hata verir. Tavan/taban lock, kullanılabilir alış/satış miktarı,
+devre kesici ve seans sonuçları da yalnız provider metadata'sı varsa fill
+modeline katılır.
+
+`MarketSessionEvent` tablosu sembol, olay türü, başlangıç/bitiş, provider kaynağı,
+metadata ve tekil dedup anahtarıyla seans olaylarını tam bir kez saklayabilecek
+audit modelini sağlar. Ancak bu sürümde lisanslı normalize seans/kurumsal işlem
+feed'ini tabloya ve runtime'a bağlayan otomatik ingest worker/scheduler yoktur;
+modelin bulunması otomatik canlı akış var demek değildir.
+
+Runtime'daki `apply_corporate_action_adjustment`, açık kullanıcı sinyalinde
+stock split, bedelsiz/bonus ve reverse split düzeltmesini atomik uygulayabilir:
+fiyatları pay katsayısına böler, lotları katsayıyla çarpar, mevcut yaşam-döngüsü
+durumunu korur ve tekil `CORPORATE_ACTION_APPLIED` audit event'i yazar. Provider,
+kaynak ve kalıcı olay anahtarı zorunludur; nihai sinyal, geçersiz katsayı ve tam
+BIST lotuna dönüşmeyen işlem reddedilir. Lisanslı normalize feed hook'u henüz
+olmadığı için bu metodun otomatik çalıştığı iddia edilmemelidir.
+
+`ATR_TRAILING`, `STRUCTURE_TRAILING` ve `MANUAL_TRAILING` şu anda yalnız
+`StopPolicy` enum seçenekleridir. Uygulanan otomatik hareketler TP1 sonrası
+breakeven ve TP2 sonrası TP1 stopudur; ayrıca kullanıcı `/stop_girise` ile stopu
+gerçekleşmiş girişe taşıyabilir. ATR/yapıdan yeni stop hesaplayan otomatik worker
+bu sürümde yoktur.
+
+### Kayıtlı sinyali tarihsel replay
+
+`/backtest_signal ID`, görülebilir kayıtlı sinyal planını değiştirmeden tarihsel
+olarak yeniden oynatır. Başka kullanıcıya ait sinyalin varlığını açığa çıkarmaz;
+genel analiz kayıtları ile yalnız komutu veren kullanıcıya ait kayıtlar
+erişilebilirdir. Kaynak plan özgün giriş, `stop_price` ve TP değerleriyle üretim
+veritabanından salt-okunur kopyalanır; daha sonra taşınmış `current_stop_price`
+replay başlangıcı yapılmaz. Geçişler geçici, bellek içi veritabanında
+çalıştırılır; canlı sinyal/event geçmişi ve broker hesabı etkilenmez.
+
+Replay, sinyalin `created_at`, `data_timestamp` ve `valid_from` alanlarının en geç
+olanından sonraki aynı-timeframe OHLCV verisini kronolojik işler. `mock` provider,
+uyuşmayan fiyat-düzeltme modu, eksik OHLCV alanları veya şüpheli veri başlangıç
+boşluğu halinde fail-closed durur. Tamamlanmış mum hiç yoksa giriş/TP/stop
+uydurulmaz: provider boş frame döndürürse replay durur; provider serisi var ama
+bilgi anından sonra uygun tamamlanmış mum kalmazsa kayıtlı deadline geçmişse
+deterministik `EXPIRED`, aksi halde dönem sonuna kadar dolmadı sonucu raporlanır.
+Tamamlanmamış mumlar dışlanır; geçersiz/güvensiz mumlar tetik üretmez. Giriş,
+kısmi fill, TP1–TP3, stop, askıya alma/devre kesici ve varsa `expires_at`
+geçişleri canlı sinyal runtime'ıyla aynı kurallardan geçirilir. Aynı mumun OHLC
+içi sırası bilinmiyorsa muhafazakâr stop-önce varsayımı kullanılır; tavan/taban,
+likidite ve seans davranışı yalnız provider ilgili mikro-yapı alanlarını veriyorsa
+hesaba katılır.
+
+Rapor kullanılan providerı (metadata varsa fallback/cache kaynağıyla), fiyat
+modunu, olay zaman çizelgesini (uzunsa ilk 9 + son 9), son durumu, brüt/net
+gerçekleşen K/Z'yi, maliyeti, açık lot varsa gerçekleşmemiş brüt K/Z'yi ve
+MFE/MAE'yi gösterir. Lotu olmayan
+eski analiz planı yalnız raporlama için 1 lota normalize edilip açıkça etiketlenir;
+komisyon/vergi alanları tanımlı değilse sıfır varsayımı raporda belirtilir. Bu
+replay emir göndermez ve geçmiş performans gelecekteki sonucu garanti etmez.
+
+### BIST30/50/100 evren dosyası
+
+`/backtest_bist30`, `/backtest_bist50` ve `/backtest_bist100`, sembolleri kodda
+uydurmaz veya `bist_symbols.csv` listesinden kestirme seçmez. Varsayılan kaynak
+`data/symbols/bist_index_membership.csv` dosyasıdır. Bu dosya repoda/kurulumda
+yoksa komut güvenli biçimde durur.
+
+En küçük güncel-snapshot formatı:
+
+```csv
+symbol,index_code,active
+AKBNK,XU030,true
+AKBNK,XU050,true
+AKBNK,XU100,true
+```
+
+Tarih kanıtlı format:
+
+```csv
+symbol,index_code,as_of,effective_from,effective_to
+AKBNK,XU030,2026-07-25,2026-07-01,2026-09-30
+```
+
+Kurallar:
+
+- `symbol` ile `index_code` zorunludur. `index`, `index_name` veya `universe`
+  başlığı da index kodu alanı olarak kabul edilir.
+- Güncellik için en az `active`, `as_of`/`as_of_date` veya
+  `effective_from`/`effective_to` alanlarından biri bulunmalıdır.
+- `active` doğru değerleri: `1`, `true`, `yes`, `evet`, `aktif`.
+- Tarihler ISO `YYYY-AA-GG` biçimindedir. Gelecek tarihli veya 120 günden eski
+  `as_of` snapshot satırı güncel kabul edilmez; effective aralığı bugünü
+  kapsamayan satır seçilmez.
+- Filtre/dedup sonrası XU030 tam 30, XU050 tam 50, XU100 tam 100 doğrulanmış
+  sembol içermelidir. 29/30 veya 99/100 gibi eksik sonuçta backtest başlamaz;
+  liste sessizce tamamlanmaz ya da kesilmez.
+- Dosya güncel anlık görüntüdür. Geçmiş tarihli point-in-time üyelik seti ayrıca
+  sağlanmadığı için rapor survivorship-bias uyarısı taşır.
+
+Evren komutları arka planda çalışır; kullanıcı başına ağır iş sınırı vardır,
+kill-switch yeni işi engeller ve `mock` provider reddedilir. İzleme listesi boşsa,
+sektör üyesi doğrulanamazsa veya evren güvenli üst sınırı aşarsa sembol
+uydurulmadan fail-closed durur. Bir sembol veri hatası verirse kalan semboller
+çalışabilir; tamamlanamayan sembol sayısı sonuçta açıkça gösterilir.
 
 ---
 
@@ -571,17 +838,39 @@ migration'ını, health uçlarını ve Telegram komut kaydını kapsar.
 
 ## Bilinen Sınırlamalar
 
-- yfinance ücretsiz/gecikmeli olabilir; resmi BIST verisi yerine geçmez.
-- Ücretsiz Yahoo kaynaklarının gün içi tarih aralığı ve rate-limit sınırları
+- Yahoo/yfinance gecikmeli olabilir; resmî BIST verisi yerine geçmez ve
+  üretimde kesin alarm/sinyal tetikleyicisi olarak tek başına kullanılmamalıdır.
+- Yahoo kaynaklarının gün içi tarih aralığı ve rate-limit sınırları
   vardır; veri kalite kapısı bu durumda analizi engelleyebilir.
-- KAP entegrasyonu yoktur; yalnızca devre dışı bir arayüz (`PublicDisclosureProvider`)
-  mevcuttur — sahte bildirim üretilmez.
+- Fintables MCP yalnızca kullanıcının geçerli OAuth yetkisiyle; KAP REST yalnızca
+  Borsa İstanbul sözleşmesi, izinli IP ve API anahtarıyla çalıştırılabilir.
+  Kimlik bilgisi yoksa sağlayıcı devre dışı/fail-closed kalır; sayfa kazıma ve
+  ortak hesap kullanımı yapılmaz.
+- KAP disclosure adaptörü yerleşiktir ancak `KAP_PROVIDER=disabled` varsayılanıyla
+  fail-closed kapalıdır. Sözleşmeli REST/gateway ve yeniden dağıtım hakkı olmadan
+  bot içi veri açılmamalıdır; `/kap SEMBOL` bu durumda yalnız resmî arama linki
+  verir. Otomatik KAP push bildirimi bu sürümde aktif değildir.
+- Lisanslı KAP temel veri adaptörünün bulunması, KAP bildirimlerinin serbestçe
+  yeniden dağıtılabileceği anlamına gelmez; temel veri ve disclosure izinleri
+  ayrı ayrı doğrulanmalıdır.
 - Aşama 5g backtest motoru long-only ve tek eşzamanlı pozisyonludur. Rolling/
   expanding walk-forward, ayrı out-of-sample sonuçlar ve parametre hassasiyet
   raporu vardır; çoklu eşzamanlı portföy optimizasyonu yoktur.
 - Piyasa genişliği hesaplaması `data/symbols/bist_symbols.csv` içindeki
   sınırlı örnek evrenle çalışır; gerçek kullanımda bu dosyayı
   genişletebilirsiniz.
+- BIST30/50/100 evren backtesti `data/symbols/bist_index_membership.csv`
+  olmadan çalışmaz. Dosya güncel ve tam 30/50/100 üyeli olsa bile current
+  snapshot geçmiş dönem üyeliğinin yerine geçmez; survivorship bias uyarısı
+  korunur.
+- Genel BIST market-rule servisi tavan/taban için evrensel `%10` kullanmaz;
+  enstrüman/pazar bazlı limit yüzdesi lisanslı quote/reference feed'inden
+  gelmiyorsa limit hesabı fail-closed kalır.
+- `MarketSessionEvent` audit modeli ve atomik sermaye-işlemi düzeltme metodu
+  vardır; bunları besleyen lisanslı normalize seans/kurumsal-aksiyon ingest
+  worker'ı henüz yoktur. Düzeltmeler otomatik uygulanıyor gibi varsayılmamalıdır.
+- `ATR_TRAILING`, `STRUCTURE_TRAILING` ve `MANUAL_TRAILING` yalnız enum
+  seçenekleridir; ATR/yapı tabanlı otomatik stop worker'ı uygulanmamıştır.
 - Otomatik emir gönderimi **yoktur ve eklenmeyecektir**.
 - Aşama 5c: Portföy ağırlığı hesaplanırken, o an fiyatı çekilmeyen diğer
   pozisyonlar için ortalama maliyet fiyatı kullanılır (yaklaşık değerdir).
@@ -623,7 +912,7 @@ başarısız olursa veritabanınız DEĞİŞTİRİLMEMİŞ olur (migration
 matplotlib `Agg` backend ile (GUI'siz) çalışır; sunucu ortamında ek bir
 ayar gerekmez. Disk alanı/yazma izni sorunlarını kontrol edin.
 
-## MERGEN QUANT — Aşama 5e
+## Montana Melih Hisse Bot — Aşama 5e
 
 Aşama 5e, mevcut kısa vadeli analizleri kaldırmadan güncel işlem fiyatını son
 kesinleşmiş kapanıştan ayırır. Teknik indikatörler tamamlanmış mumlarla; seviye,
@@ -671,7 +960,7 @@ ekler; mevcut kullanıcı, portföy, sinyal, alarm, haber, seviye ve senaryo
 kayıtlarını değiştirmez. Temel veri veya kurumsal işlem verisi sağlayıcıda yoksa
 değer üretilmez; çıktı açıkça “Veri bulunamadı / Veri yetersiz” olarak işaretlenir.
 
-## MERGEN QUANT — Aşama 5f
+## Montana Melih Hisse Bot — Aşama 5f
 
 Aşama 5f yeni bir kısa vadeli AL/SAT modeli eklemez. Telegram metinlerini
 sadeleştirir, uzun vadeli senaryoları bağımsız teknik kaynaklarla doğrular,
@@ -723,7 +1012,7 @@ scripti bilinçli olarak bu klasörü doğrudan paketlemeyi reddeder. Script tem
 bir kaynak staging klasöründe çalıştırılmalıdır. Mevcut migration geçmişi Aşama
 5f'te değiştirilmemiştir.
 
-## MERGEN QUANT — Aşama 5g
+## Montana Melih Hisse Bot — Aşama 5g
 
 Aşama 5g, mevcut analiz ve sinyal motorlarını kaldırmadan onları point-in-time
 geçmiş veri üzerinde çalıştırır. Varsayılan gerçekleşme modeli `next_open`,
@@ -732,12 +1021,14 @@ fiyattan giriş yapılmaz; tamamlanmamış veya `INVALID` mum kullanılmaz. Raw 
 adjusted seriler karıştırılmaz; raw seride `split_factor` varsa lot, giriş,
 stop ve hedefler birlikte düzeltilir.
 
-Masraflar varsayılan olarak sıfır değildir:
+Masraflar uydurulmaz. Alanlar yapılandırılmadığında sıfır kullanılır ve raporda
+açıkça görünür; gerçek aracı kurum oranlarını Coolify ortam değişkenlerine girin.
+`BACKTEST_COMMISSION_RATE=0.001` binde bir komisyon demektir:
 
 ```env
-BACKTEST_COMMISSION_BPS=15
-BACKTEST_SLIPPAGE_BPS=5
-BACKTEST_SPREAD_BPS=10
+BACKTEST_COMMISSION_BPS=0
+BACKTEST_SLIPPAGE_BPS=0
+BACKTEST_SPREAD_BPS=0
 BACKTEST_BSMV_BPS=0
 BACKTEST_MINIMUM_COST=0
 BACKTEST_INITIAL_CAPITAL=100000
@@ -775,7 +1066,8 @@ emir gönderemez.
 
 Ana Telegram komutları:
 
-- `/backtest SEMBOL [YYYY-AA-GG YYYY-AA-GG]`
+- `/backtest SEMBOL [ZAMAN_DILIMI DONEM]` — ör. `/backtest THYAO 1g 5y`
+- `/backtest SEMBOL YYYY-AA-GG YYYY-AA-GG` — geriye uyumlu tarih aralığı
 - `/backtest_ozet`
 - `/sanal_portfoy`
 - `/sanal_performans [SEMBOL]`
@@ -800,7 +1092,7 @@ Bilinen sınırlamalar: Resmî BIST tatil/delist tarihsel evreni ayrı bir ücre
 veri seti olarak projede yoktur; motor sağlanan gerçek mum takvimini izler ve
 survivorship uyarısı üretir. `next_vwap` için provider VWAP vermiyorsa tipik
 fiyat kullanılır. `lower_timeframe` sırası yoksa conservative fallback uygulanır.
-Ücretsiz provider verisi resmî BIST tick verisi değildir.
+Yahoo fallback verisi resmî BIST tick verisi değildir.
 
 Güvenli release:
 

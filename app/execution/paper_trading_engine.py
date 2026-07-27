@@ -9,7 +9,7 @@ import pandas as pd
 from sqlalchemy.orm import Session
 
 from app.backtest.engine_v5g import TransactionCostConfig
-from app.models.database import PaperAccount, PaperOrder, PaperTrade, PaperTradeEvent
+from app.models.database import PaperAccount, PaperOrder, PaperTrade, PaperTradeEvent, Signal
 
 ACTIVE_STATUSES = {"PENDING", "ACTIVE", "TARGET_1_HIT", "TARGET_2_HIT", "PARTIALLY_CLOSED"}
 FINAL_STATUSES = {"TARGET_3_HIT", "STOPPED", "MANUALLY_CLOSED", "EXPIRED", "DATA_PROBLEM", "CANCELLED"}
@@ -107,6 +107,11 @@ class PaperTradingEngine:
         if len(partial_exit_ratios) != 3 or any(value < 0 for value in partial_exit_ratios) or sum(partial_exit_ratios) > 1.000001:
             raise PaperTradingError("Kismi cikis oranlari gecersiz.")
         if signal_id is not None:
+            source_signal = self.db.get(Signal, signal_id)
+            if source_signal is None:
+                raise PaperTradingError("Sinyal bulunamadi; sanal islem kaynagi dogrulanamadi.")
+            if source_signal.user_id is not None and source_signal.user_id != user_id:
+                raise PaperTradingError("Bu sinyal baska bir kullaniciya ait.")
             duplicate = self.db.query(PaperTrade).filter(
                 PaperTrade.user_id == user_id,
                 PaperTrade.signal_id == signal_id,

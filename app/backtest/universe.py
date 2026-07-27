@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -87,10 +88,20 @@ class UniverseBacktestEngine:
         data_loader: DataLoader,
         signal_provider_factory: SignalProviderFactory,
         benchmark_loader: Optional[DataLoader] = None,
+        timeout_seconds: Optional[float] = None,
     ) -> UniverseBacktestResult:
         output = UniverseBacktestResult(request=request)
+        started = time.monotonic()
         benchmark = benchmark_loader("XU100.IS", request.start_date, request.end_date) if benchmark_loader else None
-        for symbol in self.resolve_symbols(request):
+        symbols = self.resolve_symbols(request)
+        for position, symbol in enumerate(symbols):
+            remaining_timeout = None
+            if timeout_seconds is not None:
+                remaining_timeout = timeout_seconds - (time.monotonic() - started)
+                if remaining_timeout <= 0:
+                    for pending in symbols[position:]:
+                        output.failures[pending] = "BacktestTimeout: Evren backtest sure siniri asildi."
+                    break
             try:
                 bars = data_loader(symbol, request.start_date, request.end_date)
                 base_provider = signal_provider_factory(symbol)
@@ -104,7 +115,11 @@ class UniverseBacktestEngine:
                     return instruction
 
                 output.results[symbol] = BacktestEngine(self.config).run(
-                    bars, symbol, filtered_provider, benchmark_bars=benchmark
+                    bars,
+                    symbol,
+                    filtered_provider,
+                    benchmark_bars=benchmark,
+                    timeout_seconds=remaining_timeout,
                 )
             except Exception as exc:
                 output.failures[symbol] = f"{type(exc).__name__}: {exc}"

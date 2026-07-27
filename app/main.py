@@ -17,8 +17,8 @@ install_sensitive_data_filter()
 logger = logging.getLogger("mergen_quant.main")
 
 app = FastAPI(
-    title="MERGEN QUANT API",
-    description="Akilli BIST Analiz ve Risk Sistemi - MERGEN QUANT (BIST hisse analiz, tarama, sinyal takip, portfoy risk ve backtest botu)",
+    title="MONTANA MELİH HİSSE BOT API",
+    description="Akıllı BIST Analiz ve Risk Sistemi - MONTANA MELİH HİSSE BOT (analiz, tarama, sinyal takip, portföy risk ve backtest)",
     version="3.0.0",
 )
 
@@ -42,7 +42,7 @@ def on_startup() -> None:
 @app.get("/")
 def root():
     return {
-        "name": "MERGEN QUANT",
+        "name": "MONTANA MELİH HİSSE BOT",
         "tagline": "Akilli BIST Analiz ve Risk Sistemi",
         "version": "V3",
         "status": "running",
