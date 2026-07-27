@@ -41,3 +41,28 @@ class DisabledFundamentalDataProvider(FundamentalDataProvider):
 
     def fetch(self, symbol: str) -> FundamentalSnapshot:
         raise ProviderUnavailableError(self.reason)
+
+
+class FallbackFundamentalDataProvider(FundamentalDataProvider):
+    """Try providers in trust order while preserving the actual provenance."""
+
+    name = "fundamental_fallback_chain"
+
+    def __init__(self, *providers: FundamentalDataProvider) -> None:
+        self.providers = tuple(provider for provider in providers if provider is not None)
+        if not self.providers:
+            raise ValueError("En az bir temel veri sağlayıcısı gerekir.")
+
+    def fetch(self, symbol: str) -> FundamentalSnapshot:
+        failures: list[str] = []
+        for provider in self.providers:
+            try:
+                return provider.fetch(symbol)
+            except FundamentalDataError:
+                failures.append(provider.name)
+            except Exception:
+                failures.append(provider.name)
+        attempted = ", ".join(failures) or "bilinmeyen"
+        raise ProviderUnavailableError(
+            f"Temel veri kaynakları geçici olarak kullanılamıyor (denenen: {attempted})."
+        )

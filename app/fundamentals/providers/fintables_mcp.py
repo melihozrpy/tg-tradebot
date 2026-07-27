@@ -43,8 +43,6 @@ class FintablesMcpProvider(FundamentalDataProvider):
             raise ProviderConfigurationError("Fintables MCP adresi geçerli bir HTTPS adresi olmalıdır.")
         if not bearer_token.strip():
             raise ProviderConfigurationError("Fintables OAuth bearer token eksik.")
-        if not tool_name.strip():
-            raise ProviderConfigurationError("Fintables MCP araç adı eksik.")
         if not symbol_argument.strip():
             raise ProviderConfigurationError("Fintables MCP sembol argümanı eksik.")
         self.endpoint = endpoint
@@ -155,6 +153,63 @@ class FintablesMcpProvider(FundamentalDataProvider):
         )
         self._initialized = True
 
+    def _discover_tool(self) -> None:
+        """Discover a financial/company tool when the operator did not pin one.
+
+        Fintables can add or rename MCP tools. Explicit configuration always
+        wins; discovery only selects a tool whose schema visibly accepts a
+        symbol/ticker-like argument and whose name describes financial data.
+        """
+        if self.tool_name:
+            return
+        response = self._post(
+            {
+                "jsonrpc": "2.0",
+                "id": self._next_id(),
+                "method": "tools/list",
+                "params": {},
+            }
+        )
+        result = response.get("result")
+        tools = result.get("tools") if isinstance(result, Mapping) else None
+        if not isinstance(tools, list):
+            raise ProviderResponseError("Fintables MCP araç listesi alınamadı.")
+
+        argument_names = (
+            self.symbol_argument,
+            "symbol",
+            "ticker",
+            "stock",
+            "code",
+            "stock_code",
+            "stockCode",
+        )
+        keywords = ("financial", "fundamental", "company", "statement", "balance", "stock")
+        ranked: list[tuple[int, str, str]] = []
+        for item in tools:
+            if not isinstance(item, Mapping):
+                continue
+            name = str(item.get("name") or "").strip()
+            schema = item.get("inputSchema")
+            properties = schema.get("properties") if isinstance(schema, Mapping) else None
+            if not name or not isinstance(properties, Mapping):
+                continue
+            argument = next((candidate for candidate in argument_names if candidate in properties), None)
+            if argument is None:
+                continue
+            searchable = f"{name} {item.get('description') or ''}".casefold()
+            score = sum(3 for keyword in keywords if keyword in searchable)
+            required = schema.get("required") if isinstance(schema, Mapping) else []
+            if isinstance(required, list) and argument in required:
+                score += 2
+            ranked.append((score, name, argument))
+        if not ranked:
+            raise ProviderResponseError(
+                "Fintables MCP içinde sembol kabul eden finansal araç bulunamadı; FINTABLES_MCP_TOOL_NAME ayarlanmalı."
+            )
+        ranked.sort(reverse=True)
+        _score, self.tool_name, self.symbol_argument = ranked[0]
+
     @staticmethod
     def _tool_payload(response: Mapping[str, Any]) -> Mapping[str, Any]:
         result = response.get("result")
@@ -182,6 +237,7 @@ class FintablesMcpProvider(FundamentalDataProvider):
         normalized = normalize_symbol(symbol)
         with self._lock:
             self._initialize()
+            self._discover_tool()
             arguments = {**self.tool_arguments, self.symbol_argument: normalized}
             response = self._post(
                 {

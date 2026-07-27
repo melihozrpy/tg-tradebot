@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from app.fundamentals.base import DisabledFundamentalDataProvider, FundamentalDataProvider
+from app.fundamentals.base import (
+    DisabledFundamentalDataProvider,
+    FallbackFundamentalDataProvider,
+    FundamentalDataProvider,
+)
 from app.fundamentals.cross_check import FundamentalCrossCheckService
 from app.fundamentals.providers import FintablesMcpProvider, LicensedKapRestProvider, YahooFundamentalProvider
 
@@ -15,7 +19,7 @@ def _fintables(settings) -> FintablesMcpProvider | None:
         settings, "fintables_oauth_bearer_token"
     )
     tool = _text(settings, "fintables_mcp_tool_name")
-    if not token or not tool:
+    if not token:
         return None
     return FintablesMcpProvider(
         endpoint=endpoint,
@@ -59,7 +63,7 @@ def build_fundamental_provider(settings) -> FundamentalDataProvider:
 
     if mode == "fintables_mcp":
         primary = fintables
-        missing = "Fintables MCP OAuth token veya araç adı eksik."
+        missing = "Fintables MCP OAuth tokeni eksik."
     elif mode == "kap_rest":
         primary = kap
         missing = "Lisanslı KAP REST adresi veya API anahtarı eksik."
@@ -77,6 +81,14 @@ def build_fundamental_provider(settings) -> FundamentalDataProvider:
     if primary is None:
         return DisabledFundamentalDataProvider(missing)
     if not bool(getattr(settings, "fundamental_cross_check_enabled", False)):
+        if mode == "auto" and yahoo is not None:
+            ordered = tuple(
+                dict.fromkeys(
+                    provider for provider in (fintables, kap, yahoo) if provider is not None
+                )
+            )
+            if len(ordered) > 1:
+                return FallbackFundamentalDataProvider(*ordered)
         return primary
 
     secondary: FundamentalDataProvider | None = None

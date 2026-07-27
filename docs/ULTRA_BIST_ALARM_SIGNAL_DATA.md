@@ -665,6 +665,15 @@ KAP_REST_DISCLOSURE_DETAIL_PATH=/disclosureDetail/{id}
 KAP_REST_SYMBOL_QUERY_PARAM=symbol
 ```
 
+Yetkili Fintables/KAP anahtarı henüz yoksa botun temel analiz komutunun tamamen
+kapalı kalmaması için `FUNDAMENTAL_PROVIDER=auto` ve
+`FUNDAMENTAL_ALLOW_YAHOO_FALLBACK=true` kullanılabilir. Bu durumda çıktı açıkça
+`secondary` ve gecikmeli olarak etiketlenir. Finansal tablo para birimi ile
+borsa fiyatının para birimi farklıysa kur dönüşümü uydurulmaz; F/K, PD/DD ve
+FD/FAVÖK boş bırakılır. Fintables OAuth tanımlıysa araç adı boş bırakıldığında
+MCP `tools/list` şemasından sembol kabul eden finansal araç güvenli biçimde
+keşfedilir; istenirse `FINTABLES_MCP_TOOL_NAME` ile sabitlenebilir.
+
 Maliyet alanları boş/sıfır bırakılırsa sistem tahminî komisyon uydurmaz; koşu
 snapshot'ında sıfır olarak açıkça saklar. Örneğin binde bir gerçek komisyon için
 `BACKTEST_COMMISSION_RATE=0.001`, komisyon üzerinden yüzde beş vergi için

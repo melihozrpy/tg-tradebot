@@ -14,6 +14,24 @@ _SYMBOLS = {
     AlarmCondition.PERCENT_DOWN_FROM_BASE.value: "% aşağı",
 }
 
+_STATUS = {
+    "ACTIVE": "Aktif",
+    "TRIGGERED": "Çalıyor / onay bekliyor",
+    "SNOOZED": "Ertelendi",
+    "ACKNOWLEDGED": "Durduruldu",
+    "PAUSED": "Bekletiliyor",
+    "COMPLETED": "Tamamlandı",
+    "DISABLED": "Devre dışı",
+    "ERROR": "Hata",
+}
+
+_MODE = {
+    "ONE_SHOT": "Tek sefer",
+    "PERSISTENT": "Hedef bölgedeyken tekrar",
+    "MANUAL_REARM": "Elle yeniden kur",
+    "RECURRING_CROSS": "Her yeni kesişimde",
+}
+
 
 def money(value) -> str:
     number = Decimal(str(value or 0)).quantize(Decimal("0.01"))
@@ -41,7 +59,7 @@ def format_trigger_message(alert, trigger) -> str:
         else f"{alert.repeat_interval_seconds} saniyede bir, durdurulana kadar"
     )
     return (
-        "🚨 FİYAT ALARMI TETİKLENDİ\n"
+        "🚨 ALARM ÇALIYOR • İSTENİLEN FİYATA GELDİ\n"
         "━━━━━━━━━━━━━━━━━━\n"
         f"📌 Hisse: {alert.symbol}\n"
         f"🎯 Koşul: {condition_text(alert)}\n"
@@ -58,6 +76,7 @@ def format_trigger_message(alert, trigger) -> str:
 def format_alarm_summary(alert) -> str:
     return (
         f"🔔 {alert.symbol} • {condition_text(alert)}\n"
-        f"Durum: {alert.status} | Mod: {alert.mode}\n"
-        f"Tekrar: {alert.repeat_interval_seconds} sn | Referans: {alert.public_id}"
+        f"Durum: {_STATUS.get(alert.status, alert.status)}\n"
+        f"Çalışma şekli: {_MODE.get(alert.mode, alert.mode)}\n"
+        f"Kontrol/tekrar: {alert.repeat_interval_seconds} sn • Kod: {alert.public_id}"
     )

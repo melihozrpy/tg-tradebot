@@ -79,6 +79,9 @@ def test_ultra_bist_settings_fail_fast_for_unsafe_combinations():
 
 
 def test_fundamental_provider_names_are_normalized_and_validated():
+    defaults = Settings(_env_file=None)
+    assert defaults.fundamental_provider == "auto"
+    assert defaults.fundamental_allow_yahoo_fallback is True
     assert Settings(_env_file=None, fundamental_provider="FiNtAbLeS_McP").fundamental_provider == "fintables_mcp"
     assert Settings(_env_file=None, market_data_provider="LICENSED_REST").market_data_provider == "licensed_rest"
     with pytest.raises(ValidationError, match="FUNDAMENTAL_PROVIDER"):

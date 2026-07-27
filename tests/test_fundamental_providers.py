@@ -11,6 +11,7 @@ import pytest
 from app.fundamentals import (
     CrossCheckMismatchError,
     DisabledFundamentalDataProvider,
+    FallbackFundamentalDataProvider,
     FintablesMcpProvider,
     FundamentalCrossCheckService,
     FundamentalDataProvider,
@@ -238,6 +239,54 @@ def test_fintables_rejects_missing_token_and_non_https_endpoint():
         FintablesMcpProvider(endpoint="http://evo.fintables.com/mcp", bearer_token="secret", tool_name="x")
 
 
+def test_fintables_can_discover_financial_tool_and_symbol_argument():
+    calls = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        calls.append(body)
+        method = body["method"]
+        if method == "initialize":
+            return httpx.Response(200, json={
+                "jsonrpc": "2.0", "id": body["id"],
+                "result": {"protocolVersion": "2025-03-26"},
+            })
+        if method == "notifications/initialized":
+            return httpx.Response(202)
+        if method == "tools/list":
+            return httpx.Response(200, json={
+                "jsonrpc": "2.0", "id": body["id"],
+                "result": {"tools": [{
+                    "name": "company_financial_statements",
+                    "description": "BIST company financial statements",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {"ticker": {"type": "string"}},
+                        "required": ["ticker"],
+                    },
+                }]},
+            })
+        return httpx.Response(200, json={
+            "jsonrpc": "2.0", "id": body["id"],
+            "result": {"structuredContent": _payload()},
+        })
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        provider = FintablesMcpProvider(
+            endpoint="https://evo.fintables.com/mcp",
+            bearer_token="oauth",
+            tool_name="",
+            client=client,
+        )
+        result = provider.fetch("THYAO")
+    assert result.symbol == "THYAO"
+    tool_call = next(item for item in calls if item["method"] == "tools/call")
+    assert tool_call["params"] == {
+        "name": "company_financial_statements",
+        "arguments": {"ticker": "THYAO"},
+    }
+
+
 def test_licensed_kap_adapter_uses_api_key_and_contract_path():
     observed: dict[str, str] = {}
 
@@ -303,6 +352,60 @@ def test_yahoo_fallback_normalizes_statements_and_marks_secondary_source():
     assert result.latest_period.value("revenue") == Decimal("120000000")
     assert result.ratios.free_cash_flow == Decimal("13000000")
     assert result.ratios.trailing_pe == Decimal("10")
+
+
+def test_yahoo_uses_financial_statements_when_profile_endpoint_fails():
+    class StatementOnlyTicker:
+        @property
+        def info(self):
+            raise RuntimeError("profile unavailable")
+
+        fast_info = {"currency": "TRY", "last_price": 100}
+        columns = pd.to_datetime(["2025-03-31", "2026-03-31"])
+        quarterly_income_stmt = pd.DataFrame(
+            [[100, 120], [10, 14]],
+            index=["Total Revenue", "Net Income"],
+            columns=columns,
+        )
+        quarterly_balance_sheet = pd.DataFrame()
+        quarterly_cashflow = pd.DataFrame()
+
+    snapshot = YahooFundamentalProvider(ticker_factory=lambda _symbol: StatementOnlyTicker()).fetch("THYAO")
+    assert snapshot.latest_period.value("revenue") == Decimal("120")
+    assert any("profil" in note.casefold() for note in snapshot.provenance.notes)
+
+
+def test_yahoo_never_mixes_quote_and_statement_currencies_in_valuation():
+    class MixedCurrencyTicker:
+        info = {
+            "financialCurrency": "USD",
+            "currency": "TRY",
+            "marketCap": 1_000_000_000,
+            "enterpriseValue": 1_200_000_000,
+        }
+        columns = pd.to_datetime(["2025-03-31", "2026-03-31"])
+        quarterly_income_stmt = pd.DataFrame(
+            [[100, 120], [10, 12]],
+            index=["Total Revenue", "Net Income"],
+            columns=columns,
+        )
+        quarterly_balance_sheet = pd.DataFrame()
+        quarterly_cashflow = pd.DataFrame()
+
+    snapshot = YahooFundamentalProvider(ticker_factory=lambda _symbol: MixedCurrencyTicker()).fetch("THYAO")
+    assert snapshot.latest_period.currency == "USD"
+    assert snapshot.latest_period.value("market_cap") is None
+    assert snapshot.ratios.trailing_pe is None
+    assert any("kur dönüşümü olmadan" in note for note in snapshot.provenance.notes)
+
+
+def test_fallback_chain_uses_secondary_source_without_relabeling_it():
+    unavailable = _StaticProvider("fintables", error=ProviderUnavailableError("down"))
+    yahoo_snapshot = _snapshot(provider="yahoo_finance", trust=SourceTrust.SECONDARY)
+    fallback = _StaticProvider("yahoo_finance", snapshot=yahoo_snapshot)
+    result = FallbackFundamentalDataProvider(unavailable, fallback).fetch("THYAO")
+    assert result.provenance.provider == "yahoo_finance"
+    assert result.provenance.trust is SourceTrust.SECONDARY
 
 
 class _StaticProvider(FundamentalDataProvider):

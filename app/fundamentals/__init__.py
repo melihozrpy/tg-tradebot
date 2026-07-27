@@ -1,6 +1,7 @@
 from app.fundamentals.base import (
     CrossCheckMismatchError,
     DisabledFundamentalDataProvider,
+    FallbackFundamentalDataProvider,
     FundamentalDataError,
     FundamentalDataProvider,
     ProviderConfigurationError,
@@ -29,6 +30,7 @@ __all__ = [
     "CrossCheckReport",
     "DataProvenance",
     "DisabledFundamentalDataProvider",
+    "FallbackFundamentalDataProvider",
     "FinancialRatios",
     "FintablesMcpProvider",
     "FundamentalCrossCheckService",

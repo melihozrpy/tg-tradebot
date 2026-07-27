@@ -445,7 +445,18 @@ async def cmd_islemplani(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     try:
         end = datetime.now(timezone.utc)
         df = await asyncio.to_thread(provider.get_ohlcv, symbol, "1d", end - timedelta(days=520), end)
-        plan = await asyncio.to_thread(build_bist_trade_plan, df, symbol)
+        multi_result = None
+        try:
+            multi_result = await asyncio.to_thread(
+                analyze_multi_timeframe,
+                provider,
+                symbol,
+                ("4h", "1h", "15m", "5m"),
+                timezone_name=get_settings().timezone_name,
+            )
+        except Exception as exc:  # çoklu zaman kesintisi günlük planı engellemez
+            logger.warning("İşlem planı çoklu zaman teyidi alınamadı symbol=%s: %s", symbol, exc)
+        plan = await asyncio.to_thread(build_bist_trade_plan, df, symbol, multi_result)
         chart_path = await asyncio.to_thread(generate_bist_trade_plan_chart, df, plan)
         with open(chart_path, "rb") as image:
             await update.message.reply_photo(
@@ -1682,15 +1693,9 @@ async def cmd_aktif_sinyaller(update: Update, context: ContextTypes.DEFAULT_TYPE
             .limit(30)
             .all()
         )
-        if not rows:
-            await update.message.reply_text("Aktif sinyal yok.")
-            return
-        lines = [
-            f"• #{s.id} {s.symbol}: {s.signal_type.value} — skor {s.score:.0f}, "
-            f"durum {s.state.value}, stop {s.current_stop_price or s.stop_price}, TP1 {s.target_1}"
-            for s in rows
-        ]
-        await update.message.reply_text("Aktif sinyaller:\n" + "\n".join(lines))
+        from app.telegram.signal_list_formatter import format_active_signals
+
+        await update.message.reply_text(format_active_signals(rows))
     finally:
         db.close()
 
@@ -2858,16 +2863,20 @@ async def cmd_start_v3(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     keyboard = [
         [InlineKeyboardButton("📊 Teknik Analiz", callback_data="menu_analiz"),
          InlineKeyboardButton("🎯 AL / SAT Planı", callback_data="menu_islemplani")],
-        [InlineKeyboardButton("🏢 Temel Analiz", callback_data="menu_fundamental_prompt"),
-         InlineKeyboardButton("🔔 Alarm Kur", callback_data="menu_alarm_prompt")],
+        [InlineKeyboardButton("🏢 Şirket Analizi", callback_data="menu_fundamental_prompt"),
+         InlineKeyboardButton("📣 KAP Bildirimleri", callback_data="menu_kap_prompt")],
+        [InlineKeyboardButton("🔔 Alarm Kur", callback_data="menu_alarm_prompt"),
+         InlineKeyboardButton("🔊 Alarmı Dene", callback_data="menu_alarm_test")],
+        [InlineKeyboardButton("📋 Alarmlarım", callback_data="menu_alarm_list"),
+         InlineKeyboardButton("🎯 Aktif Sinyaller", callback_data="menu_sinyaller")],
         [InlineKeyboardButton("⭐ İzleme Listem", callback_data="menu_liste"),
          InlineKeyboardButton("🔎 Piyasa Tara", callback_data="menu_tara")],
         [InlineKeyboardButton("💼 Portföy", callback_data="menu_portfoy"),
-         InlineKeyboardButton("🎯 Aktif Sinyaller", callback_data="menu_sinyaller")],
+         InlineKeyboardButton("🌍 Piyasa Özeti", callback_data="menu_piyasa")],
         [InlineKeyboardButton("🧪 Backtest", callback_data="menu_backtest_prompt"),
          InlineKeyboardButton("📈 Test Sonuçları", callback_data="menu_backtest_summary")],
-        [InlineKeyboardButton("🌍 Piyasa Özeti", callback_data="menu_piyasa"),
-         InlineKeyboardButton("📚 Komut Rehberi", callback_data="menu_commands")],
+        [InlineKeyboardButton("📚 Komut Rehberi", callback_data="menu_commands"),
+         InlineKeyboardButton("⚙️ Ayarlar", callback_data="menu_ayarlar")],
     ]
     await update.message.reply_text(
         "🏔️✨ MONTANA MELİH HİSSE BOT ✨📈\n"
@@ -2909,7 +2918,10 @@ async def handle_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         "menu_analiz": "Bir sembol yaz: /analiz THYAO",
         "menu_islemplani": "Bir sembol yaz: /islemplani THYAO",
         "menu_fundamental_prompt": "Şirketi bilanço, borç, kârlılık ve riskleriyle incelemek için: /sirket THYAO",
+        "menu_kap_prompt": "Son resmî şirket bildirimleri için: /kap THYAO",
         "menu_alarm_prompt": "Fiyat alarmı örneği: /alarm 9.20 THYAO",
+        "menu_alarm_test": "Alarm sesini denemek için: /alarm_test radar",
+        "menu_alarm_list": "Açık ve tetiklenen alarmların için: /alarmlar",
         "menu_commands": "Tüm özellikleri açıklayan rehber için /komutlar yaz.",
         "menu_backtest_prompt": "Bir hissenin son iki yılını test etmek için: /backtest THYAO",
         "menu_backtest_summary": "Son backtest sonuçları için /backtest_ozet yaz.",
@@ -3124,6 +3136,7 @@ async def cmd_komutlar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "/alarm_kur ASELS 72.50 üstü — koşullu kalıcı alarm\n"
         "/toplu_alarm — metin/CSV/XLSX ile önizlemeli toplu kurulum\n"
         "/alarm_test zil — alarm sesini dener\n"
+        "/alarm_yardim — alarmı en sade şekilde öğretir\n"
         "/alarmlar — açık alarmları listeler\n"
         "/alarm_sil 12 — alarmı siler\n\n"
         "⭐ TAKİP VE PİYASA\n"

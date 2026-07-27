@@ -814,8 +814,10 @@ def generate_bist_trade_plan_chart(df: pd.DataFrame, plan) -> str:
         if len(data) >= period:
             ax.plot(x, ema(close, period), color=color, linewidth=width, label=f"EMA {period}", alpha=.95)
 
-    ax.axhspan(plan.long.entry_low, plan.long.entry_high, color=bullish, alpha=.11)
-    ax.axhspan(plan.short.entry_low, plan.short.entry_high, color=bearish, alpha=.10)
+    long_alpha = .15 if plan.preferred_direction == "LONG" else .07
+    short_alpha = .15 if plan.preferred_direction == "SHORT" else .07
+    ax.axhspan(plan.long.entry_low, plan.long.entry_high, color=bullish, alpha=long_alpha)
+    ax.axhspan(plan.short.entry_low, plan.short.entry_high, color=bearish, alpha=short_alpha)
     ax.text(1, (plan.long.entry_low + plan.long.entry_high) / 2,
             f"  LONG {plan.long.entry_low:.2f}–{plan.long.entry_high:.2f}", color=bullish, fontsize=7, va="center")
     ax.text(1, (plan.short.entry_low + plan.short.entry_high) / 2,
@@ -823,26 +825,26 @@ def generate_bist_trade_plan_chart(df: pd.DataFrame, plan) -> str:
 
     buy_price, sell_price = float(plan.long.trigger), float(plan.short.trigger)
     marker_x = max(len(data) - 22, 1)
-    ax.annotate(f"AL  {buy_price:.2f} TL", xy=(marker_x, buy_price), xytext=(-8, -34),
+    ax.annotate(f"AL TETİK  {buy_price:.2f} TL", xy=(marker_x, buy_price), xytext=(-8, -34),
                 textcoords="offset points", color="#03120c", fontsize=9, fontweight="bold",
                 bbox=dict(boxstyle="round,pad=.42", facecolor=bullish, edgecolor="#7dffd1", linewidth=1.2),
                 arrowprops=dict(arrowstyle="-|>", color=bullish, linewidth=1.7), zorder=15)
-    ax.annotate(f"SAT  {sell_price:.2f} TL", xy=(marker_x + 5, sell_price), xytext=(8, 34),
+    ax.annotate(f"SAT/SHORT TETİK  {sell_price:.2f} TL", xy=(marker_x + 5, sell_price), xytext=(8, 34),
                 textcoords="offset points", color="#fff4f6", fontsize=9, fontweight="bold",
                 bbox=dict(boxstyle="round,pad=.42", facecolor=bearish, edgecolor="#ff8aa0", linewidth=1.2),
                 arrowprops=dict(arrowstyle="-|>", color=bearish, linewidth=1.7), zorder=15)
 
     from app.analysis.smart_money_engine import detect_smart_money
     smart = detect_smart_money(data)
-    for zone in smart.fvg:
+    for zone in smart.fvg[-2:]:
         color = "#00b8ff" if zone.direction == "bullish" else "#ff8a3d"
         ax.axhspan(zone.low, zone.high, xmin=max(zone.index / len(data), 0), xmax=1, color=color, alpha=.045)
         ax.text(zone.index, (zone.low + zone.high) / 2, "FVG", color=color, fontsize=5.5, alpha=.8)
-    for zone in smart.order_blocks:
+    for zone in smart.order_blocks[-2:]:
         color = bullish if zone.direction == "bullish" else bearish
         ax.axhspan(zone.low, zone.high, xmin=max(zone.index / len(data), 0), xmax=1, color=color, alpha=.06)
         ax.text(zone.index, (zone.low + zone.high) / 2, "OB", color=color, fontsize=5.5, alpha=.85)
-    for event in smart.structure:
+    for event in smart.structure[-3:]:
         color = bullish if event.direction == "bullish" else bearish
         ax.scatter(event.index, event.price, marker="^" if event.direction == "bullish" else "v", s=18, color=color, zorder=9)
         ax.text(event.index, event.price, f" {event.kind}", color=color, fontsize=5.5, va="bottom")
@@ -862,9 +864,11 @@ def generate_bist_trade_plan_chart(df: pd.DataFrame, plan) -> str:
     for level in plan.resistance_levels:
         ax.axhline(level, color=bearish, linewidth=.5, linestyle=":", alpha=.38)
 
-    ax.set_title(f"{plan.symbol}  •  {preferred.direction} ÖNCELİKLİ  •  {preferred.score}/100",
+    title_decision = f"{plan.preferred_direction} TETİK BEKLE" if plan.preferred_direction else "BEKLE • YÖN NET DEĞİL"
+    ax.set_title(f"{plan.symbol}  •  {title_decision}  •  EN YÜKSEK {preferred.score}/100",
                  color=foreground, fontsize=14, fontweight="bold", loc="left", pad=14)
-    ax.text(.01, .94, f"RSI {plan.rsi:.1f}   ATR %{plan.atr_percent:.2f}   TREND {plan.trend}",
+    ax.text(.01, .94,
+            f"RSI {plan.rsi:.1f}   ADX {plan.adx:.1f}   HACİM {plan.relative_volume:.2f}x   ATR %{plan.atr_percent:.2f}   TREND {plan.trend}",
             transform=ax.transAxes, color="#91a4b7", fontsize=8)
     ax.legend(loc="upper right", fontsize=7, ncol=3, facecolor=panel, edgecolor=grid, labelcolor=foreground)
     _format_trading_axis(ax, data, right_margin=14)

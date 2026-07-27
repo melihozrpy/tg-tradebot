@@ -30,10 +30,21 @@ _STATEMENT_ROWS: dict[str, tuple[str, ...]] = {
 
 def _statement(ticker: Any, *names: str) -> Any | None:
     for name in names:
-        frame = getattr(ticker, name, None)
+        try:
+            frame = getattr(ticker, name, None)
+        except Exception:
+            continue
         if frame is not None and not getattr(frame, "empty", True):
             return frame
     return None
+
+
+def _mapping_attribute(ticker: Any, name: str) -> dict[str, Any]:
+    try:
+        value = getattr(ticker, name, None)
+        return dict(value or {})
+    except Exception:
+        return {}
 
 
 def _cell(frame: Any, column: Any, labels: tuple[str, ...]) -> Any | None:
@@ -69,11 +80,14 @@ class YahooFundamentalProvider(FundamentalDataProvider):
             ticker_factory = self.ticker_factory
         try:
             ticker = ticker_factory(f"{normalized}.IS")
-            info = dict(getattr(ticker, "info", {}) or {})
         except Exception as exc:
             raise ProviderResponseError("Yahoo temel veri bağlantısı başarısız.") from exc
-        if not info:
-            raise ProviderResponseError("Yahoo doğrulanabilir şirket bilgisi döndürmedi.")
+
+        # Yahoo'nun profil uç noktası zaman zaman tek başına hata verirken
+        # finansal tabloları çalışmaya devam eder. Profil hatası tablo verisini
+        # çöpe atmamalı; her yüzey bağımsız ve kontrollü okunur.
+        info = _mapping_attribute(ticker, "info")
+        fast_info = _mapping_attribute(ticker, "fast_info")
 
         income = _statement(ticker, "quarterly_income_stmt", "quarterly_financials")
         balance = _statement(ticker, "quarterly_balance_sheet")
@@ -84,9 +98,18 @@ class YahooFundamentalProvider(FundamentalDataProvider):
                 columns.update(frame.columns)
         ordered_columns = sorted(columns, reverse=True)
         currency = str(info.get("financialCurrency") or info.get("currency") or "TRY").upper()
+        quote_currency = str(info.get("currency") or fast_info.get("currency") or "TRY").upper()
         notes = ["Yahoo Finance gecikmeli/ikincil kaynaktır; KAP ile doğrulanmalıdır."]
-        if not info.get("financialCurrency") and not info.get("currency"):
+        if not info.get("financialCurrency") and not info.get("currency") and not fast_info.get("currency"):
             notes.append("Para birimi BIST sembolü nedeniyle TRY varsayıldı.")
+        if not info:
+            notes.append("Şirket profil uç noktası yanıt vermedi; mevcut finansal tablolar kullanıldı.")
+        market_values_compatible = currency == quote_currency
+        if not market_values_compatible:
+            notes.append(
+                f"Finansal tablo para birimi {currency}, borsa fiyatı para birimi {quote_currency}; "
+                "kur dönüşümü olmadan F/K, PD/DD ve FD/FAVÖK hesaplanmadı."
+            )
 
         periods: list[dict[str, Any]] = []
         for index, column in enumerate(ordered_columns):
@@ -99,10 +122,16 @@ class YahooFundamentalProvider(FundamentalDataProvider):
                         break
             if index == 0:
                 market_fields = {
-                    "market_cap": info.get("marketCap"),
-                    "enterprise_value": info.get("enterpriseValue"),
+                    "market_cap": (
+                        info.get("marketCap") or fast_info.get("market_cap")
+                    ) if market_values_compatible else None,
+                    "enterprise_value": info.get("enterpriseValue") if market_values_compatible else None,
                     "shares_outstanding": info.get("sharesOutstanding") or info.get("impliedSharesOutstanding"),
-                    "last_price": info.get("currentPrice") or info.get("regularMarketPrice"),
+                    "last_price": (
+                        info.get("currentPrice")
+                        or info.get("regularMarketPrice")
+                        or fast_info.get("last_price")
+                    ) if market_values_compatible else None,
                     "revenue_ttm": info.get("totalRevenue"),
                     "net_income_ttm": info.get("netIncomeToCommon"),
                     "ebitda_ttm": info.get("ebitda"),
@@ -141,8 +170,8 @@ class YahooFundamentalProvider(FundamentalDataProvider):
                         "ebitda_ttm": info.get("ebitda"),
                         "total_debt": info.get("totalDebt"),
                         "cash_and_equivalents": info.get("totalCash"),
-                        "market_cap": info.get("marketCap"),
-                        "enterprise_value": info.get("enterpriseValue"),
+                    "market_cap": info.get("marketCap") if market_values_compatible else None,
+                    "enterprise_value": info.get("enterpriseValue") if market_values_compatible else None,
                     }.items()
                     if value is not None
                 }

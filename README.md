@@ -250,10 +250,10 @@ python run_bot.py
 | `USER_PRICE_ALERT_AUDIO_ENABLED` | Telegram sesli alarm gönderimi | `true` |
 | `USER_PRICE_ALERT_OCR_ENABLED` | Görselden alarm OCR akışı | `true` |
 | `USER_PRICE_ALERT_OCR_LANGUAGE` | Tesseract dil kümesi | `tur+eng` |
-| `FUNDAMENTAL_PROVIDER` | `disabled`, `fintables_mcp`, `kap_rest`, `yahoo`, `auto` | `disabled` |
+| `FUNDAMENTAL_PROVIDER` | `disabled`, `fintables_mcp`, `kap_rest`, `yahoo`, `auto`; `auto` yetkili kaynağı, ardından açıkça ikincil Yahoo fallback'ini dener | `auto` |
 | `FUNDAMENTAL_CROSS_CHECK_ENABLED` | Yetkili ikinci kaynakla temel veri kontrolü | `false` |
 | `FUNDAMENTAL_CROSS_CHECK_STRICT` | Tolerans dışı farkta kesin yorumu engeller | `true` |
-| `FUNDAMENTAL_ALLOW_YAHOO_FALLBACK` | Yahoo temel verisini açıkça düşük güvenli fallback olarak etkinleştirir | `false` |
+| `FUNDAMENTAL_ALLOW_YAHOO_FALLBACK` | Yahoo temel verisini açıkça gecikmeli/ikincil fallback olarak etkinleştirir; çıktı KAP/Fintables diye etiketlenmez | `true` |
 | `FINTABLES_MCP_URL` | Yetkili Fintables MCP uç noktası | `https://evo.fintables.com/mcp` |
 | `FINTABLES_MCP_BEARER_TOKEN` | Fintables OAuth erişim belirteci; gizli değer | boş |
 | `KAP_PROVIDER` | Bot içi disclosure okuma: `disabled` veya `kap_rest` | `disabled` |

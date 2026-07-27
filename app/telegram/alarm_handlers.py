@@ -63,10 +63,21 @@ def _preview_text(draft: AlarmDraft) -> str:
     operator = {"PRICE_GTE": "eşit veya üzerine çıkarsa", "PRICE_LTE": "eşit veya altına düşerse",
                 "CROSS_UP": "aşağıdan yukarı keserse", "CROSS_DOWN": "yukarıdan aşağı keserse",
                 "PRICE_NEAR": "hedefe yaklaşırsa"}.get(draft.condition.value, draft.condition.value)
+    mode = {
+        AlarmMode.ONE_SHOT: "Tek sefer çal ve tamamla",
+        AlarmMode.PERSISTENT: "Hedefte kaldıkça belirlenen aralıkla tekrarla",
+        AlarmMode.MANUAL_REARM: "Çaldıktan sonra elle yeniden kur",
+        AlarmMode.RECURRING_CROSS: "Her yeni kesişimde tekrar çal",
+    }.get(draft.mode, draft.mode.value)
+    repeat = (
+        "Tekrar yok"
+        if draft.mode == AlarmMode.ONE_SHOT
+        else f"En erken {draft.repeat_interval_seconds} saniyede bir"
+    )
     return (
         "🔔 ALARM ÖZETİ\n━━━━━━━━━━━━━━━━━━\n"
         f"Hisse: {draft.symbol}\nKoşul: Fiyat {draft.target_price:.2f} TL seviyesine {operator}\n"
-        f"Mod: {draft.mode.value}\nTekrarlama: {draft.repeat_interval_seconds} saniye\n"
+        f"Çalışma şekli: {mode}\nTekrarlama: {repeat}\n"
         "Durum: Onay bekliyor\n\n"
         "ℹ️ Telefon sesi Telegram ve cihaz bildirim ayarlarına bağlıdır; bot sessiz modu aşamaz."
     )
@@ -108,8 +119,13 @@ async def cmd_alarm_multi(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     if await _reject_unauthorized(update): return
     if len(context.args) < 2:
         await update.message.reply_text(
-            "Kullanım: /alarm 9.20 THYAO ASELS ses=radar koşul=yaklaşık\n"
-            "Koşul: üstü, altı, yukarı_kes, aşağı_kes veya yaklaşık"
+            "🔔 KOLAY FİYAT ALARMI\n"
+            "━━━━━━━━━━━━━━━━━━\n"
+            "Tek hisse:\n/alarm 9.20 THYAO\n\n"
+            "Birden fazla hisse:\n/alarm 9.20 THYAO ASELS TUPRS\n\n"
+            "Farklı ses:\n/alarm 9.20 THYAO ses=radar\n\n"
+            "Bot önce özeti gösterir. Ardından ‘Geçerli Alarmları Kur’ düğmesine basman yeterli.\n"
+            "İstersen koşul=üstü, koşul=altı veya koşul=yaklaşık yazabilirsin."
         )
         return
     try:
@@ -134,6 +150,7 @@ async def cmd_alarm_multi(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             raise ValueError("tekrar aralığı izin verilen sınırda değil")
         seen = set()
         drafts = []
+        mode = AlarmMode.PERSISTENT if "tekrar" in options else AlarmMode.ONE_SHOT
         for raw in symbol_values:
             symbol = normalize_symbol(raw)
             if symbol in seen:
@@ -141,8 +158,19 @@ async def cmd_alarm_multi(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             seen.add(symbol)
             drafts.append(AlarmDraft(
                 symbol=symbol, target_price=target, condition=condition,
-                repeat_interval_seconds=repeat, sound_name=sound,
+                mode=mode, repeat_interval_seconds=repeat, sound_name=sound,
             ))
+        if len(drafts) == 1:
+            draft = drafts[0]
+            context.user_data["pending_alarm"] = _draft_payload(draft)
+            await update.message.reply_text(
+                _preview_text(draft),
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("✅ Alarmı Kur", callback_data="upa_confirm_single"),
+                    InlineKeyboardButton("❌ İptal", callback_data="upa_cancel_flow"),
+                ]]),
+            )
+            return
         parsed = BulkParseResult(tuple(drafts), ())
         db, user = _db_user(update)
         try:
@@ -378,6 +406,10 @@ async def cmd_alarm_yardim(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     if await _reject_unauthorized(update): return
     await update.message.reply_text(
         "🔔 FİYAT ALARMI YARDIMI\n━━━━━━━━━━━━━━━━━━\n"
+        "EN KOLAY KULLANIM\n"
+        "/alarm 9.20 THYAO — fiyat 9,20 TL'ye gelince bildirir\n"
+        "/alarm 9.20 THYAO ASELS ses=radar — aynı hedefi çoklu hisseye kurar\n\n"
+        "GELİŞMİŞ KULLANIM\n"
         "/alarm_kur ASELS 72.50 üstü — tek alarm\n/toplu_alarm — metinden yüzlerce alarm\n"
         "/alarm_foto — ekran görüntüsünden OCR\n/alarm_dosya — CSV/XLSX\n/alarmlar — alarm listesi\n"
         "/alarm_durdur ALR-XXXXXX\n/alarm_ertele ALR-XXXXXX 5\n/alarm_devam ALR-XXXXXX\n"

@@ -41,8 +41,8 @@ def test_montana_brand_and_buy_sell_chart_labels_are_present():
     handlers = open("app/telegram/handlers_v3.py", encoding="utf-8").read()
     chart = open("app/services/chart_service.py", encoding="utf-8").read()
     assert "MONTANA MELİH HİSSE BOT" in handlers
-    assert 'f"AL  {buy_price:.2f} TL"' in chart
-    assert 'f"SAT  {sell_price:.2f} TL"' in chart
+    assert 'f"AL TETİK  {buy_price:.2f} TL"' in chart
+    assert 'f"SAT/SHORT TETİK  {sell_price:.2f} TL"' in chart
 
 
 def test_four_panel_multi_timeframe_chart_is_generated():

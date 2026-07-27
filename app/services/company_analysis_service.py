@@ -28,6 +28,9 @@ class CompanyAnalysis:
     source: str = "Yahoo Finance (gecikmeli/ikincil kaynak)"
     decision_summary: str = "Veri yeterliliği ve riskler birlikte değerlendirilmelidir."
     data_warnings: tuple[str, ...] = ()
+    score_breakdown: tuple[str, ...] = ()
+    data_coverage: int = 0
+    currency: str = "TRY"
 
 
 def _decision_summary(status: str, evidence_count: int) -> str:
@@ -59,6 +62,10 @@ def _number(value: Any) -> float | None:
         return None
 
 
+def _currency_label(currency: str) -> str:
+    return "TL" if str(currency).upper() == "TRY" else str(currency).upper()
+
+
 def _statement(ticker, *names: str):
     for name in names:
         value = getattr(ticker, name, None)
@@ -76,20 +83,20 @@ def _row(frame, *labels: str):
     return None
 
 
-def _trend_line(label: str, values) -> str | None:
+def _trend_line(label: str, values, currency: str = "TRY") -> str | None:
     if values is None or len(values) < 2:
         return None
     latest, previous = float(values.iloc[-1]), float(values.iloc[-2])
     change = ((latest / abs(previous)) - 1) * 100 if previous else 0.0
-    return f"{label}: {latest / 1_000_000:.1f} mn TL • çeyreklik %{change:+.1f}"
+    return f"{label}: {latest / 1_000_000:.1f} mn {_currency_label(currency)} • çeyreklik %{change:+.1f}"
 
 
-def _trend_line_pair(label: str, latest: Any, previous: Any) -> str | None:
+def _trend_line_pair(label: str, latest: Any, previous: Any, currency: str = "TRY") -> str | None:
     latest_value, previous_value = _number(latest), _number(previous)
     if latest_value is None or previous_value is None:
         return None
     change = ((latest_value / abs(previous_value)) - 1) * 100 if previous_value else 0.0
-    return f"{label}: {latest_value / 1_000_000:.1f} mn TL • dönemsel %{change:+.1f}"
+    return f"{label}: {latest_value / 1_000_000:.1f} mn {_currency_label(currency)} • dönemsel %{change:+.1f}"
 
 
 def _analysis_from_snapshot(snapshot: "FundamentalSnapshot") -> CompanyAnalysis:
@@ -113,13 +120,14 @@ def _analysis_from_snapshot(snapshot: "FundamentalSnapshot") -> CompanyAnalysis:
         filter(
             None,
             (
-                _trend_line_pair("Ciro", latest.value("revenue"), previous.value("revenue") if previous else None),
-                _trend_line_pair("Net kâr", latest.value("net_income"), previous.value("net_income") if previous else None),
-                _trend_line_pair("FAVÖK", latest.value("ebitda"), previous.value("ebitda") if previous else None),
+                _trend_line_pair("Ciro", latest.value("revenue"), previous.value("revenue") if previous else None, latest.currency),
+                _trend_line_pair("Net kâr", latest.value("net_income"), previous.value("net_income") if previous else None, latest.currency),
+                _trend_line_pair("FAVÖK", latest.value("ebitda"), previous.value("ebitda") if previous else None, latest.currency),
                 _trend_line_pair(
                     "Faaliyet nakdi",
                     latest.value("operating_cash_flow"),
                     previous.value("operating_cash_flow") if previous else None,
+                    latest.currency,
                 ),
             ),
         )
@@ -127,37 +135,50 @@ def _analysis_from_snapshot(snapshot: "FundamentalSnapshot") -> CompanyAnalysis:
 
     positives: list[str] = []
     risks: list[str] = []
+    score_breakdown: list[str] = ["Başlangıç: 50 puan"]
     score = 50
     growth = metrics.get("revenue_growth")
     if growth is not None:
         (positives if growth > .10 else risks).append(f"Ciro büyümesi %{growth * 100:+.1f}")
-        score += 12 if growth > .10 else -8 if growth < 0 else 0
+        contribution = 12 if growth > .10 else -8 if growth < 0 else 0
+        score += contribution
+        score_breakdown.append(f"Ciro büyümesi: {contribution:+d}")
     margin = metrics.get("profit_margin")
     if margin is not None:
         (positives if margin > .08 else risks).append(f"Net kâr marjı %{margin * 100:.1f}")
-        score += 10 if margin > .08 else -8 if margin < .02 else 0
+        contribution = 10 if margin > .08 else -8 if margin < .02 else 0
+        score += contribution
+        score_breakdown.append(f"Net kâr marjı: {contribution:+d}")
     sector_text = f"{snapshot.sector or ''} {snapshot.industry or ''}".casefold()
     is_bank = any(token in sector_text for token in ("banka", "banking", "bank"))
     data_warnings: list[str] = []
+    data_warnings.extend(snapshot.provenance.notes)
     debt = metrics.get("debt_to_equity")
     if debt is not None:
         if is_bank:
             data_warnings.append(
                 "Banka bilançosunda sanayi şirketi Borç/Özsermaye eşiği kullanılmadı; bankacılık rasyoları ayrıca gerekir."
             )
+            score_breakdown.append("Borç/özsermaye: banka için puanlanmadı")
         else:
             (risks if debt > 150 else positives).append(f"Borç/özsermaye %{debt:.1f}")
-            score += -15 if debt > 150 else 8 if debt < 60 else 0
+            contribution = -15 if debt > 150 else 8 if debt < 60 else 0
+            score += contribution
+            score_breakdown.append(f"Borç/özsermaye: {contribution:+d}")
     cash = metrics.get("free_cash_flow")
     if cash is not None:
         (positives if cash > 0 else risks).append(
             "Serbest nakit akışı pozitif" if cash > 0 else "Serbest nakit akışı negatif"
         )
-        score += 10 if cash > 0 else -12
+        contribution = 10 if cash > 0 else -12
+        score += contribution
+        score_breakdown.append(f"Serbest nakit akışı: {contribution:+d}")
     roe = metrics.get("return_on_equity")
     if roe is not None:
         (positives if roe > .15 else risks).append(f"Özsermaye kârlılığı %{roe * 100:.1f}")
-        score += 10 if roe > .15 else -5 if roe < .05 else 0
+        contribution = 10 if roe > .15 else -5 if roe < .05 else 0
+        score += contribution
+        score_breakdown.append(f"Özsermaye kârlılığı: {contribution:+d}")
     evidence_count = sum(
         metrics.get(key) is not None
         for key in ("revenue_growth", "profit_margin", "debt_to_equity", "free_cash_flow", "return_on_equity")
@@ -180,7 +201,7 @@ def _analysis_from_snapshot(snapshot: "FundamentalSnapshot") -> CompanyAnalysis:
         if metrics.get(key) is not None:
             valuation_lines.append(f"{label}: {metrics[key]:.2f}x")
     if metrics.get("net_debt") is not None:
-        valuation_lines.append(f"Net borç: {metrics['net_debt'] / 1_000_000:.1f} mn TL")
+        valuation_lines.append(f"Net borç: {metrics['net_debt'] / 1_000_000:.1f} mn {_currency_label(latest.currency)}")
 
     consolidation = "konsolide" if latest.consolidated is True else "solo" if latest.consolidated is False else "türü belirsiz"
     revision = latest.revision or "revizyon bilgisi yok"
@@ -206,6 +227,9 @@ def _analysis_from_snapshot(snapshot: "FundamentalSnapshot") -> CompanyAnalysis:
         source=source,
         decision_summary=_decision_summary(status, evidence_count),
         data_warnings=tuple(data_warnings),
+        score_breakdown=tuple(score_breakdown),
+        data_coverage=round(evidence_count / 5 * 100),
+        currency=latest.currency,
     )
 
 
@@ -248,8 +272,10 @@ def analyze_company(
     ebitda = _row(income, "EBITDA", "Normalized EBITDA")
     operating_cash = _row(cashflow, "Operating Cash Flow", "Total Cash From Operating Activities")
     trends = tuple(filter(None, (
-        _trend_line("Ciro", revenue), _trend_line("Net kâr", net_income),
-        _trend_line("FAVÖK", ebitda), _trend_line("Faaliyet nakdi", operating_cash),
+        _trend_line("Ciro", revenue, str(info.get("financialCurrency") or "TRY")),
+        _trend_line("Net kâr", net_income, str(info.get("financialCurrency") or "TRY")),
+        _trend_line("FAVÖK", ebitda, str(info.get("financialCurrency") or "TRY")),
+        _trend_line("Faaliyet nakdi", operating_cash, str(info.get("financialCurrency") or "TRY")),
     )))
     periods = []
     for frame in (income, balance, cashflow):
@@ -257,26 +283,37 @@ def analyze_company(
             periods.extend(frame.columns)
     financial_period = max(periods).strftime("%Y-%m-%d") if periods else None
     positives: list[str] = []; risks: list[str] = []; score = 50
+    score_breakdown: list[str] = ["Başlangıç: 50 puan"]
     growth = metrics["revenue_growth"]
     if growth is not None:
         (positives if growth > .10 else risks).append(f"Ciro büyümesi %{growth * 100:+.1f}")
-        score += 12 if growth > .10 else -8 if growth < 0 else 0
+        contribution = 12 if growth > .10 else -8 if growth < 0 else 0
+        score += contribution
+        score_breakdown.append(f"Ciro büyümesi: {contribution:+d}")
     margin = metrics["profit_margin"]
     if margin is not None:
         (positives if margin > .08 else risks).append(f"Net kâr marjı %{margin * 100:.1f}")
-        score += 10 if margin > .08 else -8 if margin < .02 else 0
+        contribution = 10 if margin > .08 else -8 if margin < .02 else 0
+        score += contribution
+        score_breakdown.append(f"Net kâr marjı: {contribution:+d}")
     debt = metrics["debt_to_equity"]
     if debt is not None:
         (risks if debt > 150 else positives).append(f"Borç/özsermaye %{debt:.1f}")
-        score += -15 if debt > 150 else 8 if debt < 60 else 0
+        contribution = -15 if debt > 150 else 8 if debt < 60 else 0
+        score += contribution
+        score_breakdown.append(f"Borç/özsermaye: {contribution:+d}")
     cash = metrics["free_cash_flow"]
     if cash is not None:
         (positives if cash > 0 else risks).append("Serbest nakit akışı pozitif" if cash > 0 else "Serbest nakit akışı negatif")
-        score += 10 if cash > 0 else -12
+        contribution = 10 if cash > 0 else -12
+        score += contribution
+        score_breakdown.append(f"Serbest nakit akışı: {contribution:+d}")
     roe = metrics["return_on_equity"]
     if roe is not None:
         (positives if roe > .15 else risks).append(f"Özsermaye kârlılığı %{roe * 100:.1f}")
-        score += 10 if roe > .15 else -5 if roe < .05 else 0
+        contribution = 10 if roe > .15 else -5 if roe < .05 else 0
+        score += contribution
+        score_breakdown.append(f"Özsermaye kârlılığı: {contribution:+d}")
     evidence_count = sum(
         metrics.get(key) is not None
         for key in ("revenue_growth", "profit_margin", "debt_to_equity", "free_cash_flow", "return_on_equity")
@@ -304,6 +341,9 @@ def analyze_company(
         kap_url=f"https://www.kap.org.tr/tr/search/{quote(normalized)}/1",
         decision_summary=_decision_summary(status, evidence_count),
         data_warnings=("Yahoo verisi gecikmeli/ikincil kaynaktır; KAP veya lisanslı kaynakla doğrulanmalıdır.",),
+        score_breakdown=tuple(score_breakdown),
+        data_coverage=round(evidence_count / 5 * 100),
+        currency=str(info.get("financialCurrency") or info.get("currency") or "TRY").upper(),
     )
 
 
@@ -314,15 +354,19 @@ def format_company_analysis(result: CompanyAnalysis) -> str:
     valuations = "\n".join(f"• {item}" for item in result.valuation_lines) or "• Çarpan verisi bulunamadı"
     period = result.financial_period or "veri kaynağında yok"
     warnings = "\n".join(f"• {item}" for item in result.data_warnings) or "• Ek veri kalite uyarısı yok"
+    score_lines = "\n".join(f"• {item}" for item in result.score_breakdown) or "• Puan bileşeni üretilemedi"
     return (
         f"🏢 {result.name} ({result.symbol})\n"
         f"Sektör: {result.sector} / {result.industry}\n\n"
-        f"📌 TEMEL GÖRÜNÜM: {result.status} ({result.score}/100)\n\n"
+        f"📌 TEMEL GÖRÜNÜM: {result.status} ({result.score}/100)\n"
+        f"Veri kapsamı: %{result.data_coverage}\n"
+        "Bu puan AL olasılığı değil, açıklanabilir finansal kalite puanıdır.\n\n"
         f"Şirket ne yapıyor?\n{result.summary}\n\n"
         f"✅ Yükselişi destekleyebilecek veriler\n{positives}\n\n"
         f"⚠️ Baskı yaratabilecek riskler\n{risks}\n\n"
         f"📊 SON ÇEYREK DEĞİŞİMLERİ\n{trends}\n\n"
         f"💰 DEĞERLEME VE BORÇLULUK\n{valuations}\n\n"
+        f"🧮 PUAN NEREDEN GELDİ?\n{score_lines}\n\n"
         f"🧭 NE ANLAMA GELİYOR?\n{result.decision_summary}\n\n"
         f"🔎 VERİ KALİTESİ\n{warnings}\n\n"
         f"🗓️ Son finansal dönem: {period}\n"
