@@ -8,7 +8,7 @@ router = APIRouter()
 def dashboard() -> str:
     return """<!doctype html>
 <html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MERGEN QUANT | BIST Kontrol Merkezi</title>
+<title>MONTANA MELİH HİSSE BOT | BIST Kontrol Merkezi</title>
 <style>
 :root{--bg:#061019;--card:#0c1925;--line:#1e3343;--text:#e6f1f8;--muted:#86a0b2;--cyan:#00c8ff;--green:#00e5a8;--red:#ff3b69;--amber:#ffd43b}
 *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 85% 0,#0b2940 0,transparent 32%),var(--bg);color:var(--text);font:15px Inter,Segoe UI,sans-serif}

@@ -12,6 +12,8 @@ class PriceZone:
     high: float
     index: int
     direction: str
+    confirmation_index: int | None = None
+    origin_index: int | None = None
 
 
 @dataclass(frozen=True)
@@ -20,6 +22,8 @@ class StructureEvent:
     price: float
     index: int
     direction: str
+    confirmation_index: int | None = None
+    origin_index: int | None = None
 
 
 @dataclass(frozen=True)
@@ -36,9 +40,29 @@ def detect_smart_money(df: pd.DataFrame, swing_window: int = 3) -> SmartMoneyRes
     events: list[StructureEvent] = []
     for i in range(2, len(data)):
         if float(data.loc[i, "low"]) > float(data.loc[i - 2, "high"]):
-            fvg.append(PriceZone("FVG", float(data.loc[i - 2, "high"]), float(data.loc[i, "low"]), i, "bullish"))
+            fvg.append(
+                PriceZone(
+                    "FVG",
+                    float(data.loc[i - 2, "high"]),
+                    float(data.loc[i, "low"]),
+                    i,
+                    "bullish",
+                    i,
+                    i,
+                )
+            )
         elif float(data.loc[i, "high"]) < float(data.loc[i - 2, "low"]):
-            fvg.append(PriceZone("FVG", float(data.loc[i, "high"]), float(data.loc[i - 2, "low"]), i, "bearish"))
+            fvg.append(
+                PriceZone(
+                    "FVG",
+                    float(data.loc[i, "high"]),
+                    float(data.loc[i - 2, "low"]),
+                    i,
+                    "bearish",
+                    i,
+                    i,
+                )
+            )
     last_high = last_low = None
     trend = None
     for i in range(swing_window, len(data) - swing_window):
@@ -47,16 +71,50 @@ def detect_smart_money(df: pd.DataFrame, swing_window: int = 3) -> SmartMoneyRes
         if high >= float(local["high"].max()):
             if last_high is not None and high > last_high:
                 kind = "MSS" if trend == "bearish" else "BOS"
-                events.append(StructureEvent(kind, high, i, "bullish")); trend = "bullish"
+                confirmation_index = i + swing_window
+                # ``index`` görünürlük zamanıdır: grafik/backtest olayı ancak
+                # sağ taraftaki doğrulama mumları kapandıktan sonra gösterir.
+                events.append(
+                    StructureEvent(
+                        kind, high, confirmation_index, "bullish", confirmation_index, i,
+                    )
+                )
+                trend = "bullish"
                 candle = data.iloc[max(0, i - 1)]
-                blocks.append(PriceZone("OB", float(candle["low"]), float(candle["high"]), i - 1, "bullish"))
+                blocks.append(
+                    PriceZone(
+                        "OB",
+                        float(candle["low"]),
+                        float(candle["high"]),
+                        confirmation_index,
+                        "bullish",
+                        confirmation_index,
+                        i - 1,
+                    )
+                )
             last_high = high
         if low <= float(local["low"].min()):
             if last_low is not None and low < last_low:
                 kind = "MSS" if trend == "bullish" else "BOS"
-                events.append(StructureEvent(kind, low, i, "bearish")); trend = "bearish"
+                confirmation_index = i + swing_window
+                events.append(
+                    StructureEvent(
+                        kind, low, confirmation_index, "bearish", confirmation_index, i,
+                    )
+                )
+                trend = "bearish"
                 candle = data.iloc[max(0, i - 1)]
-                blocks.append(PriceZone("OB", float(candle["low"]), float(candle["high"]), i - 1, "bearish"))
+                blocks.append(
+                    PriceZone(
+                        "OB",
+                        float(candle["low"]),
+                        float(candle["high"]),
+                        confirmation_index,
+                        "bearish",
+                        confirmation_index,
+                        i - 1,
+                    )
+                )
             last_low = low
     # Telegram ekranında okunabilirlik için yalnızca en güncel yapılar çizilir.
     return SmartMoneyResult(tuple(fvg[-3:]), tuple(blocks[-3:]), tuple(events[-5:]))

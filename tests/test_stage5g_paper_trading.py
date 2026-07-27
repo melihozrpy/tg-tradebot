@@ -8,7 +8,15 @@ from sqlalchemy.orm import sessionmaker
 
 from app.backtest.engine_v5g import TransactionCostConfig
 from app.execution.paper_trading_engine import PaperTradingEngine, PaperTradingError
-from app.models.database import Base, PaperTradeEvent, User, build_engine
+from app.models.database import (
+    Base,
+    PaperTradeEvent,
+    Signal,
+    SignalStateEnum,
+    SignalTypeEnum,
+    User,
+    build_engine,
+)
 
 
 @pytest.fixture()
@@ -20,6 +28,25 @@ def paper_env(tmp_path):
     users = [User(telegram_user_id=7001), User(telegram_user_id=7002)]
     db.add_all(users); db.commit()
     for user in users: db.refresh(user)
+    now = datetime.now(timezone.utc)
+    db.add_all([
+        Signal(
+            id=signal_id,
+            user_id=users[0].id,
+            symbol="THYAO",
+            timeframe="1d",
+            signal_type=SignalTypeEnum.BUY_CANDIDATE,
+            state=SignalStateEnum.PENDING_ENTRY,
+            score=70,
+            confidence="orta",
+            strategy_version="paper-test",
+            data_timestamp=now,
+            provider="test",
+            idempotency_key=f"paper-source-{signal_id}",
+        )
+        for signal_id in (10, 55, 909)
+    ])
+    db.commit()
     yield factory, db, users
     db.close()
 
@@ -122,6 +149,15 @@ def test_31_other_user_cannot_view_or_close_trade(paper_env):
     with pytest.raises(PaperTradingError, match="bulunamadi"):
         engine.get_trade(users[1].id, trade.id)
     assert engine.list_trades(users[1].id) == []
+
+
+def test_paper_trade_rejects_missing_or_other_users_signal(paper_env):
+    _, db, users = paper_env
+    engine = _paper(db)
+    with pytest.raises(PaperTradingError, match="bulunamadi"):
+        _open(engine, users[0].id, signal_id=999_999)
+    with pytest.raises(PaperTradingError, match="baska bir kullanici"):
+        _open(engine, users[1].id, signal_id=10)
 
 
 def test_32_paper_engine_contains_no_real_broker_or_order_call():

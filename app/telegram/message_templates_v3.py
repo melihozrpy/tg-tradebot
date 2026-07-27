@@ -751,7 +751,7 @@ def format_evening_report(
 
     breakouts_text = "\n".join(f"• {b}" for b in upcoming_breakouts) or "(Yarın için özel bir kırılım takibi yok.)"
 
-    return f"""🏹 MERGEN QUANT — KAPANIŞ RAPORU
+    return f"""🏔️ MONTANA MELİH HİSSE BOT — KAPANIŞ RAPORU
 
 Tarih: {scan_date}
 Piyasa rejimi: {market_regime}
@@ -944,7 +944,7 @@ def format_multi_timeframe(result, display_symbol: str, price_context=None) -> s
     confluence = score_text(result.confluence_score) if available_count else "Veri yetersiz"
     reversal_txt = "Aday; kapanış teyidi bekleniyor" if getattr(result, "trend_reversal", False) else "Yok"
     lines = [
-        f"🕰 MERGEN QUANT — {display_symbol} ÇOKLU ZAMAN DİLİMİ",
+        f"🕰 MONTANA MELİH HİSSE BOT — {display_symbol} ÇOKLU ZAMAN DİLİMİ",
         f"Güncel fiyat: {price_text(current_price)}",
         f"Son kapanış: {price_text(analysis_close)}",
         "",
@@ -1140,7 +1140,7 @@ def format_seviyeler(
 ) -> str:
     """/seviyeler SEMBOL icin gunluk/haftalik/aylik destek-direnc ve
     cakisan guclu bolgeler mesaji."""
-    lines = [f"📐 MERGEN QUANT — {symbol} SEVİYELER"]
+    lines = [f"📐 MONTANA MELİH HİSSE BOT — {symbol} SEVİYELER"]
     if price_context is not None:
         lines.extend(_stage5e_price_block(price_context, quality))
     else:
@@ -1189,7 +1189,7 @@ def _format_scenario_line(label: str, zone) -> list[str]:
 
 def format_price_scenarios(symbol: str, current_price: float, result, price_context=None, quality=None) -> str:
     """/senaryo SEMBOL icin dusus/yukselis senaryo bolgeleri mesaji."""
-    lines = [f"🧭 MERGEN QUANT — {symbol} SENARYOLAR"]
+    lines = [f"🧭 MONTANA MELİH HİSSE BOT — {symbol} SENARYOLAR"]
     if price_context is not None:
         lines.extend(_stage5e_price_block(price_context, quality))
     else:
@@ -1259,7 +1259,7 @@ def _format_breakout_case(case) -> list[str]:
 
 def format_breakout_scenarios(symbol: str, current_price: float, result, price_context=None, quality=None) -> str:
     """/kirilsanaryo SEMBOL icin 'bu seviye kirilirsa ne olur?' mesaji."""
-    lines = [f"⚡ MERGEN QUANT — {symbol} KIRILIM SENARYOLARI"]
+    lines = [f"⚡ MONTANA MELİH HİSSE BOT — {symbol} KIRILIM SENARYOLARI"]
     if price_context is not None:
         lines.extend(_stage5e_price_block(price_context, quality))
     else:
@@ -1311,7 +1311,7 @@ def format_price_metadata(price, quality=None) -> str:
 def format_long_term_scenarios(symbol: str, price, result, quality=None) -> str:
     missing = MissingDataCollector()
     lines = [
-        f"🧭 MERGEN QUANT — {symbol} UZUN VADE",
+        f"🧭 MONTANA MELİH HİSSE BOT — {symbol} UZUN VADE",
         "",
         f"Güncel fiyat: {price_text(price.current_price)}",
         f"Son kesinleşmiş kapanış: {price_text(price.analysis_close)}",
@@ -1416,7 +1416,7 @@ def format_long_term_scenario_detail(symbol: str, price, result, direction: str)
             ("Uzun vadeli dip", result.long_term_bottom),
             ("Aşırı negatif", result.extreme_negative),
         )
-    lines = [f"🧭 MERGEN QUANT — {symbol} {title}", f"Güncel fiyat: {price_text(price.current_price)}"]
+    lines = [f"🧭 MONTANA MELİH HİSSE BOT — {symbol} {title}", f"Güncel fiyat: {price_text(price.current_price)}"]
     for label, zone in zones:
         detail = detailed_scenario_lines(label, zone)
         if detail:
@@ -1431,7 +1431,7 @@ def format_user_target_check(evaluation, price, quality=None) -> str:
     realism = evaluation.realism
     roadmap = evaluation.roadmap
     route = " → ".join(f"{step.mid:.2f}" for step in roadmap.steps) or "Veri yetersiz"
-    lines = ["🎯 MERGEN QUANT — HEDEF KONTROLÜ", f"KULLANICI HEDEFİ: {evaluation.user_target:.2f} TL", ""]
+    lines = ["🎯 MONTANA MELİH HİSSE BOT — HEDEF KONTROLÜ", f"KULLANICI HEDEFİ: {evaluation.user_target:.2f} TL", ""]
     lines.extend([
         f"Güncel fiyat: {price_text(price.current_price)}",
         f"Kullanıcı hedefi: {evaluation.user_target:.2f} TL",
@@ -1460,7 +1460,7 @@ def format_user_target_check(evaluation, price, quality=None) -> str:
 
 
 def format_target_roadmap(symbol: str, roadmap, price, quality=None) -> str:
-    lines = [f"🛣 MERGEN QUANT — {symbol} HEDEF YOLU", ""]
+    lines = [f"🛣 MONTANA MELİH HİSSE BOT — {symbol} HEDEF YOLU", ""]
     lines.extend(_stage5e_price_block(price, quality))
     if not roadmap.reliable:
         lines.extend(["", roadmap.note])
@@ -1483,7 +1483,7 @@ def format_target_roadmap(symbol: str, roadmap, price, quality=None) -> str:
 
 
 def format_valuation(result, price, quality=None) -> str:
-    lines = [f"🏢 MERGEN QUANT — {result.symbol} DEĞERLEME", ""]
+    lines = [f"🏢 MONTANA MELİH HİSSE BOT — {result.symbol} DEĞERLEME", ""]
     lines.extend(_stage5e_price_block(price, quality))
     lines.extend(["", f"Değerleme sonucu: {result.classification}"])
     if not result.applicable:
@@ -1520,7 +1520,7 @@ def format_valuation(result, price, quality=None) -> str:
 
 
 def format_corporate_actions(symbol: str, events: list, price, quality=None) -> str:
-    lines = [f"🏛 MERGEN QUANT — {symbol} SERMAYE İŞLEMLERİ", ""]
+    lines = [f"🏛 MONTANA MELİH HİSSE BOT — {symbol} SERMAYE İŞLEMLERİ", ""]
     lines.extend(_stage5e_price_block(price, quality))
     lines.append("")
     if not events:
@@ -1537,7 +1537,7 @@ def format_corporate_actions(symbol: str, events: list, price, quality=None) -> 
 
 
 def format_target_history(symbol: str, rows: list) -> str:
-    lines = [f"📚 MERGEN QUANT — {symbol} HEDEF GEÇMİŞİ", ""]
+    lines = [f"📚 MONTANA MELİH HİSSE BOT — {symbol} HEDEF GEÇMİŞİ", ""]
     if not rows:
         return "\n".join(lines + ["Kayıtlı hedef bulunamadı."])
     for row in rows:
@@ -1551,7 +1551,7 @@ def format_target_history(symbol: str, rows: list) -> str:
 def format_target_performance_stage5e(report) -> str:
     scope = report.symbol or "Tüm semboller"
     lines = [
-        f"📈 MERGEN QUANT — HEDEF BAŞARISI ({scope})", "",
+        f"📈 MONTANA MELİH HİSSE BOT — HEDEF BAŞARISI ({scope})", "",
         f"Toplam hedef: {report.total_targets}",
         f"Hedefe ulaşıldı: {report.reached_targets}",
         f"Kısmen ulaşıldı: {report.partially_reached_targets}",

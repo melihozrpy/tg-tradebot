@@ -30,6 +30,7 @@ def _bars(closes, timeframe="1d", end=NOW - timedelta(days=1)):
 
 class PriceProvider(BaseMarketDataProvider):
     name = "fake"
+    supports_verified_live_transactions = True
 
     def __init__(self, data=None, snapshot=None, quote=None):
         self.data = data or {}
@@ -39,12 +40,18 @@ class PriceProvider(BaseMarketDataProvider):
     def get_latest_intraday_snapshot(self, symbol):
         if self.snapshot is None:
             raise DataUnavailableError("snapshot yok")
-        return self.snapshot
+        result = dict(self.snapshot)
+        result.setdefault("is_live", True)
+        result.setdefault("valid_transaction", True)
+        return result
 
     def get_quote(self, symbol):
         if self.quote is None:
             raise DataUnavailableError("quote yok")
-        return self.quote
+        result = dict(self.quote)
+        result.setdefault("is_live", True)
+        result.setdefault("valid_transaction", True)
+        return result
 
     def get_ohlcv(self, symbol, timeframe, start, end):
         if timeframe not in self.data:
@@ -131,3 +138,72 @@ def test_quote_is_used_after_all_intraday_candidates_fail():
     result = CurrentPriceResolver(provider).resolve("SVGYO", now=NOW)
     assert result.current_price == 12.71
     assert result.current_price_source == "provider_quote:quote-feed"
+
+
+def test_stale_snapshot_is_rejected_in_favour_of_fresh_completed_bar():
+    provider = PriceProvider(
+        {
+            "1d": _bars([12.5, 13.0]),
+            "5m": _bars([12.68], "5m", NOW - timedelta(minutes=10)),
+        },
+        snapshot={
+            "available": True,
+            "last_price": 99.0,
+            "timestamp": NOW - timedelta(hours=2),
+            "provider": "stale-snapshot",
+        },
+    )
+    result = CurrentPriceResolver(provider).resolve("SVGYO", now=NOW)
+    assert result.current_price == 12.68
+    assert result.current_price_source == "completed_5m"
+    assert "snapshot: fiyat güncel değil" in result.diagnostics
+
+
+def test_explicitly_stale_snapshot_and_quote_can_never_be_marked_live():
+    provider = PriceProvider(
+        {"1d": _bars([12.5, 13.0])},
+        snapshot={"available": True, "last_price": 99.0, "timestamp": NOW, "is_fresh": False},
+        quote={"price": 98.0, "timestamp": NOW - timedelta(hours=2), "provider": "stale-quote"},
+    )
+    result = CurrentPriceResolver(provider).resolve("SVGYO", now=NOW)
+    assert result.current_price == 13.0
+    assert result.is_live_price is False
+    assert result.current_price_source == "confirmed_daily_close"
+    assert "snapshot: fiyat güncel değil" in result.diagnostics
+    assert "quote: fiyat güncel değil" in result.diagnostics
+
+
+def test_provider_freshness_false_is_a_hard_gate_even_with_recent_timestamp():
+    class StaleProvider(PriceProvider):
+        def get_data_freshness(self, symbol, timeframe):
+            return DataFreshness(symbol, timeframe, NOW, False, 20, self.name)
+
+    provider = StaleProvider(
+        {
+            "1d": _bars([12.5, 13.0]),
+            "5m": _bars([99.0], "5m", NOW - timedelta(minutes=10)),
+        }
+    )
+    result = CurrentPriceResolver(provider).resolve("SVGYO", now=NOW)
+    assert result.current_price == 13.0
+    assert result.is_live_price is False
+    assert "5m: son tamamlanmış mum güncel değil" in result.diagnostics
+
+
+def test_recent_free_provider_data_is_never_presented_as_verified_live():
+    class FreeProvider(PriceProvider):
+        supports_verified_live_transactions = False
+        name = "yfinance"
+
+    provider = FreeProvider(
+        {
+            "1d": _bars([12.5, 13.0]),
+            "5m": _bars([99.0], "5m", NOW - timedelta(minutes=10)),
+        },
+        snapshot={"available": True, "last_price": 98.0, "timestamp": NOW},
+        quote={"price": 97.0, "timestamp": NOW, "is_live": True, "valid_transaction": True},
+    )
+    result = CurrentPriceResolver(provider).resolve("SVGYO", now=NOW)
+    assert result.current_price == 13.0
+    assert result.is_live_price is False
+    assert result.fallback_used is True

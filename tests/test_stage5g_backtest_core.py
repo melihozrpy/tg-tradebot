@@ -6,7 +6,7 @@ import pandas as pd
 import pytest
 
 from app.backtest.engine_v5g import (
-    BacktestConfig, BacktestEngine, LookAheadBiasError, PointInTimeContext,
+    BacktestConfig, BacktestEngine, BacktestValidationError, LookAheadBiasError, PointInTimeContext,
     SignalInstruction, TransactionCostConfig,
 )
 from app.backtest.metrics import compute_metrics
@@ -115,7 +115,7 @@ def test_08_partial_targets_reduce_position_correctly():
     result = BacktestEngine(_config()).run(frame, "THYAO", _buy_once())
     trade = result.trades[0]
     assert [item["quantity"] for item in trade.partial_exits] == pytest.approx([
-        trade.quantity * 0.4, trade.quantity * 0.3, trade.quantity * 0.3,
+        trade.quantity * 0.4, trade.quantity * 0.35, trade.quantity * 0.25,
     ])
     assert trade.target_1_hit and trade.target_2_hit and trade.target_3_hit
 
@@ -205,3 +205,32 @@ def test_67_signal_invalidation_closes_open_position():
         return SignalInstruction()
     result = BacktestEngine(_config()).run(frame, "THYAO", provider)
     assert result.trades[0].exit_reason == "INVALIDATED"
+
+
+def test_completion_flag_is_parsed_strictly_and_can_be_required():
+    frame = _bars([(100, 101, 99, 100), (101, 102, 100, 101), (102, 103, 101, 102)])
+    frame["is_complete"] = frame["is_complete"].astype(object)
+    frame.loc[1, "is_complete"] = "false"
+    result = BacktestEngine(_config(require_complete_bar_flag=True)).run(
+        frame, "THYAO", _buy_once(stop=90, targets=(120, 130, 140))
+    )
+    assert any(item["reason"] == "INCOMPLETE_CANDLE" for item in result.excluded_periods)
+
+    with pytest.raises(BacktestValidationError, match="is_complete"):
+        BacktestEngine(_config(require_complete_bar_flag=True)).run(
+            frame.drop(columns=["is_complete"]),
+            "THYAO",
+            _buy_once(stop=90, targets=(120, 130, 140)),
+        )
+
+
+def test_commission_tax_is_applied_to_commission_not_full_notional():
+    costs = TransactionCostConfig(
+        commission_bps=10,
+        slippage_bps=0,
+        spread_bps=0,
+        bsmv_bps=0,
+        minimum_cost=0,
+        commission_tax_rate=0.05,
+    )
+    assert costs.cash_cost(100_000) == pytest.approx(105.0)

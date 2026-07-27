@@ -52,16 +52,19 @@ class IntrabarPolicy(str, Enum):
 
 @dataclass(frozen=True)
 class TransactionCostConfig:
-    commission_bps: float = 15.0
-    slippage_bps: float = 5.0
-    spread_bps: float = 10.0
+    commission_bps: float = 0.0
+    slippage_bps: float = 0.0
+    spread_bps: float = 0.0
     bsmv_bps: float = 0.0
     minimum_cost: float = 0.0
+    commission_tax_rate: float = 0.0
 
     def __post_init__(self) -> None:
         for name, value in asdict(self).items():
             if value < 0:
                 raise BacktestValidationError(f"{name} negatif olamaz.")
+        if self.commission_tax_rate > 1:
+            raise BacktestValidationError("commission_tax_rate 0 ile 1 arasında oran olmalıdır.")
 
     def entry_fill(self, reference_price: float) -> float:
         impact_bps = self.slippage_bps + self.spread_bps / 2.0
@@ -72,8 +75,12 @@ class TransactionCostConfig:
         return max(reference_price * (1.0 - impact_bps / 10_000.0), 0.0001)
 
     def cash_cost(self, notional: float) -> float:
-        variable = notional * (self.commission_bps + self.bsmv_bps) / 10_000.0
-        return max(variable, self.minimum_cost) if notional > 0 else 0.0
+        if notional <= 0:
+            return 0.0
+        commission = max(notional * self.commission_bps / 10_000.0, self.minimum_cost)
+        commission_tax = commission * self.commission_tax_rate
+        direct_bsmv = notional * self.bsmv_bps / 10_000.0
+        return commission + commission_tax + direct_bsmv
 
     def impact_cost(self, reference_price: float, fill_price: float, quantity: float) -> float:
         return abs(fill_price - reference_price) * quantity
@@ -86,7 +93,7 @@ class BacktestConfig:
     entry_model: EntryModel | str = EntryModel.NEXT_OPEN
     intrabar_policy: IntrabarPolicy | str = IntrabarPolicy.CONSERVATIVE
     transaction_costs: TransactionCostConfig = field(default_factory=TransactionCostConfig)
-    target_allocations: tuple[float, float, float] = (0.40, 0.30, 0.30)
+    target_allocations: tuple[float, float, float] = (0.40, 0.35, 0.25)
     trailing_stop_percent: Optional[float] = None
     max_holding_bars: int = 60
     reverse_signal_exit: bool = True
@@ -94,6 +101,7 @@ class BacktestConfig:
     minimum_history_bars: int = 2
     minimum_sample_size: int = 30
     seed: int = 42
+    require_complete_bar_flag: bool = False
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "entry_model", EntryModel(self.entry_model))
@@ -436,10 +444,27 @@ class BacktestEngine:
         excluded: list[dict] = []
         keep = pd.Series(True, index=frame.index)
         if "is_complete" in frame.columns:
-            incomplete = ~frame["is_complete"].fillna(False).astype(bool)
+            def strict_bool(value) -> bool:
+                if isinstance(value, bool):
+                    return value
+                if isinstance(value, (int, float)) and not pd.isna(value):
+                    return value == 1
+                if isinstance(value, str):
+                    normalized = value.strip().casefold()
+                    if normalized in {"true", "1", "yes", "evet"}:
+                        return True
+                    if normalized in {"false", "0", "no", "hayır", "hayir", ""}:
+                        return False
+                return False
+
+            incomplete = ~frame["is_complete"].map(strict_bool)
             for _, row in frame.loc[incomplete].iterrows():
                 excluded.append({"timestamp": str(row["timestamp"]), "reason": "INCOMPLETE_CANDLE"})
             keep &= ~incomplete
+        elif self.config.require_complete_bar_flag:
+            raise BacktestValidationError(
+                "Nokta-zaman backtesti için is_complete alanı zorunludur; tamamlanma varsayılmadı."
+            )
         if "data_quality" in frame.columns:
             invalid = frame["data_quality"].fillna("VALID").astype(str).str.upper().eq("INVALID")
             for _, row in frame.loc[invalid].iterrows():

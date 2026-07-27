@@ -88,7 +88,7 @@ def format_data_quality_status(symbol: str, result: DataQualityResult) -> str:
     age = f"{result.data_age_minutes:.0f} dk" if result.data_age_minutes is not None else "-"
     cache = "Kullanıldı" if result.cache_used else "Kullanılmadı"
     return (
-        "🏹 MERGEN QUANT — VERİ DURUMU\n\n"
+        "🏔️ MONTANA MELİH HİSSE BOT — VERİ DURUMU\n\n"
         f"Sembol: {symbol.upper()}\n"
         f"Durum: {result.status.value}\n"
         f"Kalite: {result.score}/100\n"

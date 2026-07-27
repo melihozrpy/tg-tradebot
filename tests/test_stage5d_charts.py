@@ -77,7 +77,7 @@ def test_professional_chart_has_indicators_zones_plan_and_four_panels(
         assert len(volume.patches) >= len(df)
         assert rsi_axis.get_ylabel() == "RSI"
         assert macd_axis.get_ylabel() == "MACD"
-        assert "MERGEN QUANT" in price.get_title(loc="left")
+        assert "MONTANA MELİH HİSSE BOT" in price.get_title(loc="left")
     finally:
         delete_chart_file(path)
         real_close(fig)

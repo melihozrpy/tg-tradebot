@@ -12,7 +12,7 @@ from app.utils.financial_formatter import format_price, format_percent
 def test_fastapi_stage5e_smoke():
     response = TestClient(app).get("/")
     assert response.status_code == 200
-    assert response.json()["name"] == "MERGEN QUANT"
+    assert response.json()["name"] == "MONTANA MELİH HİSSE BOT"
 
 
 def test_bot_scheduler_stage5e_smoke():

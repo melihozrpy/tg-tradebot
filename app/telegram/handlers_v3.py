@@ -4,7 +4,9 @@ import asyncio
 import json
 import logging
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
+from sqlalchemy import or_
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
@@ -133,6 +135,11 @@ from app.telegram.formatters import sanitize_provider_error
 logger = logging.getLogger("mergen_quant.telegram.v3")
 
 
+def _istanbul_time(value: datetime) -> datetime:
+    aware = value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
+    return aware.astimezone(ZoneInfo("Europe/Istanbul"))
+
+
 async def cmd_veri_durumu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Genel veri/provider sağlığı veya tek sembol için ayrıntılı kalite sonucu."""
     if await _reject_unauthorized(update):
@@ -146,7 +153,7 @@ async def cmd_veri_durumu(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             components = health["components"]
             provider_status = components["providers"]
             await update.message.reply_text(
-                "🏹 MERGEN QUANT — VERİ DURUMU\n\n"
+                "🏔️ MONTANA MELİH HİSSE BOT — VERİ DURUMU\n\n"
                 f"Genel durum: {health['status'].upper()}\n"
                 f"Provider: {provider_status.get('provider', settings.market_data_provider)}\n"
                 f"Provider sağlığı: {provider_status.get('status', 'unknown')}\n"
@@ -482,7 +489,7 @@ async def cmd_start_v3(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
          InlineKeyboardButton("⚙️ Ayarlar", callback_data="menu_ayarlar")],
     ]
     await update.message.reply_text(
-        "🏹 MERGEN QUANT\n"
+        "🏔️ MONTANA MELİH HİSSE BOT\n"
         "Akıllı BIST Analiz ve Risk Sistemi\n\n"
         "Ücretsiz veri kaynaklarıyla çalışan kural tabanlı analiz botu.\n"
         "Yatırım tavsiyesi vermez; açıklanabilir, deterministik analiz üretir.\n\n"
@@ -1630,12 +1637,25 @@ async def cmd_sinyaller(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         return
     db = _get_db()
     try:
-        rows = db.query(Signal).order_by(Signal.created_at.desc()).limit(15).all()
+        user = _current_user(db, update)
+        rows = (
+            db.query(Signal)
+            .filter(or_(Signal.user_id.is_(None), Signal.user_id == user.id))
+            .order_by(Signal.created_at.desc(), Signal.id.desc())
+            .limit(20)
+            .all()
+        )
         if not rows:
             await update.message.reply_text("Henüz kayıtlı sinyal yok.")
             return
-        lines = [f"• {s.symbol}: {s.signal_type.value} (skor {s.score}, durum {s.state.value})" for s in rows]
-        await update.message.reply_text("Son sinyaller:\n" + "\n".join(lines))
+        lines = [
+            f"• #{s.id} {s.symbol}: {s.signal_type.value} • skor {s.score:.0f} • {s.state.value}"
+            + (" • benim takibim" if s.user_id == user.id else " • analiz")
+            for s in rows
+        ]
+        await update.message.reply_text(
+            "📌 SON SİNYALLER\n" + "\n".join(lines) + "\n\nDetay: /sinyal <id>  •  Takip: /takip <id>"
+        )
     finally:
         db.close()
 
@@ -1645,15 +1665,31 @@ async def cmd_aktif_sinyaller(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
     db = _get_db()
     try:
+        user = _current_user(db, update)
         open_states = [
             SignalStateEnum.CREATED, SignalStateEnum.WAITING_TRIGGER, SignalStateEnum.CONFIRMED,
             SignalStateEnum.SENT, SignalStateEnum.ACTIVE, SignalStateEnum.TARGET_1_HIT, SignalStateEnum.TARGET_2_HIT,
+            SignalStateEnum.PENDING_ENTRY, SignalStateEnum.TP1_HIT, SignalStateEnum.TP2_HIT,
+            SignalStateEnum.EXIT_PENDING, SignalStateEnum.SUSPENDED,
         ]
-        rows = db.query(Signal).filter(Signal.state.in_(open_states)).order_by(Signal.score.desc()).all()
+        rows = (
+            db.query(Signal)
+            .filter(
+                or_(Signal.user_id.is_(None), Signal.user_id == user.id),
+                Signal.state.in_(open_states),
+            )
+            .order_by(Signal.score.desc(), Signal.id.desc())
+            .limit(30)
+            .all()
+        )
         if not rows:
             await update.message.reply_text("Aktif sinyal yok.")
             return
-        lines = [f"• {s.symbol}: {s.signal_type.value} — skor {s.score}, durum {s.state.value}, stop {s.stop_price}, hedef1 {s.target_1}" for s in rows]
+        lines = [
+            f"• #{s.id} {s.symbol}: {s.signal_type.value} — skor {s.score:.0f}, "
+            f"durum {s.state.value}, stop {s.current_stop_price or s.stop_price}, TP1 {s.target_1}"
+            for s in rows
+        ]
         await update.message.reply_text("Aktif sinyaller:\n" + "\n".join(lines))
     finally:
         db.close()
@@ -1663,22 +1699,62 @@ async def cmd_sinyal(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     if await _reject_unauthorized(update):
         return
     if not context.args:
-        await update.message.reply_text("Kullanim: /sinyal SEMBOL")
+        await update.message.reply_text("Kullanım: /sinyal <id veya SEMBOL> (ör. /sinyal 123 ya da /sinyal THYAO)")
         return
-    symbol = context.args[0].strip().upper()
+    lookup = context.args[0].strip().upper()
     db = _get_db()
     try:
-        sig = db.query(Signal).filter(Signal.symbol == symbol).order_by(Signal.created_at.desc()).first()
+        user = _current_user(db, update)
+        visible = or_(Signal.user_id.is_(None), Signal.user_id == user.id)
+        if lookup.isdigit():
+            sig = db.query(Signal).filter(Signal.id == int(lookup), visible).one_or_none()
+        else:
+            symbol = lookup.removesuffix(".IS")
+            sig = (
+                db.query(Signal)
+                .filter(Signal.symbol == symbol, visible)
+                .order_by(Signal.created_at.desc(), Signal.id.desc())
+                .first()
+            )
         if sig is None:
-            await update.message.reply_text(f"'{symbol}' için kayıtlı sinyal bulunamadı.")
+            await update.message.reply_text("Sinyal bulunamadı veya bu kaydı görme yetkin yok.")
             return
+        state = sig.state.value if hasattr(sig.state, "value") else str(sig.state)
+        signal_type = sig.signal_type.value if hasattr(sig.signal_type, "value") else str(sig.signal_type)
+        planned_entry = sig.planned_entry_price or sig.entry_trigger
+        entry_text = f"{float(planned_entry):.2f} TL" if planned_entry is not None else "yok"
+        actual_text = f"{float(sig.actual_entry_price):.2f} TL" if sig.actual_entry_price is not None else "henüz yok"
+        stop = sig.current_stop_price or sig.stop_price
+        stop_text = f"{float(stop):.2f} TL" if stop is not None else "yok"
+        quantity = f"{float(sig.requested_quantity):.0f} lot" if sig.requested_quantity is not None else "belirlenmedi"
+        remaining = f"{float(sig.remaining_quantity):.0f} lot" if sig.remaining_quantity is not None else "-"
+        event_rows = (
+            db.query(SignalEvent)
+            .filter(SignalEvent.signal_id == sig.id)
+            .order_by(SignalEvent.created_at.desc(), SignalEvent.id.desc())
+            .limit(8)
+            .all()
+        )
+        event_lines = []
+        for event in reversed(event_rows):
+            stamp = event.candle_open_time or event.trading_date or event.created_at
+            stamp = _istanbul_time(stamp)
+            label = event.event_type or event.to_state
+            price = event.execution_price or event.price_at_event
+            price_suffix = f" • {float(price):.2f} TL" if price is not None else ""
+            event_lines.append(f"• {stamp:%d.%m.%Y %H:%M} • {label}{price_suffix}")
+        history = "\n".join(event_lines) or "• Henüz yaşam döngüsü olayı yok"
         await update.message.reply_text(
-            f"{sig.symbol} — {sig.signal_type.value}\n"
-            f"Skor: {sig.score}  Durum: {sig.state.value}\n"
-            f"Stop: {sig.stop_price}  Hedef1: {sig.target_1}  Hedef2: {sig.target_2}  Hedef3: {sig.target_3}\n"
-            f"Risk/Getiri: {sig.risk_reward}\n"
-            f"Piyasa rejimi: {sig.market_regime}\n"
-            f"Oluşturulma: {sig.created_at}"
+            f"📌 #{sig.id} {sig.symbol} — {signal_type}\n"
+            f"Durum: {state} • Skor: {sig.score:.0f}/100\n"
+            f"Planlanan giriş: {entry_text}\nGerçekleşen giriş: {actual_text}\n"
+            f"Stop: {stop_text}\nTP1: {sig.target_1} • TP2: {sig.target_2} • TP3: {sig.target_3}\n"
+            f"Planlanan miktar: {quantity} • Kalan: {remaining}\n"
+            f"Risk/Getiri: {sig.risk_reward or '-'}\n"
+            f"Veri: {sig.provider} • {_istanbul_time(sig.data_timestamp):%d.%m.%Y %H:%M} (İstanbul)\n"
+            f"Kaynak: {sig.source or 'analiz motoru'}\n\n"
+            f"🧾 OLAY GEÇMİŞİ\n{history}\n\n"
+            "Takip: /takip <id> • Bırak: /takip_birak <id> • Replay: /backtest_signal <id>"
         )
     finally:
         db.close()
@@ -1693,11 +1769,21 @@ async def cmd_sinyal_gecmisi(update: Update, context: ContextTypes.DEFAULT_TYPE)
     symbol = context.args[0].strip().upper()
     db = _get_db()
     try:
-        rows = db.query(Signal).filter(Signal.symbol == symbol).order_by(Signal.created_at.desc()).limit(10).all()
+        user = _current_user(db, update)
+        rows = (
+            db.query(Signal)
+            .filter(
+                Signal.symbol == symbol,
+                or_(Signal.user_id.is_(None), Signal.user_id == user.id),
+            )
+            .order_by(Signal.created_at.desc(), Signal.id.desc())
+            .limit(10)
+            .all()
+        )
         if not rows:
             await update.message.reply_text(f"'{symbol}' için geçmiş sinyal bulunamadı.")
             return
-        lines = [f"• {s.created_at.strftime('%d.%m.%Y')}: {s.signal_type.value} (skor {s.score}) -> {s.state.value}" for s in rows]
+        lines = [f"• #{s.id} {s.created_at.strftime('%d.%m.%Y')}: {s.signal_type.value} (skor {s.score:.0f}) → {s.state.value}" for s in rows]
         await update.message.reply_text(f"{symbol} sinyal geçmişi:\n" + "\n".join(lines))
     finally:
         db.close()
@@ -2928,12 +3014,24 @@ async def cmd_sirket(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     if not context.args:
         await update.message.reply_text("Kullanım: /sirket THYAO")
         return
+    from app.fundamentals import FundamentalDataError, build_fundamental_provider
     from app.services.company_analysis_service import analyze_company, format_company_analysis
     try:
-        result = await asyncio.to_thread(analyze_company, context.args[0])
+        fundamental_provider = build_fundamental_provider(get_settings())
+        result = await asyncio.to_thread(
+            analyze_company,
+            context.args[0],
+            fundamental_provider=fundamental_provider,
+        )
         await update.message.reply_text(format_company_analysis(result), disable_web_page_preview=True)
+    except FundamentalDataError as exc:
+        await update.message.reply_text(
+            f"Şirket temel analizi doğrulanamadı: {exc}\n\n"
+            "Lisanslı kaynak yapılandırılmadan veri uydurulmaz. Kaynak ayarlarını /veri_durumu ile kontrol et."
+        )
     except Exception as exc:  # noqa: BLE001
-        await update.message.reply_text(f"Şirket temel analizi alınamadı: {exc}")
+        logger.warning("Temel analiz başarısız symbol=%s error=%s", context.args[0], type(exc).__name__)
+        await update.message.reply_text("Şirket temel analizi şu anda alınamadı; daha sonra tekrar dene.")
 
 
 async def cmd_kap(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -2943,15 +3041,49 @@ async def cmd_kap(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text("Kullanım: /kap THYAO")
         return
     from urllib.parse import quote
+    from app.data.base_provider import DataUnavailableError
+    from app.data.provider_factory import build_kap_provider
     symbol = context.args[0].strip().upper().removesuffix(".IS")
     url = f"https://www.kap.org.tr/tr/search/{quote(symbol)}/1"
-    await update.message.reply_text(
-        f"📣 {symbol} KAP BİLDİRİMLERİ\n\n"
-        f"Resmî KAP araması: {url}\n\n"
-        "Bot içi otomatik KAP akışı henüz aktif değil. Resmî KAP REST Veri Yayın Servisi, "
-        "Borsa İstanbul ile entegrasyon ve yetkilendirme gerektirir; erişim bilgileri verilmeden bildirim uydurulmaz.",
-        disable_web_page_preview=True,
-    )
+    settings = get_settings()
+    if str(settings.kap_provider).casefold() != "kap_rest":
+        await update.message.reply_text(
+            f"📣 {symbol} KAP BİLDİRİMLERİ\n\nResmî KAP araması: {url}\n\n"
+            "Bot içi akış için KAP_PROVIDER=kap_rest ve sözleşmeli KAP REST erişimi gerekir; "
+            "erişim bilgileri olmadan bildirim uydurulmaz.",
+            disable_web_page_preview=True,
+        )
+        return
+    try:
+        disclosures = await asyncio.to_thread(build_kap_provider(settings).get_latest_disclosures, symbol)
+    except (DataUnavailableError, ValueError) as exc:
+        logger.warning("KAP bildirimleri alınamadı symbol=%s error=%s", symbol, type(exc).__name__)
+        await update.message.reply_text(
+            f"KAP bildirimleri şu anda doğrulanamadı.\nResmî arama: {url}",
+            disable_web_page_preview=True,
+        )
+        return
+    if not disclosures:
+        await update.message.reply_text(
+            f"📣 {symbol} için lisanslı akışta bildirim bulunamadı.\nResmî arama: {url}",
+            disable_web_page_preview=True,
+        )
+        return
+    lines = [f"📣 {symbol} KAP BİLDİRİMLERİ", "━━━━━━━━━━━━━━━━━━"]
+    for item in disclosures[:10]:
+        published = item.get("published_at")
+        if published:
+            from zoneinfo import ZoneInfo
+            stamp = published.astimezone(ZoneInfo(settings.timezone_name)).strftime("%d.%m.%Y %H:%M")
+        else:
+            stamp = "Zaman bilgisi yok"
+        lines.extend([
+            f"\n• {item['title']}",
+            f"  {stamp} • {item['classification']}",
+            f"  {item['source_url']}",
+        ])
+    lines.extend(["", "Sınıflandırma yalnız anahtar kelime özetidir; yatırım tavsiyesi değildir."])
+    await update.message.reply_text("\n".join(lines)[:4096], disable_web_page_preview=True)
 
 
 async def cmd_komutlar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -2964,16 +3096,33 @@ async def cmd_komutlar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "/analiz THYAO — teknik analiz + 5dk/15dk/1s/4s okuması\n"
         "/islemplani THYAO — long/short, stop ve TP1–TP5\n"
         "/sirket THYAO — şirketi ve finansal durumunu anlatır\n"
-        "/kap THYAO — resmî KAP aramasını açar\n"
+        "/kap THYAO — lisanslı akış varsa son KAP bildirimlerini, yoksa resmî aramayı gösterir\n"
         "/seviyeler THYAO — destek ve dirençleri gösterir\n"
         "/cokluzaman THYAO — farklı zaman dilimlerini karşılaştırır\n\n"
         "🧪 GEÇMİŞ PERFORMANS\n"
         "/backtest THYAO — son 2 yılı masraflarla test eder\n"
         "/backtest THYAO 2023-01-01 2026-01-01 — özel dönem\n"
         "/backtest_ozet — son testleri ve başarı oranlarını gösterir\n\n"
+        "📌 SİNYAL TAKİBİ\n"
+        "/sinyaller — üretilen sinyalleri listeler\n"
+        "/sinyal 123 — sinyal planı ve olay geçmişi\n"
+        "/takip 123 — planı sana ait PENDING_ENTRY kaydı olarak izler\n"
+        "/takip_birak 123 — otomatik izlemeyi durdurur\n"
+        "/sinyal_iptal 123 — gerçekleşmemiş giriş planını iptal eder\n"
+        "/stop_girise 123 — aktif pozisyon stopunu girişe taşır\n"
+        "/pozisyon_kapat 123 — doğrulanmış canlı fiyatla sanal takibi kapatır\n"
+        "/aktif_pozisyonlar — açık sanal takip pozisyonlarını gösterir\n\n"
+        "🧪 GELİŞMİŞ BACKTEST\n"
+        "/backtest_signal 123 — kayıtlı sinyali kronolojik yeniden oynatır\n"
+        "/backtest_watchlist 1g 3y — izleme listesini test eder\n"
+        "/backtest_sector XBANK 1g 5y — sektör evrenini test eder\n"
+        "/backtest_bist30 1g 3y — doğrulanmış üyelik dosyasıyla BIST 30\n"
+        "/backtest_stats — yalnız sana ait toplam istatistikler\n\n"
         "🔔 ALARMLAR\n"
         "/alarm 9.20 THYAO — fiyat alarmı kurar\n"
         "/alarm 9.20 THYAO ASELS ses=radar — çoklu alarm kurar\n"
+        "/alarm_kur ASELS 72.50 üstü — koşullu kalıcı alarm\n"
+        "/toplu_alarm — metin/CSV/XLSX ile önizlemeli toplu kurulum\n"
         "/alarm_test zil — alarm sesini dener\n"
         "/alarmlar — açık alarmları listeler\n"
         "/alarm_sil 12 — alarmı siler\n\n"

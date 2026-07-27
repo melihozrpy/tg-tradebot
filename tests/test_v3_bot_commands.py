@@ -45,3 +45,16 @@ def test_simple_alarm_company_and_kap_commands_are_registered():
     application = build_telegram_application()
     commands = _all_registered_commands(application)
     assert {"alarm", "alarm_test", "sirket", "kap", "komutlar"}.issubset(commands)
+
+
+def test_ultra_signal_lifecycle_commands_are_registered_once():
+    application = build_telegram_application()
+    commands = _all_registered_commands(application)
+    assert {
+        "takip",
+        "takip_birak",
+        "sinyal_iptal",
+        "stop_girise",
+        "pozisyon_kapat",
+        "aktif_pozisyonlar",
+    }.issubset(commands)

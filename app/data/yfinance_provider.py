@@ -353,6 +353,17 @@ class YFinanceMarketDataProvider(BaseMarketDataProvider):
                 len(result),
                 min_bars,
             )
+        # Completion is explicit for point-in-time backtests. A bar whose
+        # expected end is after the request cutoff is never silently accepted.
+        duration = INTERVAL_DURATION.get(timeframe, timedelta(days=1))
+        cutoff = pd.Timestamp(end)
+        if cutoff.tzinfo is None:
+            cutoff = cutoff.tz_localize("UTC")
+        else:
+            cutoff = cutoff.tz_convert("UTC")
+        result["is_complete"] = (
+            pd.to_datetime(result["timestamp"], utc=True) + duration <= cutoff
+        )
         return result
 
     # ------------------------------------------------------------------

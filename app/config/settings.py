@@ -37,9 +37,42 @@ class Settings(BaseSettings):
     database_url: str = Field(default="sqlite:///./mergen_quant.db")
 
     market_data_provider: str = Field(default="mock")  # mock | csv
+    licensed_market_data_base_url: str = Field(default="")
+    licensed_market_data_api_key: str = Field(default="")
+    licensed_market_data_api_key_header: str = Field(default="X-API-Key")
+    licensed_market_data_quote_path: str = Field(default="/quote/{symbol}")
+    licensed_market_data_ohlcv_path: str = Field(default="/ohlcv/{symbol}")
+    licensed_market_data_market_state_path: str = Field(default="/market-state")
+    licensed_market_data_provider_name: str = Field(default="licensed_rest")
+    licensed_market_data_timeout_seconds: float = Field(default=10.0, gt=0, le=120)
     kap_provider: str = Field(default="disabled")
     broker_flow_provider: str = Field(default="disabled")
     fundamental_provider: str = Field(default="disabled")
+    fundamental_secondary_provider: str = Field(default="disabled")
+    fundamental_cross_check_enabled: bool = Field(default=False)
+    fundamental_cross_check_strict: bool = Field(default=True)
+    fundamental_allow_secondary_fallback: bool = Field(default=False)
+    fundamental_allow_yahoo_fallback: bool = Field(default=False)
+    fundamental_cross_check_relative_tolerance: float = Field(default=0.03, ge=0)
+    fundamental_cross_check_absolute_tolerance: float = Field(default=1.0, ge=0)
+    fundamental_timeout_seconds: float = Field(default=20.0, gt=0, le=120)
+    # Fintables yalnizca kullanicinin/lisans sahibinin OAuth yetkisiyle MCP
+    # uzerinden kullanilir. Web sayfasi kazima veya hesabi ortak kullanma yoktur.
+    fintables_mcp_url: str = Field(default="https://evo.fintables.com/mcp")
+    fintables_mcp_bearer_token: str = Field(default="")
+    # Eski/alternatif env adi geriye uyumluluk icin korunur.
+    fintables_oauth_bearer_token: str = Field(default="")
+    fintables_mcp_tool_name: str = Field(default="")
+    fintables_mcp_symbol_argument: str = Field(default="symbol")
+    # KAP REST erisimi Borsa Istanbul sozlesmesi/API anahtari gerektirir.
+    kap_rest_base_url: str = Field(default="")
+    kap_rest_api_key: str = Field(default="")
+    kap_rest_api_key_header: str = Field(default="X-API-Key")
+    kap_rest_endpoint_path: str = Field(default="/fundamentals/{symbol}")
+    kap_rest_fundamental_path_template: str = Field(default="/fundamentals/{symbol}")
+    kap_rest_disclosures_path: str = Field(default="/disclosures")
+    kap_rest_disclosure_detail_path: str = Field(default="/disclosureDetail/{id}")
+    kap_rest_symbol_query_param: str = Field(default="symbol")
     csv_data_dir: str = Field(default="./data_csv")
     yfinance_timeout_seconds: int = Field(default=10)
     yfinance_max_retries: int = Field(default=3)
@@ -116,6 +149,28 @@ class Settings(BaseSettings):
     daily_brief_time: str = Field(default="09:10")
     tcmb_policy_rate_percent: float | None = Field(default=None)
 
+    # ---- Kalici, kullanici tanimli fiyat alarmlari (0008) ----
+    user_price_alerts_enabled: bool = Field(default=True)
+    user_price_alert_poll_seconds: int = Field(default=30, ge=5, le=3600)
+    user_price_alert_delivery_poll_seconds: int = Field(default=5, ge=1, le=300)
+    user_price_alert_default_repeat_seconds: int = Field(default=60, ge=30, le=86400)
+    user_price_alert_min_repeat_seconds: int = Field(default=30, ge=30, le=86400)
+    user_price_alert_max_active_per_user: int = Field(default=500, ge=1, le=10_000)
+    user_price_alert_max_bulk_import: int = Field(default=250, ge=1, le=5_000)
+    user_price_alert_stale_after_seconds: int = Field(default=180, ge=5, le=86400)
+    user_price_alert_max_deliveries_per_minute_per_user: int = Field(default=10, ge=1, le=120)
+    user_price_alert_max_global_deliveries_per_minute: int = Field(default=500, ge=1, le=10_000)
+    user_price_alert_audio_enabled: bool = Field(default=True)
+    user_price_alert_ocr_enabled: bool = Field(default=True)
+    user_price_alert_ocr_language: str = Field(default="tur+eng")
+    user_price_alert_temp_file_ttl_minutes: int = Field(default=30, ge=1, le=1440)
+    user_price_alert_max_image_bytes: int = Field(
+        default=10 * 1024 * 1024, ge=1024, le=50 * 1024 * 1024
+    )
+    user_price_alert_max_file_bytes: int = Field(
+        default=10 * 1024 * 1024, ge=1024, le=100 * 1024 * 1024
+    )
+
     # ---- V3: kamuya acik bildirim (KAP yerine) ----
     public_disclosure_provider: str = Field(default="disabled")
 
@@ -130,10 +185,34 @@ class Settings(BaseSettings):
     signal_expiry_trading_days: int = Field(default=10)
     conservative_execution: bool = Field(default=True)
 
+    # ---- Ultra BIST: emir/sinyal yasam dongusu ve canli izleme ----
+    long_only: bool = Field(default=True)
+    signal_monitor_enabled: bool = Field(default=True)
+    signal_monitor_interval_seconds: int = Field(default=5, ge=1, le=3600)
+    allow_delayed_data_for_live_trigger: bool = Field(default=False)
+    max_market_data_staleness_seconds: int | None = Field(default=None)
+    default_risk_percent: float = Field(default=1.0, gt=0, le=100)
+    max_position_percent: float = Field(default=20.0, gt=0, le=100)
+    max_daily_volume_participation_percent: float = Field(default=1.0, gt=0, le=100)
+    default_tp1_allocation: float = Field(default=40.0, ge=0, le=100)
+    default_tp2_allocation: float = Field(default=35.0, ge=0, le=100)
+    default_tp3_allocation: float = Field(default=25.0, ge=0, le=100)
+    move_stop_to_breakeven_after_tp1: bool = Field(default=True)
+    move_stop_to_tp1_after_tp2: bool = Field(default=True)
+    backtest_entry_mode: str = Field(default="next_session_level_touch")
+    backtest_intrabar_mode: str = Field(default="lower_timeframe_then_conservative")
+    backtest_fill_model: str = Field(default="conservative_volume_limited")
+    backtest_limit_lock_mode: str = Field(default="conservative")
+    backtest_price_mode: str = Field(default="split_adjusted")
+    backtest_commission_rate: float | None = Field(default=None)
+    backtest_commission_minimum: float | None = Field(default=None)
+    backtest_commission_tax_rate: float | None = Field(default=None)
+    backtest_include_dividends: bool = Field(default=True)
+
     # ---- Asama 5g: gercekci backtest / walk-forward / sanal islem ----
-    backtest_commission_bps: float = Field(default=15.0)
-    backtest_slippage_bps: float = Field(default=5.0)
-    backtest_spread_bps: float = Field(default=10.0)
+    backtest_commission_bps: float = Field(default=0.0)
+    backtest_slippage_bps: float = Field(default=0.0)
+    backtest_spread_bps: float = Field(default=0.0)
     backtest_bsmv_bps: float = Field(default=0.0)
     backtest_minimum_cost: float = Field(default=0.0)
     backtest_initial_capital: float = Field(default=100_000.0)
@@ -180,13 +259,14 @@ class Settings(BaseSettings):
     @field_validator("market_data_provider")
     @classmethod
     def _validate_provider(cls, v: str) -> str:
-        allowed = {"mock", "csv", "yfinance"}
-        if v not in allowed:
+        normalized = v.strip().lower()
+        allowed = {"mock", "csv", "yfinance", "licensed_rest"}
+        if normalized not in allowed:
             raise ValueError(
-                f"MARKET_DATA_PROVIDER '{v}' desteklenmiyor. Izin verilenler: {allowed}. "
-                "'mock' yalnizca test/gelistirme icindir; gercek analiz icin 'yfinance' kullanin."
+                f"MARKET_DATA_PROVIDER '{normalized}' desteklenmiyor. Izin verilenler: {allowed}. "
+                "'mock' yalnizca test/gelistirme icindir; canli tetikler icin lisansli kaynak kullanin."
             )
-        return v
+        return normalized
 
     @field_validator("public_disclosure_provider")
     @classmethod
@@ -197,6 +277,106 @@ class Settings(BaseSettings):
                 f"PUBLIC_DISCLOSURE_PROVIDER '{v}' desteklenmiyor. Izin verilenler: {allowed}."
             )
         return v
+
+    @field_validator("fundamental_provider", "fundamental_secondary_provider")
+    @classmethod
+    def _validate_fundamental_provider(cls, v: str) -> str:
+        normalized = v.strip().lower()
+        if normalized == "yfinance":
+            normalized = "yahoo"
+        allowed = {"disabled", "kap_rest", "fintables_mcp", "yahoo", "auto"}
+        if normalized not in allowed:
+            raise ValueError(
+                f"FUNDAMENTAL_PROVIDER desteklenmiyor: {normalized}. Izin verilenler: {allowed}."
+            )
+        return normalized
+
+    @field_validator(
+        "max_market_data_staleness_seconds",
+        "backtest_commission_rate",
+        "backtest_commission_minimum",
+        "backtest_commission_tax_rate",
+        mode="before",
+    )
+    @classmethod
+    def _empty_optional_number_is_none(cls, v):
+        if isinstance(v, str) and not v.strip():
+            return None
+        return v
+
+    @field_validator("max_market_data_staleness_seconds")
+    @classmethod
+    def _validate_optional_staleness(cls, v: int | None) -> int | None:
+        if v is not None and not 1 <= v <= 86400:
+            raise ValueError(
+                "MAX_MARKET_DATA_STALENESS_SECONDS 1-86400 araliginda olmali veya bos birakilmali."
+            )
+        return v
+
+    @field_validator(
+        "backtest_commission_rate",
+        "backtest_commission_minimum",
+        "backtest_commission_tax_rate",
+    )
+    @classmethod
+    def _validate_optional_cost(cls, v: float | None) -> float | None:
+        if v is not None and v < 0:
+            raise ValueError("Backtest komisyon/vergi degerleri negatif olamaz.")
+        return v
+
+    @field_validator("backtest_commission_rate", "backtest_commission_tax_rate")
+    @classmethod
+    def _validate_optional_rate(cls, v: float | None) -> float | None:
+        if v is not None and v > 1:
+            raise ValueError("Backtest komisyon ve vergi oranları 0 ile 1 arasında olmalıdır.")
+        return v
+
+    @field_validator("backtest_entry_mode")
+    @classmethod
+    def _validate_backtest_entry_mode(cls, v: str) -> str:
+        normalized = v.strip().lower()
+        allowed = {"next_session_level_touch", "next_open", "next_vwap", "next_close"}
+        if normalized not in allowed:
+            raise ValueError(f"BACKTEST_ENTRY_MODE desteklenmiyor: {normalized}")
+        return normalized
+
+    @field_validator("backtest_intrabar_mode")
+    @classmethod
+    def _validate_backtest_intrabar_mode(cls, v: str) -> str:
+        normalized = v.strip().lower()
+        allowed = {
+            "lower_timeframe_then_conservative",
+            "conservative",
+            "optimistic",
+            "nearest_to_open",
+        }
+        if normalized not in allowed:
+            raise ValueError(f"BACKTEST_INTRABAR_MODE desteklenmiyor: {normalized}")
+        return normalized
+
+    @field_validator("backtest_fill_model")
+    @classmethod
+    def _validate_backtest_fill_model(cls, v: str) -> str:
+        normalized = v.strip().lower()
+        if normalized not in {"full_fill", "volume_limited", "conservative_volume_limited"}:
+            raise ValueError(f"BACKTEST_FILL_MODEL desteklenmiyor: {normalized}")
+        return normalized
+
+    @field_validator("backtest_limit_lock_mode")
+    @classmethod
+    def _validate_backtest_limit_lock_mode(cls, v: str) -> str:
+        normalized = v.strip().lower()
+        if normalized not in {"conservative", "volume_confirmed", "disabled"}:
+            raise ValueError(f"BACKTEST_LIMIT_LOCK_MODE desteklenmiyor: {normalized}")
+        return normalized
+
+    @field_validator("backtest_price_mode")
+    @classmethod
+    def _validate_backtest_price_mode(cls, v: str) -> str:
+        normalized = v.strip().lower()
+        if normalized not in {"split_adjusted", "adjusted", "raw"}:
+            raise ValueError(f"BACKTEST_PRICE_MODE desteklenmiyor: {normalized}")
+        return normalized
 
     @field_validator("technical_price_mode")
     @classmethod
@@ -261,6 +441,18 @@ class Settings(BaseSettings):
     def _forbid_mock_in_production(self):
         if self.app_env.strip().lower() in {"production", "prod"} and self.market_data_provider == "mock":
             raise ValueError("Production ortamında MARKET_DATA_PROVIDER=mock kullanılamaz.")
+        if self.user_price_alert_default_repeat_seconds < self.user_price_alert_min_repeat_seconds:
+            raise ValueError(
+                "USER_PRICE_ALERT_DEFAULT_REPEAT_SECONDS, "
+                "USER_PRICE_ALERT_MIN_REPEAT_SECONDS degerinden kucuk olamaz."
+            )
+        allocation_total = (
+            self.default_tp1_allocation
+            + self.default_tp2_allocation
+            + self.default_tp3_allocation
+        )
+        if abs(allocation_total - 100.0) > 1e-9:
+            raise ValueError("DEFAULT_TP1/TP2/TP3_ALLOCATION toplami tam olarak 100 olmali.")
         return self
 
     @property

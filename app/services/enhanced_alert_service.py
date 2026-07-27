@@ -668,7 +668,7 @@ def format_alarm_message(trigger: AlarmTrigger, context: AlarmEvaluationContext)
             level = f"{trigger.level_low:.2f}-{trigger.level_high:.2f}"
     data_time = trigger.candle_key.split(":", 1)[-1]
     return (
-        "🏹 MERGEN QUANT — ALARM\n\n"
+        "🚨 MONTANA MELİH HİSSE BOT — ALARM\n\n"
         f"Sembol: {context.symbol.upper()}\n"
         f"Alarm türü: {trigger.label}\n"
         f"Güncel fiyat: {trigger.current_price:.2f}\n"

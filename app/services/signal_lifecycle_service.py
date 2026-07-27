@@ -52,7 +52,14 @@ def update_open_signals(
     conservative_execution=True oldugunda STOP oncelikli sayilir (daha
     temkinli/kotumser sonuc secilir).
     """
-    open_signals = db.query(Signal).filter(Signal.state.in_(_OPEN_STATES)).all()
+    # This is the legacy aggregate signal tracker. User-owned signals belong
+    # exclusively to BistSignalRuntimeService; processing them here would skip
+    # PENDING_ENTRY execution and could write legacy TARGET_* states over the
+    # new deterministic lifecycle.
+    open_signals = db.query(Signal).filter(
+        Signal.user_id.is_(None),
+        Signal.state.in_(_OPEN_STATES),
+    ).all()
     updated = 0
     expired = 0
     errors = 0

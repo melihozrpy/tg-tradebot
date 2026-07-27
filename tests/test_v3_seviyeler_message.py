@@ -32,7 +32,7 @@ def test_format_seviyeler_contains_all_timeframes_and_confluence():
 
     text = format_seviyeler("THYAO", current_price, levels, supports, resistances)
 
-    assert "MERGEN QUANT" in text
+    assert "MONTANA MELİH HİSSE BOT" in text
     assert "THYAO" in text
     assert "Günlük Seviyeler" in text
     assert "Haftalık Seviyeler" in text
