@@ -149,6 +149,31 @@ class Settings(BaseSettings):
     daily_brief_time: str = Field(default="09:10")
     tcmb_policy_rate_percent: float | None = Field(default=None)
 
+    # ---- SMXM sabah/akşam raporları ve PDF tabanlı BIST evreni ----
+    # JSON dizi (örn. ["THYAO","EURUSD"]) veya virgüllü liste kabul edilir.
+    # Boş bırakılırsa otomatik rapor yalnızca XU100 ile çalışır; 571 kodluk
+    # tam evren ayrıca BIST_UNIVERSE_JSON_PATH üzerinden kullanılmaya devam eder.
+    instruments: str = Field(default="")
+    bist_universe_json_path: str = Field(default="app/config/bist_instruments.json")
+    morning_report_enabled: bool = Field(default=True)
+    morning_report_time: str = Field(default="08:00")
+    evening_market_report_enabled: bool = Field(default=True)
+    evening_market_report_time: str = Field(default="21:00")
+    report_chart_output_dir: str = Field(default="/tmp/mergen_quant_reports")
+    report_max_news_events: int = Field(default=8, ge=0, le=50)
+    economic_calendar_enabled: bool = Field(default=True)
+    economic_calendar_url: str = Field(default="https://tr.investing.com/economic-calendar/")
+    economic_calendar_timeout_seconds: float = Field(default=15.0, gt=0, le=120)
+    vix_symbol: str = Field(default="^VIX")
+    dxy_symbol: str = Field(default="DX-Y.NYB")
+
+    # ---- Tüm Hisseler / en iyi giriş taraması ----
+    universe_scan_top_n: int = Field(default=50, ge=1, le=100)
+    universe_scan_max_symbols_per_run: int = Field(default=1000, ge=1, le=5000)
+    universe_scan_workers: int = Field(default=3, ge=1, le=12)
+    universe_scan_cache_minutes: int = Field(default=60, ge=1, le=1440)
+    universe_scan_minimum_score: int = Field(default=68, ge=0, le=100)
+
     # ---- Kalici, kullanici tanimli fiyat alarmlari (0008) ----
     user_price_alerts_enabled: bool = Field(default=True)
     user_price_alert_poll_seconds: int = Field(default=30, ge=5, le=3600)
@@ -230,6 +255,15 @@ class Settings(BaseSettings):
     calibration_minimum_sample_size: int = Field(default=30)
     paper_trading_initial_capital: float = Field(default=100_000.0)
     paper_trading_scan_minutes: int = Field(default=15)
+
+    # ---- Çoklu sanal portföy / SMXM simülasyon kuralları ----
+    virtual_portfolio_max_per_user: int = Field(default=3, ge=1, le=20)
+    virtual_portfolio_max_strategies: int = Field(default=2, ge=1, le=10)
+    virtual_trade_risk_percent: float = Field(default=1.0, gt=0, le=100)
+    virtual_trade_after_loss_risk_percent: float = Field(default=0.5, gt=0, le=100)
+    virtual_trade_minimum_rr: float = Field(default=2.0, gt=0)
+    virtual_trade_minimum_checklist: int = Field(default=5, ge=0, le=6)
+    virtual_trade_blocked_weekdays: str = Field(default="0,4")
 
     # ---- V3.1: gun ici onizleme zaman dilimi ----
     intraday_snapshot_timeframe: str = Field(default="15m")

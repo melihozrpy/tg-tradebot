@@ -23,6 +23,11 @@ Yeni alarm, sinyal ve veri kaynağı kurulumunun tamamı için
 [`docs/ULTRA_BIST_ALARM_SIGNAL_DATA.md`](docs/ULTRA_BIST_ALARM_SIGNAL_DATA.md)
 dosyasına bakın.
 
+571 kodluk PDF evreni, `/tum_hisseler`, `/eniyi50`, 08:00/21:00 SMXM
+raporları, sanal portföy ve yeni backtest kurulumu için
+[`docs/SMXM_DAILY_REPORTS_AND_UNIVERSE.md`](docs/SMXM_DAILY_REPORTS_AND_UNIVERSE.md)
+dosyasına bakın.
+
 ---
 
 ## Montana Melih Hisse Bot — Aşama 5d + Veri Güvenilirliği

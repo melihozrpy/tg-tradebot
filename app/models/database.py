@@ -1011,6 +1011,80 @@ class UserPriceAlert(Base):
     deleted_at = Column(DateTime(timezone=True), nullable=True)
 
 
+class VirtualPortfolio(Base):
+    """Bir kullanıcının bağımsız SMXM sanal hesabı.
+
+    Eski ``paper_accounts`` tablosu geriye uyumluluk için korunur. Bu model,
+    istenen üç ayrı portföy ve iki strateji senaryosunu birbirinden ayırır.
+    """
+
+    __tablename__ = "virtual_portfolios"
+    __table_args__ = (
+        UniqueConstraint("user_id", "name", name="uq_virtual_portfolio_user_name"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    name = Column(String(96), nullable=False)
+    starting_balance = Column(Float, nullable=False)
+    current_balance = Column(Float, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+
+class VirtualTrade(Base):
+    __tablename__ = "virtual_trades"
+
+    id = Column(Integer, primary_key=True)
+    portfolio_id = Column(Integer, ForeignKey("virtual_portfolios.id"), nullable=False, index=True)
+    instrument = Column(String(24), nullable=False, index=True)
+    direction = Column(String(8), nullable=False)  # long | short
+    entry_price = Column(Float, nullable=False)
+    sl = Column(Float, nullable=False)
+    tp = Column(Float, nullable=False)
+    size = Column(Float, nullable=False)
+    risk_percent = Column(Float, nullable=False)
+    opened_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+    closed_at = Column(DateTime(timezone=True), nullable=True)
+    exit_price = Column(Float, nullable=True)
+    pnl = Column(Float, nullable=True)
+    status = Column(String(16), default="open", nullable=False, index=True)
+    setup_checklist_score = Column(Integer, nullable=False)
+    strategy_name = Column(String(64), default="smxm", nullable=False)
+    planned_rr = Column(Float, nullable=False)
+    notes = Column(Text, nullable=True)
+
+
+class MarketDailyReportLog(Base):
+    """Sabah biasını ve akşam gerçekleşmesini aynı işlem günü için saklar."""
+
+    __tablename__ = "market_daily_report_logs"
+    __table_args__ = (
+        UniqueConstraint(
+            "report_date", "report_type", "symbol", name="uq_market_report_date_type_symbol"
+        ),
+    )
+
+    id = Column(Integer, primary_key=True)
+    report_date = Column(DateTime(timezone=True), nullable=False, index=True)
+    report_type = Column(String(16), nullable=False, index=True)  # morning | evening
+    symbol = Column(String(24), nullable=False, index=True)
+    predicted_direction = Column(String(16), nullable=True)
+    actual_direction = Column(String(16), nullable=True)
+    confidence_score = Column(Float, nullable=True)
+    checklist_passed = Column(Integer, nullable=True)
+    checklist_total = Column(Integer, nullable=True)
+    open_price = Column(Float, nullable=True)
+    high_price = Column(Float, nullable=True)
+    low_price = Column(Float, nullable=True)
+    close_price = Column(Float, nullable=True)
+    daily_change_percent = Column(Float, nullable=True)
+    consistent = Column(Boolean, nullable=True)
+    news_json = Column(Text, nullable=True)
+    report_json = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
 class PriceAlertTrigger(Base):
     __tablename__ = "price_alert_triggers"
     __table_args__ = (UniqueConstraint("idempotency_key", name="uq_price_alert_trigger_key"),)

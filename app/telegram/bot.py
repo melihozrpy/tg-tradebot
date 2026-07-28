@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime, timedelta, timezone
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -13,6 +14,7 @@ from app.telegram import (
     handlers,
     handlers_stage5g,
     handlers_v3,
+    smxm_report_handlers,
     ultra_backtest_handlers,
     ultra_signal_handlers,
 )
@@ -89,6 +91,11 @@ def build_telegram_application() -> Application:
     application.add_handler(CommandHandler("tarama_durumu", handlers_v3.cmd_tarama_durumu))
     application.add_handler(CommandHandler("aksam_raporu", handlers_v3.cmd_aksam_raporu))
     application.add_handler(CommandHandler("tarama_ayarlari", handlers_v3.cmd_tarama_ayarlari))
+    application.add_handler(CommandHandler("tum_hisseler", smxm_report_handlers.cmd_tum_hisseler))
+    application.add_handler(CommandHandler("eniyi50", smxm_report_handlers.cmd_eniyi50))
+    application.add_handler(CommandHandler("en_iyi_50", smxm_report_handlers.cmd_eniyi50))
+    application.add_handler(CommandHandler("sabah_raporu", smxm_report_handlers.cmd_sabah_raporu))
+    application.add_handler(CommandHandler("smxm_aksam_raporu", smxm_report_handlers.cmd_smxm_aksam_raporu))
 
     # ---- V3: Sinyal gecmisi / performans ----
     application.add_handler(CommandHandler("sinyaller", handlers_v3.cmd_sinyaller))
@@ -137,6 +144,9 @@ def build_telegram_application() -> Application:
     application.add_handler(CommandHandler("sinyalbasari", handlers_stage5g.cmd_sinyalbasari))
     application.add_handler(CommandHandler("kalibrasyon", handlers_stage5g.cmd_kalibrasyon))
     application.add_handler(CommandHandler("neden", handlers_stage5g.cmd_neden))
+    application.add_handler(CommandHandler("sanal_portfoy_olustur", smxm_report_handlers.cmd_sanal_portfoy_olustur))
+    application.add_handler(CommandHandler("sanal_portfoyler", smxm_report_handlers.cmd_sanal_portfoyler))
+    application.add_handler(CommandHandler("smxm_backtest", smxm_report_handlers.cmd_smxm_backtest))
     ultra_backtest_handlers.register_ultra_backtest_handlers(application)
 
     # ---- V3: Inline buton callback'leri ----
@@ -144,6 +154,7 @@ def build_telegram_application() -> Application:
     application.add_handler(CallbackQueryHandler(handlers_v3.handle_stage5f_callback, pattern=r"^stage5f_"))
     application.add_handler(CallbackQueryHandler(handlers_v3.handle_menu_callback, pattern=r"^menu_"))
     application.add_handler(CallbackQueryHandler(handlers_stage5g.handle_stage5g_callback, pattern=r"^stage5g_"))
+    application.add_handler(CallbackQueryHandler(smxm_report_handlers.handle_universe_callback, pattern=r"^universe_page_"))
 
     return application
 
@@ -238,7 +249,7 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
                 settings.timezone_name,
             )
 
-    if getattr(settings, "daily_brief_enabled", False):
+    if getattr(settings, "daily_brief_enabled", False) and not getattr(settings, "morning_report_enabled", False):
         async def _daily_brief_job() -> None:
             from app.data.provider_factory import build_market_data_provider
             from app.models.database import User, get_session_factory
@@ -271,6 +282,169 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
             )
         except (TypeError, ValueError):
             logger.warning("DAILY_BRIEF_TIME formatı geçersiz: %s", settings.daily_brief_time)
+
+    async def _notify_report_error(job_label: str, exc: Exception) -> None:
+        """Zamanlanmış rapor hatasını adminlere bildir; kendi hatasını yutkunur."""
+        if application is None:
+            return
+        from app.models.database import User, get_session_factory
+
+        db = get_session_factory()()
+        try:
+            recipients = {
+                int(item.telegram_user_id)
+                for item in db.query(User).filter(User.is_admin.is_(True)).all()
+            }
+            recipients.update(int(value) for value in getattr(settings, "admin_ids", ()))
+            for chat_id in recipients:
+                try:
+                    await application.bot.send_message(
+                        chat_id=chat_id,
+                        text=(
+                            f"⚠️ {job_label} üretilemedi\n"
+                            f"Hata: {type(exc).__name__}\n"
+                            "Bot çalışmaya devam ediyor. /veri_durumu ile veri kaynağını kontrol et."
+                        ),
+                    )
+                except Exception as delivery_exc:  # noqa: BLE001
+                    logger.warning(
+                        "Rapor hata bildirimi gönderilemedi chat=%s: %s", chat_id, delivery_exc
+                    )
+        finally:
+            db.close()
+
+    async def _deliver_smxm_report(kind: str) -> None:
+        """DB/provider işlemlerini worker thread'de, Telegram'ı event-loop'ta tutar."""
+        from pathlib import Path
+
+        def _build_payload():
+            from app.config.instruments import resolve_report_instruments
+            from app.data.provider_factory import build_market_data_provider
+            from app.models.database import get_session_factory
+            from app.modules.chart_engine import render_report_chart
+
+            db = get_session_factory()()
+            try:
+                provider = build_market_data_provider(settings)
+                instruments = resolve_report_instruments(settings)
+                if kind == "morning":
+                    from app.modules.morning_report import (
+                        build_morning_chart_spec,
+                        build_morning_report,
+                        format_morning_report,
+                    )
+
+                    report = build_morning_report(provider, settings, instruments, db=db)
+                    primary = report.instruments[0]
+                    spec = build_morning_chart_spec(report, primary.symbol)
+                    text = format_morning_report(report)
+                    caption = f"🌅 {primary.symbol} • 08:00 SMXM sabah görünümü"
+                else:
+                    from app.modules.evening_report import (
+                        build_evening_chart_spec,
+                        build_evening_report,
+                        format_evening_report,
+                    )
+
+                    report = build_evening_report(provider, settings, instruments, db=db)
+                    primary = report.instruments[0]
+                    spec = build_evening_chart_spec(report, primary.symbol)
+                    text = format_evening_report(report)
+                    caption = f"🌙 {primary.symbol} • 21:00 kapanış görünümü"
+                end = datetime.now(timezone.utc)
+                days = 520 if kind == "morning" else 180
+                frame = provider.get_ohlcv(
+                    primary.symbol, "1d", end - timedelta(days=days), end
+                )
+                chart_path = render_report_chart(
+                    frame,
+                    spec,
+                    smart_money=primary.smart_money,
+                    output_dir=settings.report_chart_output_dir,
+                    dpi=settings.chart_dpi,
+                )
+                return text, caption, chart_path
+            finally:
+                db.close()
+
+        chart_path = None
+        try:
+            text, caption, chart_path = await asyncio.to_thread(_build_payload)
+            if application is None:
+                return
+            from app.models.database import User, get_session_factory
+
+            db = get_session_factory()()
+            try:
+                recipients = db.query(User).filter(User.kill_switch_active.is_(False)).all()
+                for user in recipients:
+                    try:
+                        with open(chart_path, "rb") as image:
+                            await application.bot.send_photo(
+                                chat_id=user.telegram_user_id,
+                                photo=image,
+                                caption=caption,
+                            )
+                        await application.bot.send_message(
+                            chat_id=user.telegram_user_id,
+                            text=text,
+                            disable_web_page_preview=True,
+                        )
+                    except Exception as exc:  # noqa: BLE001 - diğer alıcılara devam
+                        logger.warning("SMXM raporu gönderilemedi user=%s: %s", user.id, exc)
+            finally:
+                db.close()
+        finally:
+            if chart_path:
+                Path(chart_path).unlink(missing_ok=True)
+
+    if getattr(settings, "morning_report_enabled", False):
+        async def _smxm_morning_job() -> None:
+            try:
+                await _deliver_smxm_report("morning")
+            except Exception as exc:  # noqa: BLE001 - scheduler ve bot yaşamaya devam eder
+                logger.exception("08:00 SMXM sabah raporu üretilemedi")
+                await _notify_report_error("08:00 SMXM sabah raporu", exc)
+
+        try:
+            morning_hour, morning_minute = settings.morning_report_time.split(":")
+            scheduler.add_job(
+                _smxm_morning_job,
+                CronTrigger(hour=int(morning_hour), minute=int(morning_minute)),
+                id="smxm_morning_report",
+                coalesce=True,
+                max_instances=1,
+                replace_existing=True,
+            )
+        except (AttributeError, TypeError, ValueError):
+            logger.warning(
+                "MORNING_REPORT_TIME geçersiz: %s",
+                getattr(settings, "morning_report_time", None),
+            )
+
+    if getattr(settings, "evening_market_report_enabled", False):
+        async def _smxm_evening_job() -> None:
+            try:
+                await _deliver_smxm_report("evening")
+            except Exception as exc:  # noqa: BLE001
+                logger.exception("21:00 SMXM akşam raporu üretilemedi")
+                await _notify_report_error("21:00 SMXM akşam raporu", exc)
+
+        try:
+            evening_hour, evening_minute = settings.evening_market_report_time.split(":")
+            scheduler.add_job(
+                _smxm_evening_job,
+                CronTrigger(hour=int(evening_hour), minute=int(evening_minute)),
+                id="smxm_evening_report",
+                coalesce=True,
+                max_instances=1,
+                replace_existing=True,
+            )
+        except (AttributeError, TypeError, ValueError):
+            logger.warning(
+                "EVENING_MARKET_REPORT_TIME geçersiz: %s",
+                getattr(settings, "evening_market_report_time", None),
+            )
 
     # V3.2 (Asama 3, bolum 7): gun ici otomatik anomali taramasi + grafik.
     # Piyasa saatlerinde (Pzt-Cuma, 10:00-18:00) her 30 dakikada bir calisir.

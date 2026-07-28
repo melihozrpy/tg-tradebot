@@ -2863,6 +2863,10 @@ async def cmd_start_v3(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     keyboard = [
         [InlineKeyboardButton("📊 Teknik Analiz", callback_data="menu_analiz"),
          InlineKeyboardButton("🎯 AL / SAT Planı", callback_data="menu_islemplani")],
+        [InlineKeyboardButton("📚 Tüm Hisseler", callback_data="menu_all_stocks"),
+         InlineKeyboardButton("🏆 En İyi 50", callback_data="menu_best50")],
+        [InlineKeyboardButton("🌅 Sabah Raporu", callback_data="menu_morning_report"),
+         InlineKeyboardButton("🌙 Kapanış Raporu", callback_data="menu_smxm_evening")],
         [InlineKeyboardButton("🏢 Şirket Analizi", callback_data="menu_fundamental_prompt"),
          InlineKeyboardButton("📣 KAP Bildirimleri", callback_data="menu_kap_prompt")],
         [InlineKeyboardButton("🔔 Alarm Kur", callback_data="menu_alarm_prompt"),
@@ -2917,6 +2921,10 @@ async def handle_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     direct = {
         "menu_analiz": "Bir sembol yaz: /analiz THYAO",
         "menu_islemplani": "Bir sembol yaz: /islemplani THYAO",
+        "menu_all_stocks": "PDF'den aktarılan 571 kodu görmek için /tum_hisseler yaz.",
+        "menu_best50": "Tüm evrende en kaliteli giriş bölgelerini taramak için /eniyi50 yaz.",
+        "menu_morning_report": "08:00 raporunu şimdi üretmek için /sabah_raporu yaz.",
+        "menu_smxm_evening": "21:00 kapanış raporunu şimdi üretmek için /smxm_aksam_raporu yaz.",
         "menu_fundamental_prompt": "Şirketi bilanço, borç, kârlılık ve riskleriyle incelemek için: /sirket THYAO",
         "menu_kap_prompt": "Son resmî şirket bildirimleri için: /kap THYAO",
         "menu_alarm_prompt": "Fiyat alarmı örneği: /alarm 9.20 THYAO",
@@ -3111,10 +3119,18 @@ async def cmd_komutlar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "/kap THYAO — lisanslı akış varsa son KAP bildirimlerini, yoksa resmî aramayı gösterir\n"
         "/seviyeler THYAO — destek ve dirençleri gösterir\n"
         "/cokluzaman THYAO — farklı zaman dilimlerini karşılaştırır\n\n"
+        "📚 TÜM HİSSELER VE RAPORLAR\n"
+        "/tum_hisseler — PDF'den aktarılan 571 kodu sayfalı gösterir\n"
+        "/eniyi50 — tüm evrende en kaliteli 50 giriş bölgesini tarar\n"
+        "/sabah_raporu — 08:00 SMXM raporunu şimdi üretir\n"
+        "/smxm_aksam_raporu — 21:00 kapanış ve tahmin karşılaştırmasını üretir\n\n"
         "🧪 GEÇMİŞ PERFORMANS\n"
         "/backtest THYAO — son 2 yılı masraflarla test eder\n"
         "/backtest THYAO 2023-01-01 2026-01-01 — özel dönem\n"
         "/backtest_ozet — son testleri ve başarı oranlarını gösterir\n\n"
+        "/smxm_backtest THYAO 2025-01-01 2025-06-01 10000 — A+ setup simülasyonu\n"
+        "/sanal_portfoy_olustur Ana 10000 — bağımsız sanal hesap oluşturur\n"
+        "/sanal_portfoyler — tüm SMXM sanal hesaplarını listeler\n\n"
         "📌 SİNYAL TAKİBİ\n"
         "/sinyaller — üretilen sinyalleri listeler\n"
         "/sinyal 123 — sinyal planı ve olay geçmişi\n"

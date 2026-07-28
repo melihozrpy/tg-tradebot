@@ -23,6 +23,7 @@ KIND_TECHNICAL = "teknik"
 KIND_MULTI_TIMEFRAME = "coklu_zaman"
 KIND_NEWS = "haber"
 KIND_RISK = "risk"
+KIND_MARKET_SENTIMENT = "market_sentiment"
 
 # Groq'un ASLA uretmemesi gereken seyler: fiyat/hedef/stop rakamlari ve
 # AL/SAT karari degistirme dili. Bu kaba desen listesi, Groq cevabini kabul
@@ -249,6 +250,97 @@ class GroqExplainer:
             text = _deterministic_fallback(kind, symbol, structured_payload)
             self._persist(db, symbol, kind, cache_key, text, is_fallback=True, model=None)
             return text, True
+
+    @staticmethod
+    def _deterministic_sentiments(texts: list[str]) -> list[str]:
+        positive_words = {
+            "artış", "artis", "yükseliş", "yukselis", "büyüme", "buyume",
+            "güçlü", "guclu", "rekor", "kâr", "kar", "iyileşme", "iyilesme",
+            "above", "beat", "growth", "positive",
+        }
+        negative_words = {
+            "düşüş", "dusus", "daralma", "zayıf", "zayif", "zarar", "risk",
+            "gerileme", "kriz", "soruşturma", "sorusturma", "below", "miss",
+            "negative", "loss",
+        }
+        output: list[str] = []
+        for text in texts:
+            words = set(re.findall(r"[a-zA-ZçğıöşüÇĞİÖŞÜ]+", text.casefold()))
+            positive = len(words & positive_words)
+            negative = len(words & negative_words)
+            output.append("positive" if positive > negative else "negative" if negative > positive else "neutral")
+        return output
+
+    def classify_news_sentiment(
+        self,
+        db: Session,
+        texts: list[str],
+    ) -> tuple[list[str], bool]:
+        """Haber başlıklarını toplu ve yapılandırılmış biçimde sınıflandırır.
+
+        Dönüş ``(etiketler, is_fallback)`` biçimindedir. Etiketler yalnızca
+        positive/neutral/negative olabilir; sayı veya yön kararı üretilmez.
+        """
+
+        clean = [" ".join(str(text).split())[:600] for text in texts if str(text).strip()][:40]
+        if not clean:
+            return [], True
+        payload = {"texts": clean}
+        cache_key = compute_cache_key("MARKET", KIND_MARKET_SENTIMENT, payload)
+        cached = db.query(GroqExplanation).filter(GroqExplanation.cache_key == cache_key).first()
+        if cached is not None:
+            try:
+                labels = json.loads(cached.response_text).get("sentiments", [])
+                if len(labels) == len(clean) and all(
+                    value in {"positive", "neutral", "negative"} for value in labels
+                ):
+                    return list(labels), bool(cached.is_fallback)
+            except (TypeError, ValueError, json.JSONDecodeError):
+                pass
+
+        fallback = self._deterministic_sentiments(clean)
+        if (
+            not self.settings.groq_enabled
+            or not self.settings.groq_api_key
+            or self._daily_request_count(db) >= self.settings.groq_daily_request_limit
+        ):
+            encoded = json.dumps({"sentiments": fallback}, ensure_ascii=False)
+            self._persist(
+                db, "MARKET", KIND_MARKET_SENTIMENT, cache_key, encoded,
+                is_fallback=True, model=None,
+            )
+            return fallback, True
+
+        prompt = (
+            "Aşağıdaki haber başlıklarını sadece duygu yönüne göre sınıflandır. "
+            "Her başlık için sırasıyla yalnız positive, neutral veya negative kullan. "
+            "Fiyat, hedef, yatırım kararı ya da açıklama üretme. "
+            "Sadece şu JSON şemasında cevap ver: "
+            '{"sentiments":["positive","neutral","negative"]}\n\n'
+            + json.dumps(payload, ensure_ascii=False)
+        )
+        try:
+            parsed = json.loads(self._call_groq_api(prompt))
+            labels = parsed.get("sentiments")
+            if not isinstance(labels, list) or len(labels) != len(clean):
+                raise ValueError("Groq sentiment adetleri girdiyle eşleşmiyor.")
+            normalized = [str(value).strip().casefold() for value in labels]
+            if any(value not in {"positive", "neutral", "negative"} for value in normalized):
+                raise ValueError("Groq sentiment etiketi geçersiz.")
+            encoded = json.dumps({"sentiments": normalized}, ensure_ascii=False)
+            self._persist(
+                db, "MARKET", KIND_MARKET_SENTIMENT, cache_key, encoded,
+                is_fallback=False, model=self.settings.groq_model or None,
+            )
+            return normalized, False
+        except Exception as exc:  # noqa: BLE001 - sentiment raporu asla çökertmez
+            logger.warning("Groq sentiment sınıflandırması başarısız: %s", type(exc).__name__)
+            encoded = json.dumps({"sentiments": fallback}, ensure_ascii=False)
+            self._persist(
+                db, "MARKET", KIND_MARKET_SENTIMENT, cache_key, encoded,
+                is_fallback=True, model=None,
+            )
+            return fallback, True
 
     def _persist(
         self, db: Session, symbol: str, kind: str, cache_key: str,

@@ -26,6 +26,7 @@ REQUIRED_TABLES = {
     "paper_trade_events", "signal_outcomes", "signal_feature_snapshots",
     "score_calibration_models", "score_calibration_bins", "signal_score_contributions",
     "validation_reports",
+    "virtual_portfolios", "virtual_trades", "market_daily_report_logs",
 }
 
 
@@ -61,14 +62,14 @@ def test_55_fresh_migration_reaches_stage5g_head(migrated_databases):
         names = {row[0] for row in connection.execute("select name from sqlite_master where type='table'")}
         version = connection.execute("select version_num from alembic_version").fetchone()[0]
     assert REQUIRED_TABLES.issubset(names)
-    assert version == "0008_ultra_bist_alerts_signals"
+    assert version == "0009_smxm_reports_virtual_portfolios"
 
 
 def test_56_existing_database_migration_reaches_stage5g_head(migrated_databases):
     _, existing = migrated_databases
     with sqlite3.connect(existing) as connection:
         version = connection.execute("select version_num from alembic_version").fetchone()[0]
-    assert version == "0008_ultra_bist_alerts_signals"
+    assert version == "0009_smxm_reports_virtual_portfolios"
 
 
 def test_57_existing_user_record_is_preserved_by_migration(migrated_databases):

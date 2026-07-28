@@ -54,7 +54,7 @@ def _current_user(db, update: Update):
     )
 
 
-def _backtest_config() -> BacktestConfig:
+def _backtest_config(initial_capital: float | None = None) -> BacktestConfig:
     settings = get_settings()
     commission_rate = settings.backtest_commission_rate
     commission_bps = (
@@ -68,7 +68,11 @@ def _backtest_config() -> BacktestConfig:
         else settings.backtest_minimum_cost
     )
     return BacktestConfig(
-        initial_capital=settings.backtest_initial_capital,
+        initial_capital=(
+            float(initial_capital)
+            if initial_capital is not None
+            else settings.backtest_initial_capital
+        ),
         max_position_pct=settings.backtest_max_position_pct,
         entry_model=settings.backtest_entry_model,
         intrabar_policy=settings.backtest_intrabar_policy,
@@ -181,7 +185,8 @@ async def cmd_backtest(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     if not context.args:
         await update.message.reply_text(
             "Kullanım: /backtest THYAO 1g 5y\n"
-            "Alternatif: /backtest THYAO 2024-01-01 2026-01-01"
+            "Alternatif: /backtest THYAO 2024-01-01 2026-01-01 10000\n"
+            "SMXM özel motoru: /smxm_backtest THYAO 2024-01-01 2026-01-01 10000"
         )
         return
     settings = get_settings()
@@ -192,6 +197,14 @@ async def cmd_backtest(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             context.args,
             default_timeframe=strategy_config["timeframes"]["primary"],
         )
+        initial_capital = settings.backtest_initial_capital
+        if (
+            len(context.args) >= 4
+            and re.fullmatch(r"\d{4}-\d{2}-\d{2}", context.args[1])
+        ):
+            initial_capital = float(context.args[3].replace(",", "."))
+            if initial_capital <= 0:
+                raise ValueError("Başlangıç bakiyesi pozitif olmalıdır.")
     except Exception:
         await update.message.reply_text(
             "Sembol, zaman dilimi veya dönem geçersiz. Örnek: /backtest THYAO 1g 5y"
@@ -227,13 +240,14 @@ async def cmd_backtest(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             start_date=start, end_date=end,
             bars_loader=lambda: provider.get_ohlcv(symbol, timeframe, start, end),
             benchmark_loader=lambda: provider.get_ohlcv(settings.xu100_symbol, timeframe, start, end),
-            signal_provider=adapter, config=_backtest_config(),
+            signal_provider=adapter, config=_backtest_config(initial_capital),
             strategy_version=strategy_config["strategy"]["version"],
             provider=provider.name, on_complete=notify,
         )
         await update.message.reply_text(
             f"🧪 {symbol} backtest başlatıldı.\n"
             f"Zaman: {timeframe} | Dönem: {start:%Y-%m-%d} → {end:%Y-%m-%d}\n"
+            f"Başlangıç bakiyesi: {initial_capital:.2f}\n"
             "Komisyon + spread + fiyat kayması dahil; botu kullanmaya devam edebilirsin.\n"
             f"Run ID: {run_id}",
             reply_markup=InlineKeyboardMarkup([[
