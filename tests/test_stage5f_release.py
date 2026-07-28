@@ -106,3 +106,13 @@ def test_29_release_skips_isolated_pytest_runtime_database(tmp_path):
     archive, _, _ = build_release(source, tmp_path / "release.zip")
     with zipfile.ZipFile(archive) as zipped:
         assert not any(name.startswith(".test-tmp/") for name in zipped.namelist())
+
+
+def test_30_release_accepts_runtime_settings_secret_reference(tmp_path):
+    source = _clean_source(tmp_path)
+    (source / "app" / "provider.py").write_text(
+        "client = Client(api_key=settings.licensed_market_data_api_key)\n",
+        encoding="utf-8",
+    )
+    archive, _, _ = build_release(source, tmp_path / "release.zip")
+    assert archive.exists()

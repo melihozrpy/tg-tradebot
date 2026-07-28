@@ -141,6 +141,16 @@ def _looks_like_placeholder(text: str) -> bool:
     return any(token in lowered for token in PLACEHOLDER_TOKENS)
 
 
+def _looks_like_runtime_reference(match: re.Match[str]) -> bool:
+    """Ayar nesnesi/env referansını gömülü gizli değer sanma."""
+
+    value = match.group(1) if match.lastindex else match.group(0)
+    normalized = value.strip("\"'").casefold()
+    return normalized.startswith(
+        ("settings.", "self.settings.", "config.", "os.environ", "getenv(", "${")
+    )
+
+
 def scan_for_secrets(files: Iterable[Path], source: Path) -> None:
     for path in files:
         try:
@@ -150,7 +160,7 @@ def scan_for_secrets(files: Iterable[Path], source: Path) -> None:
         for pattern in SECRET_PATTERNS:
             for match in pattern.finditer(text):
                 context = text[max(0, match.start() - 40) : min(len(text), match.end() + 40)]
-                if _looks_like_placeholder(context):
+                if _looks_like_placeholder(context) or _looks_like_runtime_reference(match):
                     continue
                 # Eşleşen gizli değer bilinçli olarak çıktıya eklenmez.
                 raise ReleaseSafetyError(
