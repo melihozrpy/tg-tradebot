@@ -25,10 +25,11 @@ RUN sed -i 's/\r$//' /app/docker-entrypoint.sh /app/docker-run-bot.sh
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir .
 
-RUN mkdir -p /app/data_csv /app/data /app/.mplconfig && chown -R mergen:mergen /app \
+RUN mkdir -p /app/data_csv /app/data /app/.mplconfig /app/.cache/fontconfig && chown -R mergen:mergen /app \
     && chmod +x /app/docker-entrypoint.sh /app/docker-run-bot.sh
 
 ENV MPLCONFIGDIR=/app/.mplconfig
+ENV XDG_CACHE_HOME=/app/.cache
 
 USER mergen
 

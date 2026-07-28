@@ -90,6 +90,7 @@ services:
       REPORT_CHART_OUTPUT_DIR: ${REPORT_CHART_OUTPUT_DIR:-/tmp/mergen_quant_reports}
       REPORT_MAX_NEWS_EVENTS: ${REPORT_MAX_NEWS_EVENTS:-8}
       CHART_DPI: ${CHART_DPI:-120}
+      CHART_THEME: ${CHART_THEME:-dark}
       ECONOMIC_CALENDAR_ENABLED: ${ECONOMIC_CALENDAR_ENABLED:-true}
       ECONOMIC_CALENDAR_URL: ${ECONOMIC_CALENDAR_URL:-https://tr.investing.com/economic-calendar/}
       ECONOMIC_CALENDAR_TIMEOUT_SECONDS: ${ECONOMIC_CALENDAR_TIMEOUT_SECONDS:-15}
@@ -209,6 +210,7 @@ services:
       REPORT_CHART_OUTPUT_DIR: ${REPORT_CHART_OUTPUT_DIR:-/tmp/mergen_quant_reports}
       REPORT_MAX_NEWS_EVENTS: ${REPORT_MAX_NEWS_EVENTS:-8}
       CHART_DPI: ${CHART_DPI:-120}
+      CHART_THEME: ${CHART_THEME:-dark}
       ECONOMIC_CALENDAR_ENABLED: ${ECONOMIC_CALENDAR_ENABLED:-true}
       ECONOMIC_CALENDAR_URL: ${ECONOMIC_CALENDAR_URL:-https://tr.investing.com/economic-calendar/}
       ECONOMIC_CALENDAR_TIMEOUT_SECONDS: ${ECONOMIC_CALENDAR_TIMEOUT_SECONDS:-15}
@@ -232,6 +234,11 @@ services:
     command: ["/app/docker-run-bot.sh"]
     depends_on:
       - api
+    healthcheck:
+      test: ["CMD", "python", "-c", "import pathlib,sys; sys.exit(0 if any('run_bot.py' in path.read_text(errors='ignore') for path in pathlib.Path('/proc').glob('[0-9]*/cmdline')) else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
 volumes:
   mergen_data:
