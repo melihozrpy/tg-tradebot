@@ -318,6 +318,16 @@ class Settings(BaseSettings):
             )
         return normalized
 
+    @field_validator("openrouter_vision_model")
+    @classmethod
+    def _upgrade_generic_vision_router(cls, v: str) -> str:
+        """Eski genel router ayarını gerçek görsel modelle güvenli biçimde değiştirir."""
+
+        normalized = str(v or "").strip()
+        if not normalized or normalized.casefold() == "openrouter/free":
+            return "google/gemma-4-31b-it:free"
+        return normalized
+
     @field_validator("public_disclosure_provider")
     @classmethod
     def _validate_disclosure_provider(cls, v: str) -> str:

@@ -51,6 +51,11 @@ def test_approved_prompt_is_versioned_without_silent_changes():
     assert "11. SONUÇ TABLOSU" in prompt
 
 
+def test_legacy_free_router_is_upgraded_to_fixed_vision_model():
+    settings = _settings(openrouter_vision_model="openrouter/free")
+    assert settings.openrouter_vision_model == "google/gemma-4-31b-it:free"
+
+
 def test_text_analysis_uses_exact_system_prompt_and_verified_context():
     captured: dict = {}
 
