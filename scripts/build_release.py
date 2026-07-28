@@ -22,7 +22,7 @@ from typing import Iterable
 DEFAULT_ARCHIVE_NAME = "mergen-quant-stage5g-backtest-paper-validation.zip"
 MANIFEST_NAME = "RELEASE_MANIFEST.json"
 
-ALLOWED_DIRECTORIES = {"app", "tests", "migrations", "scripts", "data", "data_csv"}
+ALLOWED_DIRECTORIES = {"app", "tests", "migrations", "scripts", "data", "data_csv", "docs"}
 ALLOWED_ROOT_FILES = {
     ".env.example",
     ".gitignore",
@@ -42,6 +42,7 @@ SKIP_DIRECTORY_NAMES = {
     "venv",
     "__pycache__",
     ".pytest_cache",
+    ".test-tmp",
     ".mypy_cache",
     ".ruff_cache",
     "cache",
@@ -122,6 +123,8 @@ def _is_allowed(path: Path, source: Path) -> bool:
         return relative.name in ALLOWED_ROOT_FILES
     if relative.parts[0] not in ALLOWED_DIRECTORIES:
         return False
+    if relative.parts[0] == "docs" and path.suffix.casefold() == ".png":
+        return True
     return path.suffix.casefold() in ALLOWED_SUFFIXES or path.name in {"Dockerfile"}
 
 
@@ -178,7 +181,7 @@ def build_manifest(source: Path, files: list[Path]) -> tuple[dict, dict[str, byt
         entries.append({"path": name, "sha256": _sha256_bytes(data), "size": len(data)})
     manifest = {
         "project": "MERGEN QUANT",
-        "release": "Aşama 5g - Backtest, Sanal İşlem ve Sinyal Doğrulama",
+        "release": "Tüm Hisseler ve SMXM Günlük Rapor Sistemi",
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
         "file_count": len(entries),
         "files": entries,

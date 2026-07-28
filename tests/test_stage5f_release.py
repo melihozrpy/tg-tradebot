@@ -88,3 +88,21 @@ def test_27_manifest_and_file_hash_verification_passes(tmp_path):
         manifest = json.loads(zipped.read(MANIFEST_NAME).decode("utf-8"))
         assert manifest["file_count"] == len(manifest["files"])
         assert all(len(item["sha256"]) == 64 for item in manifest["files"])
+
+
+def test_28_release_includes_documented_example_png(tmp_path):
+    source = _clean_source(tmp_path)
+    (source / "docs" / "examples").mkdir(parents=True)
+    (source / "docs" / "examples" / "smxm_report.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+    archive, _, _ = build_release(source, tmp_path / "release.zip")
+    with zipfile.ZipFile(archive) as zipped:
+        assert "docs/examples/smxm_report.png" in zipped.namelist()
+
+
+def test_29_release_skips_isolated_pytest_runtime_database(tmp_path):
+    source = _clean_source(tmp_path)
+    (source / ".test-tmp").mkdir()
+    (source / ".test-tmp" / "runtime.db").write_bytes(b"SQLite format 3\x00")
+    archive, _, _ = build_release(source, tmp_path / "release.zip")
+    with zipfile.ZipFile(archive) as zipped:
+        assert not any(name.startswith(".test-tmp/") for name in zipped.namelist())
