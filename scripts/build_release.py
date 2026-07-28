@@ -22,7 +22,7 @@ from typing import Iterable
 DEFAULT_ARCHIVE_NAME = "mergen-quant-stage5g-backtest-paper-validation.zip"
 MANIFEST_NAME = "RELEASE_MANIFEST.json"
 
-ALLOWED_DIRECTORIES = {"app", "tests", "migrations", "scripts", "data", "data_csv"}
+ALLOWED_DIRECTORIES = {"app", "tests", "migrations", "scripts", "data", "data_csv", "docs"}
 ALLOWED_ROOT_FILES = {
     ".env.example",
     ".gitignore",
@@ -42,6 +42,7 @@ SKIP_DIRECTORY_NAMES = {
     "venv",
     "__pycache__",
     ".pytest_cache",
+    ".test-tmp",
     ".mypy_cache",
     ".ruff_cache",
     "cache",
@@ -122,6 +123,8 @@ def _is_allowed(path: Path, source: Path) -> bool:
         return relative.name in ALLOWED_ROOT_FILES
     if relative.parts[0] not in ALLOWED_DIRECTORIES:
         return False
+    if relative.parts[0] == "docs" and path.suffix.casefold() == ".png":
+        return True
     return path.suffix.casefold() in ALLOWED_SUFFIXES or path.name in {"Dockerfile"}
 
 
@@ -138,6 +141,16 @@ def _looks_like_placeholder(text: str) -> bool:
     return any(token in lowered for token in PLACEHOLDER_TOKENS)
 
 
+def _looks_like_runtime_reference(match: re.Match[str]) -> bool:
+    """Ayar nesnesi/env referansını gömülü gizli değer sanma."""
+
+    value = match.group(1) if match.lastindex else match.group(0)
+    normalized = value.strip("\"'").casefold()
+    return normalized.startswith(
+        ("settings.", "self.settings.", "config.", "os.environ", "getenv(", "${")
+    )
+
+
 def scan_for_secrets(files: Iterable[Path], source: Path) -> None:
     for path in files:
         try:
@@ -147,7 +160,7 @@ def scan_for_secrets(files: Iterable[Path], source: Path) -> None:
         for pattern in SECRET_PATTERNS:
             for match in pattern.finditer(text):
                 context = text[max(0, match.start() - 40) : min(len(text), match.end() + 40)]
-                if _looks_like_placeholder(context):
+                if _looks_like_placeholder(context) or _looks_like_runtime_reference(match):
                     continue
                 # Eşleşen gizli değer bilinçli olarak çıktıya eklenmez.
                 raise ReleaseSafetyError(
@@ -178,7 +191,7 @@ def build_manifest(source: Path, files: list[Path]) -> tuple[dict, dict[str, byt
         entries.append({"path": name, "sha256": _sha256_bytes(data), "size": len(data)})
     manifest = {
         "project": "MERGEN QUANT",
-        "release": "Aşama 5g - Backtest, Sanal İşlem ve Sinyal Doğrulama",
+        "release": "Tüm Hisseler ve SMXM Günlük Rapor Sistemi",
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
         "file_count": len(entries),
         "files": entries,

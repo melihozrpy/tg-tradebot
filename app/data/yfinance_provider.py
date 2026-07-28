@@ -66,6 +66,22 @@ def normalize_bist_symbol(raw_symbol: str) -> str:
     symbol = raw_symbol.strip().upper()
     if symbol in ("XU100", "^XU100"):
         return "^XU100"
+    # INSTRUMENTS yalnızca BIST ile sınırlı değildir. Kullanıcı doğrudan
+    # Yahoo kodu verdiyse (.NYB, =X, =F, ^VIX gibi) kodu bozmayız. Yaygın
+    # kullanıcı dostu adlar da burada yalnızca sağlayıcı sembolüne çevrilir;
+    # enstrüman evreninin kendisi config/env'den okunmaya devam eder.
+    aliases = {
+        "EURUSD": "EURUSD=X",
+        "XAUUSD": "GC=F",
+        "XAGUSD": "SI=F",
+        "US100": "^NDX",
+        "VIX": "^VIX",
+        "DXY": "DX-Y.NYB",
+    }
+    if symbol in aliases:
+        return aliases[symbol]
+    if symbol.startswith("^") or "=" in symbol or "." in symbol:
+        return symbol
     if symbol.endswith(BIST_SUFFIX):
         return symbol
     return f"{symbol}{BIST_SUFFIX}"

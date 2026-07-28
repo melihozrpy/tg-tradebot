@@ -1,0 +1,3438 @@
+{
+  "schema_version": 1,
+  "source": {
+    "name": "BIST_Tum_Hisseler_Listesi.pdf",
+    "original_file": "BIST_Tum_Hisseler_Listesi.pdf",
+    "imported_at": "2026-07-28T06:47:55.073809+00:00",
+    "instrument_count": 571,
+    "note": "PDF'deki kodlar değişmeden, ilk görünme sırasıyla aktarılmıştır."
+  },
+  "instruments": [
+    {
+      "symbol": "AAGYO",
+      "exchange": "BIST",
+      "provider_symbol": "AAGYO.IS",
+      "active": true
+    },
+    {
+      "symbol": "EMNIS",
+      "exchange": "BIST",
+      "provider_symbol": "EMNIS.IS",
+      "active": true
+    },
+    {
+      "symbol": "KRDMA",
+      "exchange": "BIST",
+      "provider_symbol": "KRDMA.IS",
+      "active": true
+    },
+    {
+      "symbol": "RYSAS",
+      "exchange": "BIST",
+      "provider_symbol": "RYSAS.IS",
+      "active": true
+    },
+    {
+      "symbol": "AEFES",
+      "exchange": "BIST",
+      "provider_symbol": "AEFES.IS",
+      "active": true
+    },
+    {
+      "symbol": "EMPAE",
+      "exchange": "BIST",
+      "provider_symbol": "EMPAE.IS",
+      "active": true
+    },
+    {
+      "symbol": "KRDMB",
+      "exchange": "BIST",
+      "provider_symbol": "KRDMB.IS",
+      "active": true
+    },
+    {
+      "symbol": "SAFKR",
+      "exchange": "BIST",
+      "provider_symbol": "SAFKR.IS",
+      "active": true
+    },
+    {
+      "symbol": "AKBNK",
+      "exchange": "BIST",
+      "provider_symbol": "AKBNK.IS",
+      "active": true
+    },
+    {
+      "symbol": "ENDAE",
+      "exchange": "BIST",
+      "provider_symbol": "ENDAE.IS",
+      "active": true
+    },
+    {
+      "symbol": "KRDMD",
+      "exchange": "BIST",
+      "provider_symbol": "KRDMD.IS",
+      "active": true
+    },
+    {
+      "symbol": "SAHOL",
+      "exchange": "BIST",
+      "provider_symbol": "SAHOL.IS",
+      "active": true
+    },
+    {
+      "symbol": "AKENR",
+      "exchange": "BIST",
+      "provider_symbol": "AKENR.IS",
+      "active": true
+    },
+    {
+      "symbol": "ENERY",
+      "exchange": "BIST",
+      "provider_symbol": "ENERY.IS",
+      "active": true
+    },
+    {
+      "symbol": "KRGYO",
+      "exchange": "BIST",
+      "provider_symbol": "KRGYO.IS",
+      "active": true
+    },
+    {
+      "symbol": "SAMAT",
+      "exchange": "BIST",
+      "provider_symbol": "SAMAT.IS",
+      "active": true
+    },
+    {
+      "symbol": "AKFGY",
+      "exchange": "BIST",
+      "provider_symbol": "AKFGY.IS",
+      "active": true
+    },
+    {
+      "symbol": "ENJSA",
+      "exchange": "BIST",
+      "provider_symbol": "ENJSA.IS",
+      "active": true
+    },
+    {
+      "symbol": "KRONT",
+      "exchange": "BIST",
+      "provider_symbol": "KRONT.IS",
+      "active": true
+    },
+    {
+      "symbol": "SANEL",
+      "exchange": "BIST",
+      "provider_symbol": "SANEL.IS",
+      "active": true
+    },
+    {
+      "symbol": "AKFIS",
+      "exchange": "BIST",
+      "provider_symbol": "AKFIS.IS",
+      "active": true
+    },
+    {
+      "symbol": "ENKAI",
+      "exchange": "BIST",
+      "provider_symbol": "ENKAI.IS",
+      "active": true
+    },
+    {
+      "symbol": "KRPLS",
+      "exchange": "BIST",
+      "provider_symbol": "KRPLS.IS",
+      "active": true
+    },
+    {
+      "symbol": "SANFM",
+      "exchange": "BIST",
+      "provider_symbol": "SANFM.IS",
+      "active": true
+    },
+    {
+      "symbol": "AKGRT",
+      "exchange": "BIST",
+      "provider_symbol": "AKGRT.IS",
+      "active": true
+    },
+    {
+      "symbol": "ENPRA",
+      "exchange": "BIST",
+      "provider_symbol": "ENPRA.IS",
+      "active": true
+    },
+    {
+      "symbol": "KRSTL",
+      "exchange": "BIST",
+      "provider_symbol": "KRSTL.IS",
+      "active": true
+    },
+    {
+      "symbol": "SANKO",
+      "exchange": "BIST",
+      "provider_symbol": "SANKO.IS",
+      "active": true
+    },
+    {
+      "symbol": "AKHAN",
+      "exchange": "BIST",
+      "provider_symbol": "AKHAN.IS",
+      "active": true
+    },
+    {
+      "symbol": "ENSRI",
+      "exchange": "BIST",
+      "provider_symbol": "ENSRI.IS",
+      "active": true
+    },
+    {
+      "symbol": "KRTEK",
+      "exchange": "BIST",
+      "provider_symbol": "KRTEK.IS",
+      "active": true
+    },
+    {
+      "symbol": "SARAE",
+      "exchange": "BIST",
+      "provider_symbol": "SARAE.IS",
+      "active": true
+    },
+    {
+      "symbol": "AKSEN",
+      "exchange": "BIST",
+      "provider_symbol": "AKSEN.IS",
+      "active": true
+    },
+    {
+      "symbol": "ENTRA",
+      "exchange": "BIST",
+      "provider_symbol": "ENTRA.IS",
+      "active": true
+    },
+    {
+      "symbol": "KRVGD",
+      "exchange": "BIST",
+      "provider_symbol": "KRVGD.IS",
+      "active": true
+    },
+    {
+      "symbol": "SARKY",
+      "exchange": "BIST",
+      "provider_symbol": "SARKY.IS",
+      "active": true
+    },
+    {
+      "symbol": "AKSUE",
+      "exchange": "BIST",
+      "provider_symbol": "AKSUE.IS",
+      "active": true
+    },
+    {
+      "symbol": "EPLAS",
+      "exchange": "BIST",
+      "provider_symbol": "EPLAS.IS",
+      "active": true
+    },
+    {
+      "symbol": "KSTUR",
+      "exchange": "BIST",
+      "provider_symbol": "KSTUR.IS",
+      "active": true
+    },
+    {
+      "symbol": "SASA",
+      "exchange": "BIST",
+      "provider_symbol": "SASA.IS",
+      "active": true
+    },
+    {
+      "symbol": "AKYHO",
+      "exchange": "BIST",
+      "provider_symbol": "AKYHO.IS",
+      "active": true
+    },
+    {
+      "symbol": "ERBOS",
+      "exchange": "BIST",
+      "provider_symbol": "ERBOS.IS",
+      "active": true
+    },
+    {
+      "symbol": "KTLEV",
+      "exchange": "BIST",
+      "provider_symbol": "KTLEV.IS",
+      "active": true
+    },
+    {
+      "symbol": "SAYAS",
+      "exchange": "BIST",
+      "provider_symbol": "SAYAS.IS",
+      "active": true
+    },
+    {
+      "symbol": "ALARK",
+      "exchange": "BIST",
+      "provider_symbol": "ALARK.IS",
+      "active": true
+    },
+    {
+      "symbol": "ERCB",
+      "exchange": "BIST",
+      "provider_symbol": "ERCB.IS",
+      "active": true
+    },
+    {
+      "symbol": "KTSKR",
+      "exchange": "BIST",
+      "provider_symbol": "KTSKR.IS",
+      "active": true
+    },
+    {
+      "symbol": "SDTTR",
+      "exchange": "BIST",
+      "provider_symbol": "SDTTR.IS",
+      "active": true
+    },
+    {
+      "symbol": "ALBRK",
+      "exchange": "BIST",
+      "provider_symbol": "ALBRK.IS",
+      "active": true
+    },
+    {
+      "symbol": "EREGL",
+      "exchange": "BIST",
+      "provider_symbol": "EREGL.IS",
+      "active": true
+    },
+    {
+      "symbol": "KUTPO",
+      "exchange": "BIST",
+      "provider_symbol": "KUTPO.IS",
+      "active": true
+    },
+    {
+      "symbol": "SEGMN",
+      "exchange": "BIST",
+      "provider_symbol": "SEGMN.IS",
+      "active": true
+    },
+    {
+      "symbol": "ANHYT",
+      "exchange": "BIST",
+      "provider_symbol": "ANHYT.IS",
+      "active": true
+    },
+    {
+      "symbol": "ERSU",
+      "exchange": "BIST",
+      "provider_symbol": "ERSU.IS",
+      "active": true
+    },
+    {
+      "symbol": "KUVVA",
+      "exchange": "BIST",
+      "provider_symbol": "KUVVA.IS",
+      "active": true
+    },
+    {
+      "symbol": "SEGYO",
+      "exchange": "BIST",
+      "provider_symbol": "SEGYO.IS",
+      "active": true
+    },
+    {
+      "symbol": "ARSAN",
+      "exchange": "BIST",
+      "provider_symbol": "ARSAN.IS",
+      "active": true
+    },
+    {
+      "symbol": "ESCAR",
+      "exchange": "BIST",
+      "provider_symbol": "ESCAR.IS",
+      "active": true
+    },
+    {
+      "symbol": "KUYAS",
+      "exchange": "BIST",
+      "provider_symbol": "KUYAS.IS",
+      "active": true
+    },
+    {
+      "symbol": "SEKFK",
+      "exchange": "BIST",
+      "provider_symbol": "SEKFK.IS",
+      "active": true
+    },
+    {
+      "symbol": "ASGYO",
+      "exchange": "BIST",
+      "provider_symbol": "ASGYO.IS",
+      "active": true
+    },
+    {
+      "symbol": "ESCOM",
+      "exchange": "BIST",
+      "provider_symbol": "ESCOM.IS",
+      "active": true
+    },
+    {
+      "symbol": "KZBGY",
+      "exchange": "BIST",
+      "provider_symbol": "KZBGY.IS",
+      "active": true
+    },
+    {
+      "symbol": "SEKUR",
+      "exchange": "BIST",
+      "provider_symbol": "SEKUR.IS",
+      "active": true
+    },
+    {
+      "symbol": "ATEKS",
+      "exchange": "BIST",
+      "provider_symbol": "ATEKS.IS",
+      "active": true
+    },
+    {
+      "symbol": "ESEN",
+      "exchange": "BIST",
+      "provider_symbol": "ESEN.IS",
+      "active": true
+    },
+    {
+      "symbol": "KZGYO",
+      "exchange": "BIST",
+      "provider_symbol": "KZGYO.IS",
+      "active": true
+    },
+    {
+      "symbol": "SELEC",
+      "exchange": "BIST",
+      "provider_symbol": "SELEC.IS",
+      "active": true
+    },
+    {
+      "symbol": "ATSYH",
+      "exchange": "BIST",
+      "provider_symbol": "ATSYH.IS",
+      "active": true
+    },
+    {
+      "symbol": "ETILR",
+      "exchange": "BIST",
+      "provider_symbol": "ETILR.IS",
+      "active": true
+    },
+    {
+      "symbol": "LIDER",
+      "exchange": "BIST",
+      "provider_symbol": "LIDER.IS",
+      "active": true
+    },
+    {
+      "symbol": "SELVA",
+      "exchange": "BIST",
+      "provider_symbol": "SELVA.IS",
+      "active": true
+    },
+    {
+      "symbol": "AVTUR",
+      "exchange": "BIST",
+      "provider_symbol": "AVTUR.IS",
+      "active": true
+    },
+    {
+      "symbol": "ETYAT",
+      "exchange": "BIST",
+      "provider_symbol": "ETYAT.IS",
+      "active": true
+    },
+    {
+      "symbol": "LIDFA",
+      "exchange": "BIST",
+      "provider_symbol": "LIDFA.IS",
+      "active": true
+    },
+    {
+      "symbol": "SERNT",
+      "exchange": "BIST",
+      "provider_symbol": "SERNT.IS",
+      "active": true
+    },
+    {
+      "symbol": "BAGFS",
+      "exchange": "BIST",
+      "provider_symbol": "BAGFS.IS",
+      "active": true
+    },
+    {
+      "symbol": "EUHOL",
+      "exchange": "BIST",
+      "provider_symbol": "EUHOL.IS",
+      "active": true
+    },
+    {
+      "symbol": "LILAK",
+      "exchange": "BIST",
+      "provider_symbol": "LILAK.IS",
+      "active": true
+    },
+    {
+      "symbol": "SEYKM",
+      "exchange": "BIST",
+      "provider_symbol": "SEYKM.IS",
+      "active": true
+    },
+    {
+      "symbol": "BAHKM",
+      "exchange": "BIST",
+      "provider_symbol": "BAHKM.IS",
+      "active": true
+    },
+    {
+      "symbol": "EUKYO",
+      "exchange": "BIST",
+      "provider_symbol": "EUKYO.IS",
+      "active": true
+    },
+    {
+      "symbol": "LINK",
+      "exchange": "BIST",
+      "provider_symbol": "LINK.IS",
+      "active": true
+    },
+    {
+      "symbol": "SILVR",
+      "exchange": "BIST",
+      "provider_symbol": "SILVR.IS",
+      "active": true
+    },
+    {
+      "symbol": "BAKAB",
+      "exchange": "BIST",
+      "provider_symbol": "BAKAB.IS",
+      "active": true
+    },
+    {
+      "symbol": "EUPWR",
+      "exchange": "BIST",
+      "provider_symbol": "EUPWR.IS",
+      "active": true
+    },
+    {
+      "symbol": "LKMNH",
+      "exchange": "BIST",
+      "provider_symbol": "LKMNH.IS",
+      "active": true
+    },
+    {
+      "symbol": "SISE",
+      "exchange": "BIST",
+      "provider_symbol": "SISE.IS",
+      "active": true
+    },
+    {
+      "symbol": "BALAT",
+      "exchange": "BIST",
+      "provider_symbol": "BALAT.IS",
+      "active": true
+    },
+    {
+      "symbol": "EUREN",
+      "exchange": "BIST",
+      "provider_symbol": "EUREN.IS",
+      "active": true
+    },
+    {
+      "symbol": "LMKDC",
+      "exchange": "BIST",
+      "provider_symbol": "LMKDC.IS",
+      "active": true
+    },
+    {
+      "symbol": "SKBNK",
+      "exchange": "BIST",
+      "provider_symbol": "SKBNK.IS",
+      "active": true
+    },
+    {
+      "symbol": "BALSU",
+      "exchange": "BIST",
+      "provider_symbol": "BALSU.IS",
+      "active": true
+    },
+    {
+      "symbol": "EUYO",
+      "exchange": "BIST",
+      "provider_symbol": "EUYO.IS",
+      "active": true
+    },
+    {
+      "symbol": "LOGO",
+      "exchange": "BIST",
+      "provider_symbol": "LOGO.IS",
+      "active": true
+    },
+    {
+      "symbol": "SKTAS",
+      "exchange": "BIST",
+      "provider_symbol": "SKTAS.IS",
+      "active": true
+    },
+    {
+      "symbol": "BANVT",
+      "exchange": "BIST",
+      "provider_symbol": "BANVT.IS",
+      "active": true
+    },
+    {
+      "symbol": "EYGYO",
+      "exchange": "BIST",
+      "provider_symbol": "EYGYO.IS",
+      "active": true
+    },
+    {
+      "symbol": "LRSHO",
+      "exchange": "BIST",
+      "provider_symbol": "LRSHO.IS",
+      "active": true
+    },
+    {
+      "symbol": "SKYLP",
+      "exchange": "BIST",
+      "provider_symbol": "SKYLP.IS",
+      "active": true
+    },
+    {
+      "symbol": "BARMA",
+      "exchange": "BIST",
+      "provider_symbol": "BARMA.IS",
+      "active": true
+    },
+    {
+      "symbol": "FADE",
+      "exchange": "BIST",
+      "provider_symbol": "FADE.IS",
+      "active": true
+    },
+    {
+      "symbol": "LUKSK",
+      "exchange": "BIST",
+      "provider_symbol": "LUKSK.IS",
+      "active": true
+    },
+    {
+      "symbol": "SKYMD",
+      "exchange": "BIST",
+      "provider_symbol": "SKYMD.IS",
+      "active": true
+    },
+    {
+      "symbol": "BASCM",
+      "exchange": "BIST",
+      "provider_symbol": "BASCM.IS",
+      "active": true
+    },
+    {
+      "symbol": "FENER",
+      "exchange": "BIST",
+      "provider_symbol": "FENER.IS",
+      "active": true
+    },
+    {
+      "symbol": "LXGYO",
+      "exchange": "BIST",
+      "provider_symbol": "LXGYO.IS",
+      "active": true
+    },
+    {
+      "symbol": "SMART",
+      "exchange": "BIST",
+      "provider_symbol": "SMART.IS",
+      "active": true
+    },
+    {
+      "symbol": "BASGZ",
+      "exchange": "BIST",
+      "provider_symbol": "BASGZ.IS",
+      "active": true
+    },
+    {
+      "symbol": "FLAP",
+      "exchange": "BIST",
+      "provider_symbol": "FLAP.IS",
+      "active": true
+    },
+    {
+      "symbol": "LYDHO",
+      "exchange": "BIST",
+      "provider_symbol": "LYDHO.IS",
+      "active": true
+    },
+    {
+      "symbol": "SMRTG",
+      "exchange": "BIST",
+      "provider_symbol": "SMRTG.IS",
+      "active": true
+    },
+    {
+      "symbol": "BAYRK",
+      "exchange": "BIST",
+      "provider_symbol": "BAYRK.IS",
+      "active": true
+    },
+    {
+      "symbol": "FMIZP",
+      "exchange": "BIST",
+      "provider_symbol": "FMIZP.IS",
+      "active": true
+    },
+    {
+      "symbol": "LYDYE",
+      "exchange": "BIST",
+      "provider_symbol": "LYDYE.IS",
+      "active": true
+    },
+    {
+      "symbol": "SMRVA",
+      "exchange": "BIST",
+      "provider_symbol": "SMRVA.IS",
+      "active": true
+    },
+    {
+      "symbol": "BEGYO",
+      "exchange": "BIST",
+      "provider_symbol": "BEGYO.IS",
+      "active": true
+    },
+    {
+      "symbol": "FONET",
+      "exchange": "BIST",
+      "provider_symbol": "FONET.IS",
+      "active": true
+    },
+    {
+      "symbol": "MAALT",
+      "exchange": "BIST",
+      "provider_symbol": "MAALT.IS",
+      "active": true
+    },
+    {
+      "symbol": "SNGYO",
+      "exchange": "BIST",
+      "provider_symbol": "SNGYO.IS",
+      "active": true
+    },
+    {
+      "symbol": "BERA",
+      "exchange": "BIST",
+      "provider_symbol": "BERA.IS",
+      "active": true
+    },
+    {
+      "symbol": "FORMT",
+      "exchange": "BIST",
+      "provider_symbol": "FORMT.IS",
+      "active": true
+    },
+    {
+      "symbol": "MACKO",
+      "exchange": "BIST",
+      "provider_symbol": "MACKO.IS",
+      "active": true
+    },
+    {
+      "symbol": "SNICA",
+      "exchange": "BIST",
+      "provider_symbol": "SNICA.IS",
+      "active": true
+    },
+    {
+      "symbol": "BESLR",
+      "exchange": "BIST",
+      "provider_symbol": "BESLR.IS",
+      "active": true
+    },
+    {
+      "symbol": "FORTE",
+      "exchange": "BIST",
+      "provider_symbol": "FORTE.IS",
+      "active": true
+    },
+    {
+      "symbol": "MAGEN",
+      "exchange": "BIST",
+      "provider_symbol": "MAGEN.IS",
+      "active": true
+    },
+    {
+      "symbol": "SNPAM",
+      "exchange": "BIST",
+      "provider_symbol": "SNPAM.IS",
+      "active": true
+    },
+    {
+      "symbol": "BESTE",
+      "exchange": "BIST",
+      "provider_symbol": "BESTE.IS",
+      "active": true
+    },
+    {
+      "symbol": "FRIGO",
+      "exchange": "BIST",
+      "provider_symbol": "FRIGO.IS",
+      "active": true
+    },
+    {
+      "symbol": "MAKIM",
+      "exchange": "BIST",
+      "provider_symbol": "MAKIM.IS",
+      "active": true
+    },
+    {
+      "symbol": "SODSN",
+      "exchange": "BIST",
+      "provider_symbol": "SODSN.IS",
+      "active": true
+    },
+    {
+      "symbol": "BETAE",
+      "exchange": "BIST",
+      "provider_symbol": "BETAE.IS",
+      "active": true
+    },
+    {
+      "symbol": "FRMPL",
+      "exchange": "BIST",
+      "provider_symbol": "FRMPL.IS",
+      "active": true
+    },
+    {
+      "symbol": "MAKTK",
+      "exchange": "BIST",
+      "provider_symbol": "MAKTK.IS",
+      "active": true
+    },
+    {
+      "symbol": "SOHOE",
+      "exchange": "BIST",
+      "provider_symbol": "SOHOE.IS",
+      "active": true
+    },
+    {
+      "symbol": "BEYAZ",
+      "exchange": "BIST",
+      "provider_symbol": "BEYAZ.IS",
+      "active": true
+    },
+    {
+      "symbol": "FROTO",
+      "exchange": "BIST",
+      "provider_symbol": "FROTO.IS",
+      "active": true
+    },
+    {
+      "symbol": "MANAS",
+      "exchange": "BIST",
+      "provider_symbol": "MANAS.IS",
+      "active": true
+    },
+    {
+      "symbol": "SOKE",
+      "exchange": "BIST",
+      "provider_symbol": "SOKE.IS",
+      "active": true
+    },
+    {
+      "symbol": "BFREN",
+      "exchange": "BIST",
+      "provider_symbol": "BFREN.IS",
+      "active": true
+    },
+    {
+      "symbol": "FZLGY",
+      "exchange": "BIST",
+      "provider_symbol": "FZLGY.IS",
+      "active": true
+    },
+    {
+      "symbol": "MARBL",
+      "exchange": "BIST",
+      "provider_symbol": "MARBL.IS",
+      "active": true
+    },
+    {
+      "symbol": "SOKM",
+      "exchange": "BIST",
+      "provider_symbol": "SOKM.IS",
+      "active": true
+    },
+    {
+      "symbol": "BIENY",
+      "exchange": "BIST",
+      "provider_symbol": "BIENY.IS",
+      "active": true
+    },
+    {
+      "symbol": "GARAN",
+      "exchange": "BIST",
+      "provider_symbol": "GARAN.IS",
+      "active": true
+    },
+    {
+      "symbol": "MARKA",
+      "exchange": "BIST",
+      "provider_symbol": "MARKA.IS",
+      "active": true
+    },
+    {
+      "symbol": "SONME",
+      "exchange": "BIST",
+      "provider_symbol": "SONME.IS",
+      "active": true
+    },
+    {
+      "symbol": "BIGCH",
+      "exchange": "BIST",
+      "provider_symbol": "BIGCH.IS",
+      "active": true
+    },
+    {
+      "symbol": "GARFA",
+      "exchange": "BIST",
+      "provider_symbol": "GARFA.IS",
+      "active": true
+    },
+    {
+      "symbol": "MARMR",
+      "exchange": "BIST",
+      "provider_symbol": "MARMR.IS",
+      "active": true
+    },
+    {
+      "symbol": "SRVGY",
+      "exchange": "BIST",
+      "provider_symbol": "SRVGY.IS",
+      "active": true
+    },
+    {
+      "symbol": "BIGEN",
+      "exchange": "BIST",
+      "provider_symbol": "BIGEN.IS",
+      "active": true
+    },
+    {
+      "symbol": "GATEG",
+      "exchange": "BIST",
+      "provider_symbol": "GATEG.IS",
+      "active": true
+    },
+    {
+      "symbol": "MARTI",
+      "exchange": "BIST",
+      "provider_symbol": "MARTI.IS",
+      "active": true
+    },
+    {
+      "symbol": "SSAAT",
+      "exchange": "BIST",
+      "provider_symbol": "SSAAT.IS",
+      "active": true
+    },
+    {
+      "symbol": "BIGTK",
+      "exchange": "BIST",
+      "provider_symbol": "BIGTK.IS",
+      "active": true
+    },
+    {
+      "symbol": "GEDIK",
+      "exchange": "BIST",
+      "provider_symbol": "GEDIK.IS",
+      "active": true
+    },
+    {
+      "symbol": "MAVI",
+      "exchange": "BIST",
+      "provider_symbol": "MAVI.IS",
+      "active": true
+    },
+    {
+      "symbol": "SUMAS",
+      "exchange": "BIST",
+      "provider_symbol": "SUMAS.IS",
+      "active": true
+    },
+    {
+      "symbol": "BIMAS",
+      "exchange": "BIST",
+      "provider_symbol": "BIMAS.IS",
+      "active": true
+    },
+    {
+      "symbol": "GEDZA",
+      "exchange": "BIST",
+      "provider_symbol": "GEDZA.IS",
+      "active": true
+    },
+    {
+      "symbol": "MCARD",
+      "exchange": "BIST",
+      "provider_symbol": "MCARD.IS",
+      "active": true
+    },
+    {
+      "symbol": "SUNTK",
+      "exchange": "BIST",
+      "provider_symbol": "SUNTK.IS",
+      "active": true
+    },
+    {
+      "symbol": "BINBN",
+      "exchange": "BIST",
+      "provider_symbol": "BINBN.IS",
+      "active": true
+    },
+    {
+      "symbol": "GENIL",
+      "exchange": "BIST",
+      "provider_symbol": "GENIL.IS",
+      "active": true
+    },
+    {
+      "symbol": "MEDTR",
+      "exchange": "BIST",
+      "provider_symbol": "MEDTR.IS",
+      "active": true
+    },
+    {
+      "symbol": "SURGY",
+      "exchange": "BIST",
+      "provider_symbol": "SURGY.IS",
+      "active": true
+    },
+    {
+      "symbol": "BINHO",
+      "exchange": "BIST",
+      "provider_symbol": "BINHO.IS",
+      "active": true
+    },
+    {
+      "symbol": "GENKM",
+      "exchange": "BIST",
+      "provider_symbol": "GENKM.IS",
+      "active": true
+    },
+    {
+      "symbol": "MEGAP",
+      "exchange": "BIST",
+      "provider_symbol": "MEGAP.IS",
+      "active": true
+    },
+    {
+      "symbol": "SUWEN",
+      "exchange": "BIST",
+      "provider_symbol": "SUWEN.IS",
+      "active": true
+    },
+    {
+      "symbol": "BIOEN",
+      "exchange": "BIST",
+      "provider_symbol": "BIOEN.IS",
+      "active": true
+    },
+    {
+      "symbol": "GENTS",
+      "exchange": "BIST",
+      "provider_symbol": "GENTS.IS",
+      "active": true
+    },
+    {
+      "symbol": "MEGMT",
+      "exchange": "BIST",
+      "provider_symbol": "MEGMT.IS",
+      "active": true
+    },
+    {
+      "symbol": "SVGYO",
+      "exchange": "BIST",
+      "provider_symbol": "SVGYO.IS",
+      "active": true
+    },
+    {
+      "symbol": "BIZIM",
+      "exchange": "BIST",
+      "provider_symbol": "BIZIM.IS",
+      "active": true
+    },
+    {
+      "symbol": "GEREL",
+      "exchange": "BIST",
+      "provider_symbol": "GEREL.IS",
+      "active": true
+    },
+    {
+      "symbol": "MEKAG",
+      "exchange": "BIST",
+      "provider_symbol": "MEKAG.IS",
+      "active": true
+    },
+    {
+      "symbol": "TABGD",
+      "exchange": "BIST",
+      "provider_symbol": "TABGD.IS",
+      "active": true
+    },
+    {
+      "symbol": "BJKAS",
+      "exchange": "BIST",
+      "provider_symbol": "BJKAS.IS",
+      "active": true
+    },
+    {
+      "symbol": "GESAN",
+      "exchange": "BIST",
+      "provider_symbol": "GESAN.IS",
+      "active": true
+    },
+    {
+      "symbol": "MEPET",
+      "exchange": "BIST",
+      "provider_symbol": "MEPET.IS",
+      "active": true
+    },
+    {
+      "symbol": "TARKM",
+      "exchange": "BIST",
+      "provider_symbol": "TARKM.IS",
+      "active": true
+    },
+    {
+      "symbol": "BLCYT",
+      "exchange": "BIST",
+      "provider_symbol": "BLCYT.IS",
+      "active": true
+    },
+    {
+      "symbol": "GIPTA",
+      "exchange": "BIST",
+      "provider_symbol": "GIPTA.IS",
+      "active": true
+    },
+    {
+      "symbol": "MERCN",
+      "exchange": "BIST",
+      "provider_symbol": "MERCN.IS",
+      "active": true
+    },
+    {
+      "symbol": "TATEN",
+      "exchange": "BIST",
+      "provider_symbol": "TATEN.IS",
+      "active": true
+    },
+    {
+      "symbol": "BLUME",
+      "exchange": "BIST",
+      "provider_symbol": "BLUME.IS",
+      "active": true
+    },
+    {
+      "symbol": "GLBMD",
+      "exchange": "BIST",
+      "provider_symbol": "GLBMD.IS",
+      "active": true
+    },
+    {
+      "symbol": "MERIT",
+      "exchange": "BIST",
+      "provider_symbol": "MERIT.IS",
+      "active": true
+    },
+    {
+      "symbol": "TATGD",
+      "exchange": "BIST",
+      "provider_symbol": "TATGD.IS",
+      "active": true
+    },
+    {
+      "symbol": "BMSCH",
+      "exchange": "BIST",
+      "provider_symbol": "BMSCH.IS",
+      "active": true
+    },
+    {
+      "symbol": "GLCVY",
+      "exchange": "BIST",
+      "provider_symbol": "GLCVY.IS",
+      "active": true
+    },
+    {
+      "symbol": "MERKO",
+      "exchange": "BIST",
+      "provider_symbol": "MERKO.IS",
+      "active": true
+    },
+    {
+      "symbol": "TAVHL",
+      "exchange": "BIST",
+      "provider_symbol": "TAVHL.IS",
+      "active": true
+    },
+    {
+      "symbol": "BMSTL",
+      "exchange": "BIST",
+      "provider_symbol": "BMSTL.IS",
+      "active": true
+    },
+    {
+      "symbol": "GLDTR",
+      "exchange": "BIST",
+      "provider_symbol": "GLDTR.IS",
+      "active": true
+    },
+    {
+      "symbol": "METRO",
+      "exchange": "BIST",
+      "provider_symbol": "METRO.IS",
+      "active": true
+    },
+    {
+      "symbol": "TBORG",
+      "exchange": "BIST",
+      "provider_symbol": "TBORG.IS",
+      "active": true
+    },
+    {
+      "symbol": "BNTAS",
+      "exchange": "BIST",
+      "provider_symbol": "BNTAS.IS",
+      "active": true
+    },
+    {
+      "symbol": "GLRMK",
+      "exchange": "BIST",
+      "provider_symbol": "GLRMK.IS",
+      "active": true
+    },
+    {
+      "symbol": "MEYSU",
+      "exchange": "BIST",
+      "provider_symbol": "MEYSU.IS",
+      "active": true
+    },
+    {
+      "symbol": "TCELL",
+      "exchange": "BIST",
+      "provider_symbol": "TCELL.IS",
+      "active": true
+    },
+    {
+      "symbol": "BOBET",
+      "exchange": "BIST",
+      "provider_symbol": "BOBET.IS",
+      "active": true
+    },
+    {
+      "symbol": "GLRYH",
+      "exchange": "BIST",
+      "provider_symbol": "GLRYH.IS",
+      "active": true
+    },
+    {
+      "symbol": "MGROS",
+      "exchange": "BIST",
+      "provider_symbol": "MGROS.IS",
+      "active": true
+    },
+    {
+      "symbol": "TCKRC",
+      "exchange": "BIST",
+      "provider_symbol": "TCKRC.IS",
+      "active": true
+    },
+    {
+      "symbol": "BORLS",
+      "exchange": "BIST",
+      "provider_symbol": "BORLS.IS",
+      "active": true
+    },
+    {
+      "symbol": "GLYHO",
+      "exchange": "BIST",
+      "provider_symbol": "GLYHO.IS",
+      "active": true
+    },
+    {
+      "symbol": "MHRGY",
+      "exchange": "BIST",
+      "provider_symbol": "MHRGY.IS",
+      "active": true
+    },
+    {
+      "symbol": "TDGYO",
+      "exchange": "BIST",
+      "provider_symbol": "TDGYO.IS",
+      "active": true
+    },
+    {
+      "symbol": "BORSK",
+      "exchange": "BIST",
+      "provider_symbol": "BORSK.IS",
+      "active": true
+    },
+    {
+      "symbol": "GMSTR",
+      "exchange": "BIST",
+      "provider_symbol": "GMSTR.IS",
+      "active": true
+    },
+    {
+      "symbol": "MIATK",
+      "exchange": "BIST",
+      "provider_symbol": "MIATK.IS",
+      "active": true
+    },
+    {
+      "symbol": "TEHOL",
+      "exchange": "BIST",
+      "provider_symbol": "TEHOL.IS",
+      "active": true
+    },
+    {
+      "symbol": "BOSSA",
+      "exchange": "BIST",
+      "provider_symbol": "BOSSA.IS",
+      "active": true
+    },
+    {
+      "symbol": "GMTAS",
+      "exchange": "BIST",
+      "provider_symbol": "GMTAS.IS",
+      "active": true
+    },
+    {
+      "symbol": "MMCAS",
+      "exchange": "BIST",
+      "provider_symbol": "MMCAS.IS",
+      "active": true
+    },
+    {
+      "symbol": "TEKTU",
+      "exchange": "BIST",
+      "provider_symbol": "TEKTU.IS",
+      "active": true
+    },
+    {
+      "symbol": "BRISA",
+      "exchange": "BIST",
+      "provider_symbol": "BRISA.IS",
+      "active": true
+    },
+    {
+      "symbol": "GOKNR",
+      "exchange": "BIST",
+      "provider_symbol": "GOKNR.IS",
+      "active": true
+    },
+    {
+      "symbol": "MNDRS",
+      "exchange": "BIST",
+      "provider_symbol": "MNDRS.IS",
+      "active": true
+    },
+    {
+      "symbol": "TERA",
+      "exchange": "BIST",
+      "provider_symbol": "TERA.IS",
+      "active": true
+    },
+    {
+      "symbol": "BRKO",
+      "exchange": "BIST",
+      "provider_symbol": "BRKO.IS",
+      "active": true
+    },
+    {
+      "symbol": "GOLTS",
+      "exchange": "BIST",
+      "provider_symbol": "GOLTS.IS",
+      "active": true
+    },
+    {
+      "symbol": "MNDTR",
+      "exchange": "BIST",
+      "provider_symbol": "MNDTR.IS",
+      "active": true
+    },
+    {
+      "symbol": "TEZOL",
+      "exchange": "BIST",
+      "provider_symbol": "TEZOL.IS",
+      "active": true
+    },
+    {
+      "symbol": "BRKSN",
+      "exchange": "BIST",
+      "provider_symbol": "BRKSN.IS",
+      "active": true
+    },
+    {
+      "symbol": "GOODY",
+      "exchange": "BIST",
+      "provider_symbol": "GOODY.IS",
+      "active": true
+    },
+    {
+      "symbol": "MOBTL",
+      "exchange": "BIST",
+      "provider_symbol": "MOBTL.IS",
+      "active": true
+    },
+    {
+      "symbol": "TGSAS",
+      "exchange": "BIST",
+      "provider_symbol": "TGSAS.IS",
+      "active": true
+    },
+    {
+      "symbol": "BRKVY",
+      "exchange": "BIST",
+      "provider_symbol": "BRKVY.IS",
+      "active": true
+    },
+    {
+      "symbol": "GOZDE",
+      "exchange": "BIST",
+      "provider_symbol": "GOZDE.IS",
+      "active": true
+    },
+    {
+      "symbol": "MOGAN",
+      "exchange": "BIST",
+      "provider_symbol": "MOGAN.IS",
+      "active": true
+    },
+    {
+      "symbol": "THYAO",
+      "exchange": "BIST",
+      "provider_symbol": "THYAO.IS",
+      "active": true
+    },
+    {
+      "symbol": "BRLSM",
+      "exchange": "BIST",
+      "provider_symbol": "BRLSM.IS",
+      "active": true
+    },
+    {
+      "symbol": "GRNYO",
+      "exchange": "BIST",
+      "provider_symbol": "GRNYO.IS",
+      "active": true
+    },
+    {
+      "symbol": "MOPAS",
+      "exchange": "BIST",
+      "provider_symbol": "MOPAS.IS",
+      "active": true
+    },
+    {
+      "symbol": "TKFEN",
+      "exchange": "BIST",
+      "provider_symbol": "TKFEN.IS",
+      "active": true
+    },
+    {
+      "symbol": "BRMEN",
+      "exchange": "BIST",
+      "provider_symbol": "BRMEN.IS",
+      "active": true
+    },
+    {
+      "symbol": "GRSEL",
+      "exchange": "BIST",
+      "provider_symbol": "GRSEL.IS",
+      "active": true
+    },
+    {
+      "symbol": "MPARK",
+      "exchange": "BIST",
+      "provider_symbol": "MPARK.IS",
+      "active": true
+    },
+    {
+      "symbol": "TKNSA",
+      "exchange": "BIST",
+      "provider_symbol": "TKNSA.IS",
+      "active": true
+    },
+    {
+      "symbol": "BRSAN",
+      "exchange": "BIST",
+      "provider_symbol": "BRSAN.IS",
+      "active": true
+    },
+    {
+      "symbol": "GRTHO",
+      "exchange": "BIST",
+      "provider_symbol": "GRTHO.IS",
+      "active": true
+    },
+    {
+      "symbol": "MRGYO",
+      "exchange": "BIST",
+      "provider_symbol": "MRGYO.IS",
+      "active": true
+    },
+    {
+      "symbol": "TLMAN",
+      "exchange": "BIST",
+      "provider_symbol": "TLMAN.IS",
+      "active": true
+    },
+    {
+      "symbol": "BRYAT",
+      "exchange": "BIST",
+      "provider_symbol": "BRYAT.IS",
+      "active": true
+    },
+    {
+      "symbol": "GSDDE",
+      "exchange": "BIST",
+      "provider_symbol": "GSDDE.IS",
+      "active": true
+    },
+    {
+      "symbol": "MRSHL",
+      "exchange": "BIST",
+      "provider_symbol": "MRSHL.IS",
+      "active": true
+    },
+    {
+      "symbol": "TMPOL",
+      "exchange": "BIST",
+      "provider_symbol": "TMPOL.IS",
+      "active": true
+    },
+    {
+      "symbol": "BSOKE",
+      "exchange": "BIST",
+      "provider_symbol": "BSOKE.IS",
+      "active": true
+    },
+    {
+      "symbol": "GSDHO",
+      "exchange": "BIST",
+      "provider_symbol": "GSDHO.IS",
+      "active": true
+    },
+    {
+      "symbol": "MSGYO",
+      "exchange": "BIST",
+      "provider_symbol": "MSGYO.IS",
+      "active": true
+    },
+    {
+      "symbol": "TMSN",
+      "exchange": "BIST",
+      "provider_symbol": "TMSN.IS",
+      "active": true
+    },
+    {
+      "symbol": "BTCIM",
+      "exchange": "BIST",
+      "provider_symbol": "BTCIM.IS",
+      "active": true
+    },
+    {
+      "symbol": "GSRAY",
+      "exchange": "BIST",
+      "provider_symbol": "GSRAY.IS",
+      "active": true
+    },
+    {
+      "symbol": "MTRKS",
+      "exchange": "BIST",
+      "provider_symbol": "MTRKS.IS",
+      "active": true
+    },
+    {
+      "symbol": "TNZTP",
+      "exchange": "BIST",
+      "provider_symbol": "TNZTP.IS",
+      "active": true
+    },
+    {
+      "symbol": "BUCIM",
+      "exchange": "BIST",
+      "provider_symbol": "BUCIM.IS",
+      "active": true
+    },
+    {
+      "symbol": "GUBRF",
+      "exchange": "BIST",
+      "provider_symbol": "GUBRF.IS",
+      "active": true
+    },
+    {
+      "symbol": "MTRYO",
+      "exchange": "BIST",
+      "provider_symbol": "MTRYO.IS",
+      "active": true
+    },
+    {
+      "symbol": "TOASO",
+      "exchange": "BIST",
+      "provider_symbol": "TOASO.IS",
+      "active": true
+    },
+    {
+      "symbol": "BULGS",
+      "exchange": "BIST",
+      "provider_symbol": "BULGS.IS",
+      "active": true
+    },
+    {
+      "symbol": "GUNDG",
+      "exchange": "BIST",
+      "provider_symbol": "GUNDG.IS",
+      "active": true
+    },
+    {
+      "symbol": "MZHLD",
+      "exchange": "BIST",
+      "provider_symbol": "MZHLD.IS",
+      "active": true
+    },
+    {
+      "symbol": "TRALT",
+      "exchange": "BIST",
+      "provider_symbol": "TRALT.IS",
+      "active": true
+    },
+    {
+      "symbol": "BURCE",
+      "exchange": "BIST",
+      "provider_symbol": "BURCE.IS",
+      "active": true
+    },
+    {
+      "symbol": "GWIND",
+      "exchange": "BIST",
+      "provider_symbol": "GWIND.IS",
+      "active": true
+    },
+    {
+      "symbol": "NATEN",
+      "exchange": "BIST",
+      "provider_symbol": "NATEN.IS",
+      "active": true
+    },
+    {
+      "symbol": "TRCAS",
+      "exchange": "BIST",
+      "provider_symbol": "TRCAS.IS",
+      "active": true
+    },
+    {
+      "symbol": "BURVA",
+      "exchange": "BIST",
+      "provider_symbol": "BURVA.IS",
+      "active": true
+    },
+    {
+      "symbol": "GZNMI",
+      "exchange": "BIST",
+      "provider_symbol": "GZNMI.IS",
+      "active": true
+    },
+    {
+      "symbol": "NETAS",
+      "exchange": "BIST",
+      "provider_symbol": "NETAS.IS",
+      "active": true
+    },
+    {
+      "symbol": "TRENJ",
+      "exchange": "BIST",
+      "provider_symbol": "TRENJ.IS",
+      "active": true
+    },
+    {
+      "symbol": "BVSAN",
+      "exchange": "BIST",
+      "provider_symbol": "BVSAN.IS",
+      "active": true
+    },
+    {
+      "symbol": "HATEK",
+      "exchange": "BIST",
+      "provider_symbol": "HATEK.IS",
+      "active": true
+    },
+    {
+      "symbol": "NETCD",
+      "exchange": "BIST",
+      "provider_symbol": "NETCD.IS",
+      "active": true
+    },
+    {
+      "symbol": "TRGYO",
+      "exchange": "BIST",
+      "provider_symbol": "TRGYO.IS",
+      "active": true
+    },
+    {
+      "symbol": "BYDNR",
+      "exchange": "BIST",
+      "provider_symbol": "BYDNR.IS",
+      "active": true
+    },
+    {
+      "symbol": "HATSN",
+      "exchange": "BIST",
+      "provider_symbol": "HATSN.IS",
+      "active": true
+    },
+    {
+      "symbol": "NIBAS",
+      "exchange": "BIST",
+      "provider_symbol": "NIBAS.IS",
+      "active": true
+    },
+    {
+      "symbol": "TRHOL",
+      "exchange": "BIST",
+      "provider_symbol": "TRHOL.IS",
+      "active": true
+    },
+    {
+      "symbol": "CANTE",
+      "exchange": "BIST",
+      "provider_symbol": "CANTE.IS",
+      "active": true
+    },
+    {
+      "symbol": "HDFGS",
+      "exchange": "BIST",
+      "provider_symbol": "HDFGS.IS",
+      "active": true
+    },
+    {
+      "symbol": "NPTLR",
+      "exchange": "BIST",
+      "provider_symbol": "NPTLR.IS",
+      "active": true
+    },
+    {
+      "symbol": "TRILC",
+      "exchange": "BIST",
+      "provider_symbol": "TRILC.IS",
+      "active": true
+    },
+    {
+      "symbol": "CASA",
+      "exchange": "BIST",
+      "provider_symbol": "CASA.IS",
+      "active": true
+    },
+    {
+      "symbol": "HEDEF",
+      "exchange": "BIST",
+      "provider_symbol": "HEDEF.IS",
+      "active": true
+    },
+    {
+      "symbol": "NTGAZ",
+      "exchange": "BIST",
+      "provider_symbol": "NTGAZ.IS",
+      "active": true
+    },
+    {
+      "symbol": "TRMET",
+      "exchange": "BIST",
+      "provider_symbol": "TRMET.IS",
+      "active": true
+    },
+    {
+      "symbol": "CATES",
+      "exchange": "BIST",
+      "provider_symbol": "CATES.IS",
+      "active": true
+    },
+    {
+      "symbol": "HEKTS",
+      "exchange": "BIST",
+      "provider_symbol": "HEKTS.IS",
+      "active": true
+    },
+    {
+      "symbol": "NTHOL",
+      "exchange": "BIST",
+      "provider_symbol": "NTHOL.IS",
+      "active": true
+    },
+    {
+      "symbol": "TSGYO",
+      "exchange": "BIST",
+      "provider_symbol": "TSGYO.IS",
+      "active": true
+    },
+    {
+      "symbol": "CCOLA",
+      "exchange": "BIST",
+      "provider_symbol": "CCOLA.IS",
+      "active": true
+    },
+    {
+      "symbol": "HKTM",
+      "exchange": "BIST",
+      "provider_symbol": "HKTM.IS",
+      "active": true
+    },
+    {
+      "symbol": "NUGYO",
+      "exchange": "BIST",
+      "provider_symbol": "NUGYO.IS",
+      "active": true
+    },
+    {
+      "symbol": "TSKB",
+      "exchange": "BIST",
+      "provider_symbol": "TSKB.IS",
+      "active": true
+    },
+    {
+      "symbol": "CELHA",
+      "exchange": "BIST",
+      "provider_symbol": "CELHA.IS",
+      "active": true
+    },
+    {
+      "symbol": "HLGYO",
+      "exchange": "BIST",
+      "provider_symbol": "HLGYO.IS",
+      "active": true
+    },
+    {
+      "symbol": "NUHCM",
+      "exchange": "BIST",
+      "provider_symbol": "NUHCM.IS",
+      "active": true
+    },
+    {
+      "symbol": "TSPOR",
+      "exchange": "BIST",
+      "provider_symbol": "TSPOR.IS",
+      "active": true
+    },
+    {
+      "symbol": "CEMAS",
+      "exchange": "BIST",
+      "provider_symbol": "CEMAS.IS",
+      "active": true
+    },
+    {
+      "symbol": "HOROZ",
+      "exchange": "BIST",
+      "provider_symbol": "HOROZ.IS",
+      "active": true
+    },
+    {
+      "symbol": "OBAMS",
+      "exchange": "BIST",
+      "provider_symbol": "OBAMS.IS",
+      "active": true
+    },
+    {
+      "symbol": "TTKOM",
+      "exchange": "BIST",
+      "provider_symbol": "TTKOM.IS",
+      "active": true
+    },
+    {
+      "symbol": "CEMTS",
+      "exchange": "BIST",
+      "provider_symbol": "CEMTS.IS",
+      "active": true
+    },
+    {
+      "symbol": "HRKET",
+      "exchange": "BIST",
+      "provider_symbol": "HRKET.IS",
+      "active": true
+    },
+    {
+      "symbol": "OBASE",
+      "exchange": "BIST",
+      "provider_symbol": "OBASE.IS",
+      "active": true
+    },
+    {
+      "symbol": "TTRAK",
+      "exchange": "BIST",
+      "provider_symbol": "TTRAK.IS",
+      "active": true
+    },
+    {
+      "symbol": "CEMZY",
+      "exchange": "BIST",
+      "provider_symbol": "CEMZY.IS",
+      "active": true
+    },
+    {
+      "symbol": "HTTBT",
+      "exchange": "BIST",
+      "provider_symbol": "HTTBT.IS",
+      "active": true
+    },
+    {
+      "symbol": "ODAS",
+      "exchange": "BIST",
+      "provider_symbol": "ODAS.IS",
+      "active": true
+    },
+    {
+      "symbol": "TUCLK",
+      "exchange": "BIST",
+      "provider_symbol": "TUCLK.IS",
+      "active": true
+    },
+    {
+      "symbol": "CEOEM",
+      "exchange": "BIST",
+      "provider_symbol": "CEOEM.IS",
+      "active": true
+    },
+    {
+      "symbol": "HUBVC",
+      "exchange": "BIST",
+      "provider_symbol": "HUBVC.IS",
+      "active": true
+    },
+    {
+      "symbol": "ODINE",
+      "exchange": "BIST",
+      "provider_symbol": "ODINE.IS",
+      "active": true
+    },
+    {
+      "symbol": "TUKAS",
+      "exchange": "BIST",
+      "provider_symbol": "TUKAS.IS",
+      "active": true
+    },
+    {
+      "symbol": "CGCAM",
+      "exchange": "BIST",
+      "provider_symbol": "CGCAM.IS",
+      "active": true
+    },
+    {
+      "symbol": "HUNER",
+      "exchange": "BIST",
+      "provider_symbol": "HUNER.IS",
+      "active": true
+    },
+    {
+      "symbol": "OFSYM",
+      "exchange": "BIST",
+      "provider_symbol": "OFSYM.IS",
+      "active": true
+    },
+    {
+      "symbol": "TUPRS",
+      "exchange": "BIST",
+      "provider_symbol": "TUPRS.IS",
+      "active": true
+    },
+    {
+      "symbol": "CIMSA",
+      "exchange": "BIST",
+      "provider_symbol": "CIMSA.IS",
+      "active": true
+    },
+    {
+      "symbol": "ICBCT",
+      "exchange": "BIST",
+      "provider_symbol": "ICBCT.IS",
+      "active": true
+    },
+    {
+      "symbol": "ONCSM",
+      "exchange": "BIST",
+      "provider_symbol": "ONCSM.IS",
+      "active": true
+    },
+    {
+      "symbol": "TUREX",
+      "exchange": "BIST",
+      "provider_symbol": "TUREX.IS",
+      "active": true
+    },
+    {
+      "symbol": "CLEBI",
+      "exchange": "BIST",
+      "provider_symbol": "CLEBI.IS",
+      "active": true
+    },
+    {
+      "symbol": "ICUGS",
+      "exchange": "BIST",
+      "provider_symbol": "ICUGS.IS",
+      "active": true
+    },
+    {
+      "symbol": "ONRYT",
+      "exchange": "BIST",
+      "provider_symbol": "ONRYT.IS",
+      "active": true
+    },
+    {
+      "symbol": "TURGG",
+      "exchange": "BIST",
+      "provider_symbol": "TURGG.IS",
+      "active": true
+    },
+    {
+      "symbol": "CMBTN",
+      "exchange": "BIST",
+      "provider_symbol": "CMBTN.IS",
+      "active": true
+    },
+    {
+      "symbol": "IDGYO",
+      "exchange": "BIST",
+      "provider_symbol": "IDGYO.IS",
+      "active": true
+    },
+    {
+      "symbol": "OPK30",
+      "exchange": "BIST",
+      "provider_symbol": "OPK30.IS",
+      "active": true
+    },
+    {
+      "symbol": "TURSG",
+      "exchange": "BIST",
+      "provider_symbol": "TURSG.IS",
+      "active": true
+    },
+    {
+      "symbol": "CMENT",
+      "exchange": "BIST",
+      "provider_symbol": "CMENT.IS",
+      "active": true
+    },
+    {
+      "symbol": "IEYHO",
+      "exchange": "BIST",
+      "provider_symbol": "IEYHO.IS",
+      "active": true
+    },
+    {
+      "symbol": "OPT25",
+      "exchange": "BIST",
+      "provider_symbol": "OPT25.IS",
+      "active": true
+    },
+    {
+      "symbol": "UCAYM",
+      "exchange": "BIST",
+      "provider_symbol": "UCAYM.IS",
+      "active": true
+    },
+    {
+      "symbol": "CONSE",
+      "exchange": "BIST",
+      "provider_symbol": "CONSE.IS",
+      "active": true
+    },
+    {
+      "symbol": "IHAAS",
+      "exchange": "BIST",
+      "provider_symbol": "IHAAS.IS",
+      "active": true
+    },
+    {
+      "symbol": "OPTGY",
+      "exchange": "BIST",
+      "provider_symbol": "OPTGY.IS",
+      "active": true
+    },
+    {
+      "symbol": "UFUK",
+      "exchange": "BIST",
+      "provider_symbol": "UFUK.IS",
+      "active": true
+    },
+    {
+      "symbol": "COSMO",
+      "exchange": "BIST",
+      "provider_symbol": "COSMO.IS",
+      "active": true
+    },
+    {
+      "symbol": "IHEVA",
+      "exchange": "BIST",
+      "provider_symbol": "IHEVA.IS",
+      "active": true
+    },
+    {
+      "symbol": "OPTLR",
+      "exchange": "BIST",
+      "provider_symbol": "OPTLR.IS",
+      "active": true
+    },
+    {
+      "symbol": "ULAS",
+      "exchange": "BIST",
+      "provider_symbol": "ULAS.IS",
+      "active": true
+    },
+    {
+      "symbol": "CRDFA",
+      "exchange": "BIST",
+      "provider_symbol": "CRDFA.IS",
+      "active": true
+    },
+    {
+      "symbol": "IHGZT",
+      "exchange": "BIST",
+      "provider_symbol": "IHGZT.IS",
+      "active": true
+    },
+    {
+      "symbol": "OPX30",
+      "exchange": "BIST",
+      "provider_symbol": "OPX30.IS",
+      "active": true
+    },
+    {
+      "symbol": "ULKER",
+      "exchange": "BIST",
+      "provider_symbol": "ULKER.IS",
+      "active": true
+    },
+    {
+      "symbol": "CRFSA",
+      "exchange": "BIST",
+      "provider_symbol": "CRFSA.IS",
+      "active": true
+    },
+    {
+      "symbol": "IHLAS",
+      "exchange": "BIST",
+      "provider_symbol": "IHLAS.IS",
+      "active": true
+    },
+    {
+      "symbol": "ORCAY",
+      "exchange": "BIST",
+      "provider_symbol": "ORCAY.IS",
+      "active": true
+    },
+    {
+      "symbol": "ULUFA",
+      "exchange": "BIST",
+      "provider_symbol": "ULUFA.IS",
+      "active": true
+    },
+    {
+      "symbol": "CUSAN",
+      "exchange": "BIST",
+      "provider_symbol": "CUSAN.IS",
+      "active": true
+    },
+    {
+      "symbol": "IHYAY",
+      "exchange": "BIST",
+      "provider_symbol": "IHYAY.IS",
+      "active": true
+    },
+    {
+      "symbol": "ORGE",
+      "exchange": "BIST",
+      "provider_symbol": "ORGE.IS",
+      "active": true
+    },
+    {
+      "symbol": "ULUSE",
+      "exchange": "BIST",
+      "provider_symbol": "ULUSE.IS",
+      "active": true
+    },
+    {
+      "symbol": "CVKMD",
+      "exchange": "BIST",
+      "provider_symbol": "CVKMD.IS",
+      "active": true
+    },
+    {
+      "symbol": "INDES",
+      "exchange": "BIST",
+      "provider_symbol": "INDES.IS",
+      "active": true
+    },
+    {
+      "symbol": "ORMA",
+      "exchange": "BIST",
+      "provider_symbol": "ORMA.IS",
+      "active": true
+    },
+    {
+      "symbol": "ULUUN",
+      "exchange": "BIST",
+      "provider_symbol": "ULUUN.IS",
+      "active": true
+    },
+    {
+      "symbol": "CWENE",
+      "exchange": "BIST",
+      "provider_symbol": "CWENE.IS",
+      "active": true
+    },
+    {
+      "symbol": "INFO",
+      "exchange": "BIST",
+      "provider_symbol": "INFO.IS",
+      "active": true
+    },
+    {
+      "symbol": "OSMEN",
+      "exchange": "BIST",
+      "provider_symbol": "OSMEN.IS",
+      "active": true
+    },
+    {
+      "symbol": "UNLU",
+      "exchange": "BIST",
+      "provider_symbol": "UNLU.IS",
+      "active": true
+    },
+    {
+      "symbol": "DAGI",
+      "exchange": "BIST",
+      "provider_symbol": "DAGI.IS",
+      "active": true
+    },
+    {
+      "symbol": "INGRM",
+      "exchange": "BIST",
+      "provider_symbol": "INGRM.IS",
+      "active": true
+    },
+    {
+      "symbol": "OSTIM",
+      "exchange": "BIST",
+      "provider_symbol": "OSTIM.IS",
+      "active": true
+    },
+    {
+      "symbol": "USAK",
+      "exchange": "BIST",
+      "provider_symbol": "USAK.IS",
+      "active": true
+    },
+    {
+      "symbol": "DAPGM",
+      "exchange": "BIST",
+      "provider_symbol": "DAPGM.IS",
+      "active": true
+    },
+    {
+      "symbol": "INTEK",
+      "exchange": "BIST",
+      "provider_symbol": "INTEK.IS",
+      "active": true
+    },
+    {
+      "symbol": "OTKAR",
+      "exchange": "BIST",
+      "provider_symbol": "OTKAR.IS",
+      "active": true
+    },
+    {
+      "symbol": "USDTR",
+      "exchange": "BIST",
+      "provider_symbol": "USDTR.IS",
+      "active": true
+    },
+    {
+      "symbol": "DARDL",
+      "exchange": "BIST",
+      "provider_symbol": "DARDL.IS",
+      "active": true
+    },
+    {
+      "symbol": "INTEM",
+      "exchange": "BIST",
+      "provider_symbol": "INTEM.IS",
+      "active": true
+    },
+    {
+      "symbol": "OTTO",
+      "exchange": "BIST",
+      "provider_symbol": "OTTO.IS",
+      "active": true
+    },
+    {
+      "symbol": "VAKBN",
+      "exchange": "BIST",
+      "provider_symbol": "VAKBN.IS",
+      "active": true
+    },
+    {
+      "symbol": "DCTTR",
+      "exchange": "BIST",
+      "provider_symbol": "DCTTR.IS",
+      "active": true
+    },
+    {
+      "symbol": "INVEO",
+      "exchange": "BIST",
+      "provider_symbol": "INVEO.IS",
+      "active": true
+    },
+    {
+      "symbol": "OYAKC",
+      "exchange": "BIST",
+      "provider_symbol": "OYAKC.IS",
+      "active": true
+    },
+    {
+      "symbol": "VAKFA",
+      "exchange": "BIST",
+      "provider_symbol": "VAKFA.IS",
+      "active": true
+    },
+    {
+      "symbol": "DENGE",
+      "exchange": "BIST",
+      "provider_symbol": "DENGE.IS",
+      "active": true
+    },
+    {
+      "symbol": "INVES",
+      "exchange": "BIST",
+      "provider_symbol": "INVES.IS",
+      "active": true
+    },
+    {
+      "symbol": "OYAYO",
+      "exchange": "BIST",
+      "provider_symbol": "OYAYO.IS",
+      "active": true
+    },
+    {
+      "symbol": "VAKFN",
+      "exchange": "BIST",
+      "provider_symbol": "VAKFN.IS",
+      "active": true
+    },
+    {
+      "symbol": "DERHL",
+      "exchange": "BIST",
+      "provider_symbol": "DERHL.IS",
+      "active": true
+    },
+    {
+      "symbol": "ISBIR",
+      "exchange": "BIST",
+      "provider_symbol": "ISBIR.IS",
+      "active": true
+    },
+    {
+      "symbol": "OYLUM",
+      "exchange": "BIST",
+      "provider_symbol": "OYLUM.IS",
+      "active": true
+    },
+    {
+      "symbol": "VAKKO",
+      "exchange": "BIST",
+      "provider_symbol": "VAKKO.IS",
+      "active": true
+    },
+    {
+      "symbol": "DERIM",
+      "exchange": "BIST",
+      "provider_symbol": "DERIM.IS",
+      "active": true
+    },
+    {
+      "symbol": "ISBTR",
+      "exchange": "BIST",
+      "provider_symbol": "ISBTR.IS",
+      "active": true
+    },
+    {
+      "symbol": "OYYAT",
+      "exchange": "BIST",
+      "provider_symbol": "OYYAT.IS",
+      "active": true
+    },
+    {
+      "symbol": "VANGD",
+      "exchange": "BIST",
+      "provider_symbol": "VANGD.IS",
+      "active": true
+    },
+    {
+      "symbol": "DESA",
+      "exchange": "BIST",
+      "provider_symbol": "DESA.IS",
+      "active": true
+    },
+    {
+      "symbol": "ISCTR",
+      "exchange": "BIST",
+      "provider_symbol": "ISCTR.IS",
+      "active": true
+    },
+    {
+      "symbol": "OZATD",
+      "exchange": "BIST",
+      "provider_symbol": "OZATD.IS",
+      "active": true
+    },
+    {
+      "symbol": "VBTYZ",
+      "exchange": "BIST",
+      "provider_symbol": "VBTYZ.IS",
+      "active": true
+    },
+    {
+      "symbol": "DESPC",
+      "exchange": "BIST",
+      "provider_symbol": "DESPC.IS",
+      "active": true
+    },
+    {
+      "symbol": "ISDMR",
+      "exchange": "BIST",
+      "provider_symbol": "ISDMR.IS",
+      "active": true
+    },
+    {
+      "symbol": "OZGYO",
+      "exchange": "BIST",
+      "provider_symbol": "OZGYO.IS",
+      "active": true
+    },
+    {
+      "symbol": "VERTU",
+      "exchange": "BIST",
+      "provider_symbol": "VERTU.IS",
+      "active": true
+    },
+    {
+      "symbol": "DEVA",
+      "exchange": "BIST",
+      "provider_symbol": "DEVA.IS",
+      "active": true
+    },
+    {
+      "symbol": "ISFIN",
+      "exchange": "BIST",
+      "provider_symbol": "ISFIN.IS",
+      "active": true
+    },
+    {
+      "symbol": "OZKGY",
+      "exchange": "BIST",
+      "provider_symbol": "OZKGY.IS",
+      "active": true
+    },
+    {
+      "symbol": "VERUS",
+      "exchange": "BIST",
+      "provider_symbol": "VERUS.IS",
+      "active": true
+    },
+    {
+      "symbol": "DGATE",
+      "exchange": "BIST",
+      "provider_symbol": "DGATE.IS",
+      "active": true
+    },
+    {
+      "symbol": "ISGLK",
+      "exchange": "BIST",
+      "provider_symbol": "ISGLK.IS",
+      "active": true
+    },
+    {
+      "symbol": "OZRDN",
+      "exchange": "BIST",
+      "provider_symbol": "OZRDN.IS",
+      "active": true
+    },
+    {
+      "symbol": "VESBE",
+      "exchange": "BIST",
+      "provider_symbol": "VESBE.IS",
+      "active": true
+    },
+    {
+      "symbol": "DGGYO",
+      "exchange": "BIST",
+      "provider_symbol": "DGGYO.IS",
+      "active": true
+    },
+    {
+      "symbol": "ISGSY",
+      "exchange": "BIST",
+      "provider_symbol": "ISGSY.IS",
+      "active": true
+    },
+    {
+      "symbol": "OZSUB",
+      "exchange": "BIST",
+      "provider_symbol": "OZSUB.IS",
+      "active": true
+    },
+    {
+      "symbol": "VESTL",
+      "exchange": "BIST",
+      "provider_symbol": "VESTL.IS",
+      "active": true
+    },
+    {
+      "symbol": "DGNMO",
+      "exchange": "BIST",
+      "provider_symbol": "DGNMO.IS",
+      "active": true
+    },
+    {
+      "symbol": "ISGYO",
+      "exchange": "BIST",
+      "provider_symbol": "ISGYO.IS",
+      "active": true
+    },
+    {
+      "symbol": "OZYSR",
+      "exchange": "BIST",
+      "provider_symbol": "OZYSR.IS",
+      "active": true
+    },
+    {
+      "symbol": "VKFYO",
+      "exchange": "BIST",
+      "provider_symbol": "VKFYO.IS",
+      "active": true
+    },
+    {
+      "symbol": "DIRIT",
+      "exchange": "BIST",
+      "provider_symbol": "DIRIT.IS",
+      "active": true
+    },
+    {
+      "symbol": "ISKPL",
+      "exchange": "BIST",
+      "provider_symbol": "ISKPL.IS",
+      "active": true
+    },
+    {
+      "symbol": "PAGYO",
+      "exchange": "BIST",
+      "provider_symbol": "PAGYO.IS",
+      "active": true
+    },
+    {
+      "symbol": "VKGYO",
+      "exchange": "BIST",
+      "provider_symbol": "VKGYO.IS",
+      "active": true
+    },
+    {
+      "symbol": "DITAS",
+      "exchange": "BIST",
+      "provider_symbol": "DITAS.IS",
+      "active": true
+    },
+    {
+      "symbol": "ISMEN",
+      "exchange": "BIST",
+      "provider_symbol": "ISMEN.IS",
+      "active": true
+    },
+    {
+      "symbol": "PAHOL",
+      "exchange": "BIST",
+      "provider_symbol": "PAHOL.IS",
+      "active": true
+    },
+    {
+      "symbol": "VKING",
+      "exchange": "BIST",
+      "provider_symbol": "VKING.IS",
+      "active": true
+    },
+    {
+      "symbol": "DMRGD",
+      "exchange": "BIST",
+      "provider_symbol": "DMRGD.IS",
+      "active": true
+    },
+    {
+      "symbol": "ISVEA",
+      "exchange": "BIST",
+      "provider_symbol": "ISVEA.IS",
+      "active": true
+    },
+    {
+      "symbol": "PAMEL",
+      "exchange": "BIST",
+      "provider_symbol": "PAMEL.IS",
+      "active": true
+    },
+    {
+      "symbol": "VRGYO",
+      "exchange": "BIST",
+      "provider_symbol": "VRGYO.IS",
+      "active": true
+    },
+    {
+      "symbol": "DMSAS",
+      "exchange": "BIST",
+      "provider_symbol": "DMSAS.IS",
+      "active": true
+    },
+    {
+      "symbol": "ISYAT",
+      "exchange": "BIST",
+      "provider_symbol": "ISYAT.IS",
+      "active": true
+    },
+    {
+      "symbol": "PAPIL",
+      "exchange": "BIST",
+      "provider_symbol": "PAPIL.IS",
+      "active": true
+    },
+    {
+      "symbol": "VSNMD",
+      "exchange": "BIST",
+      "provider_symbol": "VSNMD.IS",
+      "active": true
+    },
+    {
+      "symbol": "DNISI",
+      "exchange": "BIST",
+      "provider_symbol": "DNISI.IS",
+      "active": true
+    },
+    {
+      "symbol": "IZENR",
+      "exchange": "BIST",
+      "provider_symbol": "IZENR.IS",
+      "active": true
+    },
+    {
+      "symbol": "PARSN",
+      "exchange": "BIST",
+      "provider_symbol": "PARSN.IS",
+      "active": true
+    },
+    {
+      "symbol": "YAPRK",
+      "exchange": "BIST",
+      "provider_symbol": "YAPRK.IS",
+      "active": true
+    },
+    {
+      "symbol": "DOAS",
+      "exchange": "BIST",
+      "provider_symbol": "DOAS.IS",
+      "active": true
+    },
+    {
+      "symbol": "IZFAS",
+      "exchange": "BIST",
+      "provider_symbol": "IZFAS.IS",
+      "active": true
+    },
+    {
+      "symbol": "PASEU",
+      "exchange": "BIST",
+      "provider_symbol": "PASEU.IS",
+      "active": true
+    },
+    {
+      "symbol": "YATAS",
+      "exchange": "BIST",
+      "provider_symbol": "YATAS.IS",
+      "active": true
+    },
+    {
+      "symbol": "DOCO",
+      "exchange": "BIST",
+      "provider_symbol": "DOCO.IS",
+      "active": true
+    },
+    {
+      "symbol": "IZINV",
+      "exchange": "BIST",
+      "provider_symbol": "IZINV.IS",
+      "active": true
+    },
+    {
+      "symbol": "PATEK",
+      "exchange": "BIST",
+      "provider_symbol": "PATEK.IS",
+      "active": true
+    },
+    {
+      "symbol": "YAYLA",
+      "exchange": "BIST",
+      "provider_symbol": "YAYLA.IS",
+      "active": true
+    },
+    {
+      "symbol": "DOFER",
+      "exchange": "BIST",
+      "provider_symbol": "DOFER.IS",
+      "active": true
+    },
+    {
+      "symbol": "KAPLM",
+      "exchange": "BIST",
+      "provider_symbol": "KAPLM.IS",
+      "active": true
+    },
+    {
+      "symbol": "PCILT",
+      "exchange": "BIST",
+      "provider_symbol": "PCILT.IS",
+      "active": true
+    },
+    {
+      "symbol": "YBTAS",
+      "exchange": "BIST",
+      "provider_symbol": "YBTAS.IS",
+      "active": true
+    },
+    {
+      "symbol": "DOFRB",
+      "exchange": "BIST",
+      "provider_symbol": "DOFRB.IS",
+      "active": true
+    },
+    {
+      "symbol": "KAREL",
+      "exchange": "BIST",
+      "provider_symbol": "KAREL.IS",
+      "active": true
+    },
+    {
+      "symbol": "PEKGY",
+      "exchange": "BIST",
+      "provider_symbol": "PEKGY.IS",
+      "active": true
+    },
+    {
+      "symbol": "YEOTK",
+      "exchange": "BIST",
+      "provider_symbol": "YEOTK.IS",
+      "active": true
+    },
+    {
+      "symbol": "DOGUB",
+      "exchange": "BIST",
+      "provider_symbol": "DOGUB.IS",
+      "active": true
+    },
+    {
+      "symbol": "KARSN",
+      "exchange": "BIST",
+      "provider_symbol": "KARSN.IS",
+      "active": true
+    },
+    {
+      "symbol": "PENGD",
+      "exchange": "BIST",
+      "provider_symbol": "PENGD.IS",
+      "active": true
+    },
+    {
+      "symbol": "YESIL",
+      "exchange": "BIST",
+      "provider_symbol": "YESIL.IS",
+      "active": true
+    },
+    {
+      "symbol": "DOHOL",
+      "exchange": "BIST",
+      "provider_symbol": "DOHOL.IS",
+      "active": true
+    },
+    {
+      "symbol": "KARTN",
+      "exchange": "BIST",
+      "provider_symbol": "KARTN.IS",
+      "active": true
+    },
+    {
+      "symbol": "PENTA",
+      "exchange": "BIST",
+      "provider_symbol": "PENTA.IS",
+      "active": true
+    },
+    {
+      "symbol": "YGGYO",
+      "exchange": "BIST",
+      "provider_symbol": "YGGYO.IS",
+      "active": true
+    },
+    {
+      "symbol": "DOKTA",
+      "exchange": "BIST",
+      "provider_symbol": "DOKTA.IS",
+      "active": true
+    },
+    {
+      "symbol": "KATMR",
+      "exchange": "BIST",
+      "provider_symbol": "KATMR.IS",
+      "active": true
+    },
+    {
+      "symbol": "PETKM",
+      "exchange": "BIST",
+      "provider_symbol": "PETKM.IS",
+      "active": true
+    },
+    {
+      "symbol": "YIGIT",
+      "exchange": "BIST",
+      "provider_symbol": "YIGIT.IS",
+      "active": true
+    },
+    {
+      "symbol": "DSTKF",
+      "exchange": "BIST",
+      "provider_symbol": "DSTKF.IS",
+      "active": true
+    },
+    {
+      "symbol": "KAYSE",
+      "exchange": "BIST",
+      "provider_symbol": "KAYSE.IS",
+      "active": true
+    },
+    {
+      "symbol": "PETUN",
+      "exchange": "BIST",
+      "provider_symbol": "PETUN.IS",
+      "active": true
+    },
+    {
+      "symbol": "YKBNK",
+      "exchange": "BIST",
+      "provider_symbol": "YKBNK.IS",
+      "active": true
+    },
+    {
+      "symbol": "DUNYH",
+      "exchange": "BIST",
+      "provider_symbol": "DUNYH.IS",
+      "active": true
+    },
+    {
+      "symbol": "KBORU",
+      "exchange": "BIST",
+      "provider_symbol": "KBORU.IS",
+      "active": true
+    },
+    {
+      "symbol": "PGSUS",
+      "exchange": "BIST",
+      "provider_symbol": "PGSUS.IS",
+      "active": true
+    },
+    {
+      "symbol": "YKSLN",
+      "exchange": "BIST",
+      "provider_symbol": "YKSLN.IS",
+      "active": true
+    },
+    {
+      "symbol": "DURDO",
+      "exchange": "BIST",
+      "provider_symbol": "DURDO.IS",
+      "active": true
+    },
+    {
+      "symbol": "KCAER",
+      "exchange": "BIST",
+      "provider_symbol": "KCAER.IS",
+      "active": true
+    },
+    {
+      "symbol": "PINSU",
+      "exchange": "BIST",
+      "provider_symbol": "PINSU.IS",
+      "active": true
+    },
+    {
+      "symbol": "YONGA",
+      "exchange": "BIST",
+      "provider_symbol": "YONGA.IS",
+      "active": true
+    },
+    {
+      "symbol": "DURKN",
+      "exchange": "BIST",
+      "provider_symbol": "DURKN.IS",
+      "active": true
+    },
+    {
+      "symbol": "KCHOL",
+      "exchange": "BIST",
+      "provider_symbol": "KCHOL.IS",
+      "active": true
+    },
+    {
+      "symbol": "PKART",
+      "exchange": "BIST",
+      "provider_symbol": "PKART.IS",
+      "active": true
+    },
+    {
+      "symbol": "YUNSA",
+      "exchange": "BIST",
+      "provider_symbol": "YUNSA.IS",
+      "active": true
+    },
+    {
+      "symbol": "DYOBY",
+      "exchange": "BIST",
+      "provider_symbol": "DYOBY.IS",
+      "active": true
+    },
+    {
+      "symbol": "KENT",
+      "exchange": "BIST",
+      "provider_symbol": "KENT.IS",
+      "active": true
+    },
+    {
+      "symbol": "PKENT",
+      "exchange": "BIST",
+      "provider_symbol": "PKENT.IS",
+      "active": true
+    },
+    {
+      "symbol": "YYAPI",
+      "exchange": "BIST",
+      "provider_symbol": "YYAPI.IS",
+      "active": true
+    },
+    {
+      "symbol": "DZGYO",
+      "exchange": "BIST",
+      "provider_symbol": "DZGYO.IS",
+      "active": true
+    },
+    {
+      "symbol": "KERVN",
+      "exchange": "BIST",
+      "provider_symbol": "KERVN.IS",
+      "active": true
+    },
+    {
+      "symbol": "PLTUR",
+      "exchange": "BIST",
+      "provider_symbol": "PLTUR.IS",
+      "active": true
+    },
+    {
+      "symbol": "YYLGD",
+      "exchange": "BIST",
+      "provider_symbol": "YYLGD.IS",
+      "active": true
+    },
+    {
+      "symbol": "EBEBK",
+      "exchange": "BIST",
+      "provider_symbol": "EBEBK.IS",
+      "active": true
+    },
+    {
+      "symbol": "KFEIN",
+      "exchange": "BIST",
+      "provider_symbol": "KFEIN.IS",
+      "active": true
+    },
+    {
+      "symbol": "PNLSN",
+      "exchange": "BIST",
+      "provider_symbol": "PNLSN.IS",
+      "active": true
+    },
+    {
+      "symbol": "Z30EA",
+      "exchange": "BIST",
+      "provider_symbol": "Z30EA.IS",
+      "active": true
+    },
+    {
+      "symbol": "ECILC",
+      "exchange": "BIST",
+      "provider_symbol": "ECILC.IS",
+      "active": true
+    },
+    {
+      "symbol": "KGYO",
+      "exchange": "BIST",
+      "provider_symbol": "KGYO.IS",
+      "active": true
+    },
+    {
+      "symbol": "PNSUT",
+      "exchange": "BIST",
+      "provider_symbol": "PNSUT.IS",
+      "active": true
+    },
+    {
+      "symbol": "Z30KE",
+      "exchange": "BIST",
+      "provider_symbol": "Z30KE.IS",
+      "active": true
+    },
+    {
+      "symbol": "ECZYT",
+      "exchange": "BIST",
+      "provider_symbol": "ECZYT.IS",
+      "active": true
+    },
+    {
+      "symbol": "KIMMR",
+      "exchange": "BIST",
+      "provider_symbol": "KIMMR.IS",
+      "active": true
+    },
+    {
+      "symbol": "POLHO",
+      "exchange": "BIST",
+      "provider_symbol": "POLHO.IS",
+      "active": true
+    },
+    {
+      "symbol": "Z30KP",
+      "exchange": "BIST",
+      "provider_symbol": "Z30KP.IS",
+      "active": true
+    },
+    {
+      "symbol": "EDATA",
+      "exchange": "BIST",
+      "provider_symbol": "EDATA.IS",
+      "active": true
+    },
+    {
+      "symbol": "KLGYO",
+      "exchange": "BIST",
+      "provider_symbol": "KLGYO.IS",
+      "active": true
+    },
+    {
+      "symbol": "POLTK",
+      "exchange": "BIST",
+      "provider_symbol": "POLTK.IS",
+      "active": true
+    },
+    {
+      "symbol": "ZEDUR",
+      "exchange": "BIST",
+      "provider_symbol": "ZEDUR.IS",
+      "active": true
+    },
+    {
+      "symbol": "EDIP",
+      "exchange": "BIST",
+      "provider_symbol": "EDIP.IS",
+      "active": true
+    },
+    {
+      "symbol": "KLKIM",
+      "exchange": "BIST",
+      "provider_symbol": "KLKIM.IS",
+      "active": true
+    },
+    {
+      "symbol": "PRDGS",
+      "exchange": "BIST",
+      "provider_symbol": "PRDGS.IS",
+      "active": true
+    },
+    {
+      "symbol": "ZELOT",
+      "exchange": "BIST",
+      "provider_symbol": "ZELOT.IS",
+      "active": true
+    },
+    {
+      "symbol": "EFOR",
+      "exchange": "BIST",
+      "provider_symbol": "EFOR.IS",
+      "active": true
+    },
+    {
+      "symbol": "KLMSN",
+      "exchange": "BIST",
+      "provider_symbol": "KLMSN.IS",
+      "active": true
+    },
+    {
+      "symbol": "PRKAB",
+      "exchange": "BIST",
+      "provider_symbol": "PRKAB.IS",
+      "active": true
+    },
+    {
+      "symbol": "ZERGY",
+      "exchange": "BIST",
+      "provider_symbol": "ZERGY.IS",
+      "active": true
+    },
+    {
+      "symbol": "EGEEN",
+      "exchange": "BIST",
+      "provider_symbol": "EGEEN.IS",
+      "active": true
+    },
+    {
+      "symbol": "KLNMA",
+      "exchange": "BIST",
+      "provider_symbol": "KLNMA.IS",
+      "active": true
+    },
+    {
+      "symbol": "PRKME",
+      "exchange": "BIST",
+      "provider_symbol": "PRKME.IS",
+      "active": true
+    },
+    {
+      "symbol": "ZGOLD",
+      "exchange": "BIST",
+      "provider_symbol": "ZGOLD.IS",
+      "active": true
+    },
+    {
+      "symbol": "EGEGY",
+      "exchange": "BIST",
+      "provider_symbol": "EGEGY.IS",
+      "active": true
+    },
+    {
+      "symbol": "KLRHO",
+      "exchange": "BIST",
+      "provider_symbol": "KLRHO.IS",
+      "active": true
+    },
+    {
+      "symbol": "PRZMA",
+      "exchange": "BIST",
+      "provider_symbol": "PRZMA.IS",
+      "active": true
+    },
+    {
+      "symbol": "ZGYO",
+      "exchange": "BIST",
+      "provider_symbol": "ZGYO.IS",
+      "active": true
+    },
+    {
+      "symbol": "EGEPO",
+      "exchange": "BIST",
+      "provider_symbol": "EGEPO.IS",
+      "active": true
+    },
+    {
+      "symbol": "KLSER",
+      "exchange": "BIST",
+      "provider_symbol": "KLSER.IS",
+      "active": true
+    },
+    {
+      "symbol": "PSDTC",
+      "exchange": "BIST",
+      "provider_symbol": "PSDTC.IS",
+      "active": true
+    },
+    {
+      "symbol": "ZOREN",
+      "exchange": "BIST",
+      "provider_symbol": "ZOREN.IS",
+      "active": true
+    },
+    {
+      "symbol": "EGGUB",
+      "exchange": "BIST",
+      "provider_symbol": "EGGUB.IS",
+      "active": true
+    },
+    {
+      "symbol": "KLSYN",
+      "exchange": "BIST",
+      "provider_symbol": "KLSYN.IS",
+      "active": true
+    },
+    {
+      "symbol": "PSGYO",
+      "exchange": "BIST",
+      "provider_symbol": "PSGYO.IS",
+      "active": true
+    },
+    {
+      "symbol": "ZPBDL",
+      "exchange": "BIST",
+      "provider_symbol": "ZPBDL.IS",
+      "active": true
+    },
+    {
+      "symbol": "EGPRO",
+      "exchange": "BIST",
+      "provider_symbol": "EGPRO.IS",
+      "active": true
+    },
+    {
+      "symbol": "KLYPV",
+      "exchange": "BIST",
+      "provider_symbol": "KLYPV.IS",
+      "active": true
+    },
+    {
+      "symbol": "RALYH",
+      "exchange": "BIST",
+      "provider_symbol": "RALYH.IS",
+      "active": true
+    },
+    {
+      "symbol": "ZPLIB",
+      "exchange": "BIST",
+      "provider_symbol": "ZPLIB.IS",
+      "active": true
+    },
+    {
+      "symbol": "EGSER",
+      "exchange": "BIST",
+      "provider_symbol": "EGSER.IS",
+      "active": true
+    },
+    {
+      "symbol": "KMPUR",
+      "exchange": "BIST",
+      "provider_symbol": "KMPUR.IS",
+      "active": true
+    },
+    {
+      "symbol": "RAYSG",
+      "exchange": "BIST",
+      "provider_symbol": "RAYSG.IS",
+      "active": true
+    },
+    {
+      "symbol": "ZPT10",
+      "exchange": "BIST",
+      "provider_symbol": "ZPT10.IS",
+      "active": true
+    },
+    {
+      "symbol": "EKDMR",
+      "exchange": "BIST",
+      "provider_symbol": "EKDMR.IS",
+      "active": true
+    },
+    {
+      "symbol": "KNFRT",
+      "exchange": "BIST",
+      "provider_symbol": "KNFRT.IS",
+      "active": true
+    },
+    {
+      "symbol": "REEDR",
+      "exchange": "BIST",
+      "provider_symbol": "REEDR.IS",
+      "active": true
+    },
+    {
+      "symbol": "ZPX30",
+      "exchange": "BIST",
+      "provider_symbol": "ZPX30.IS",
+      "active": true
+    },
+    {
+      "symbol": "EKGYO",
+      "exchange": "BIST",
+      "provider_symbol": "EKGYO.IS",
+      "active": true
+    },
+    {
+      "symbol": "KOCMT",
+      "exchange": "BIST",
+      "provider_symbol": "KOCMT.IS",
+      "active": true
+    },
+    {
+      "symbol": "RGYAS",
+      "exchange": "BIST",
+      "provider_symbol": "RGYAS.IS",
+      "active": true
+    },
+    {
+      "symbol": "ZRE20",
+      "exchange": "BIST",
+      "provider_symbol": "ZRE20.IS",
+      "active": true
+    },
+    {
+      "symbol": "EKIM",
+      "exchange": "BIST",
+      "provider_symbol": "EKIM.IS",
+      "active": true
+    },
+    {
+      "symbol": "KONKA",
+      "exchange": "BIST",
+      "provider_symbol": "KONKA.IS",
+      "active": true
+    },
+    {
+      "symbol": "RNPOL",
+      "exchange": "BIST",
+      "provider_symbol": "RNPOL.IS",
+      "active": true
+    },
+    {
+      "symbol": "ZRGYO",
+      "exchange": "BIST",
+      "provider_symbol": "ZRGYO.IS",
+      "active": true
+    },
+    {
+      "symbol": "EKIZ",
+      "exchange": "BIST",
+      "provider_symbol": "EKIZ.IS",
+      "active": true
+    },
+    {
+      "symbol": "KONTR",
+      "exchange": "BIST",
+      "provider_symbol": "KONTR.IS",
+      "active": true
+    },
+    {
+      "symbol": "RODRG",
+      "exchange": "BIST",
+      "provider_symbol": "RODRG.IS",
+      "active": true
+    },
+    {
+      "symbol": "ZSR25",
+      "exchange": "BIST",
+      "provider_symbol": "ZSR25.IS",
+      "active": true
+    },
+    {
+      "symbol": "EKOS",
+      "exchange": "BIST",
+      "provider_symbol": "EKOS.IS",
+      "active": true
+    },
+    {
+      "symbol": "KONYA",
+      "exchange": "BIST",
+      "provider_symbol": "KONYA.IS",
+      "active": true
+    },
+    {
+      "symbol": "RTALB",
+      "exchange": "BIST",
+      "provider_symbol": "RTALB.IS",
+      "active": true
+    },
+    {
+      "symbol": "ZTLRF",
+      "exchange": "BIST",
+      "provider_symbol": "ZTLRF.IS",
+      "active": true
+    },
+    {
+      "symbol": "EKSUN",
+      "exchange": "BIST",
+      "provider_symbol": "EKSUN.IS",
+      "active": true
+    },
+    {
+      "symbol": "KOPOL",
+      "exchange": "BIST",
+      "provider_symbol": "KOPOL.IS",
+      "active": true
+    },
+    {
+      "symbol": "RUBNS",
+      "exchange": "BIST",
+      "provider_symbol": "RUBNS.IS",
+      "active": true
+    },
+    {
+      "symbol": "ZTLRK",
+      "exchange": "BIST",
+      "provider_symbol": "ZTLRK.IS",
+      "active": true
+    },
+    {
+      "symbol": "ELITE",
+      "exchange": "BIST",
+      "provider_symbol": "ELITE.IS",
+      "active": true
+    },
+    {
+      "symbol": "KORDS",
+      "exchange": "BIST",
+      "provider_symbol": "KORDS.IS",
+      "active": true
+    },
+    {
+      "symbol": "RUZYE",
+      "exchange": "BIST",
+      "provider_symbol": "RUZYE.IS",
+      "active": true
+    },
+    {
+      "symbol": "ZTM25",
+      "exchange": "BIST",
+      "provider_symbol": "ZTM25.IS",
+      "active": true
+    },
+    {
+      "symbol": "EMKEL",
+      "exchange": "BIST",
+      "provider_symbol": "EMKEL.IS",
+      "active": true
+    },
+    {
+      "symbol": "KOTON",
+      "exchange": "BIST",
+      "provider_symbol": "KOTON.IS",
+      "active": true
+    },
+    {
+      "symbol": "RYGYO",
+      "exchange": "BIST",
+      "provider_symbol": "RYGYO.IS",
+      "active": true
+    }
+  ]
+}
