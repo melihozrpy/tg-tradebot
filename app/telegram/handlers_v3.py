@@ -3032,6 +3032,14 @@ async def cmd_komutlar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     if await _reject_unauthorized(update):
         return
     await update.message.reply_text(
+        "🤖 AI HİSSE ASİSTANI\n"
+        "━━━━━━━━━━━━━━━━━━\n"
+        "/ai_analiz THYAO — teknik + temel + haber + risk raporu\n"
+        "THYAO yaz — aynı AI analizini hızlıca başlatır\n"
+        "Grafik fotoğrafı gönder — görseli okuyup koşullu senaryolar üretir\n"
+        "İpucu: Fotoğraf açıklamasına hisse, süre ve risk toleransını yaz."
+    )
+    await update.message.reply_text(
         "🏔️📚 MONTANA MELİH BOT • KOMUT REHBERİ\n"
         "━━━━━━━━━━━━━━━━━━\n\n"
         "📊 ANALİZ\n"

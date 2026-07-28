@@ -75,6 +75,9 @@ def build_telegram_application() -> Application:
     application.add_handler(CommandHandler("haber_detay", handlers_v3.cmd_haber_detay))
     application.add_handler(CommandHandler("haber_radari", handlers_v3.cmd_haber_radari))
     application.add_handler(CommandHandler("ai_aciklama", handlers_v3.cmd_ai_aciklama))
+    from app.telegram.stock_ai_handlers import cmd_ai_analiz
+    application.add_handler(CommandHandler("ai_analiz", cmd_ai_analiz))
+    application.add_handler(CommandHandler("hisse_ai", cmd_ai_analiz))
     application.add_handler(CommandHandler("sirket", handlers_v3.cmd_sirket))
     application.add_handler(CommandHandler("kap", handlers_v3.cmd_kap))
     application.add_handler(CommandHandler("skor_detay", handlers_v3.cmd_skor_detay))
@@ -122,6 +125,8 @@ def build_telegram_application() -> Application:
     from app.telegram.alarm_handlers import register_alarm_handlers
 
     register_alarm_handlers(application)
+    from app.telegram.stock_ai_handlers import register_stock_ai_handlers
+    register_stock_ai_handlers(application)
     # Geriye uyumlu, yeni handler setiyle cakismayan eski kisayollar.
     application.add_handler(CommandHandler("alarm_test", handlers_v3.cmd_alarm_test))
     application.add_handler(CommandHandler("alarm_ac", handlers_v3.cmd_alarm_ac))

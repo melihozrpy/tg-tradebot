@@ -288,6 +288,8 @@ def format_help_message() -> str:
 /haber_detay SEMBOL - Kural tabanli haber etkisi detayi
 /haber_radari - Izleme listende onemli haberi olan semboller
 /ai_aciklama SEMBOL - Groq (opsiyonel) ile sade Turkce analiz aciklamasi
+/ai_analiz SEMBOL - OpenRouter ile kapsamli teknik/temel/haber/risk raporu
+Grafik fotografi gonder - OpenRouter ile gorselden kosullu hisse analizi
 /sinyaller - Son sinyal gecmisi
 /aktif_sinyaller - Acik/takip edilen sinyaller
 /performans - Sinyal performans ozeti

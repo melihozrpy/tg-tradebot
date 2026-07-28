@@ -256,6 +256,10 @@ async def handle_alarm_photo(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if await _reject_unauthorized(update): return
     if context.user_data.get("alarm_flow") != "photo": return
     if not update.message.photo: return
+    # Ayni Telegram fotografi daha sonra genel AI grafik handler'i tarafindan
+    # ikinci kez islenmesin. Alarm akisi tamamlaninca alarm_flow temizlense bile
+    # message_id tabanli bu tek-kullanimlik bayrak group=2 handler'ini durdurur.
+    context.user_data["skip_stock_ai_photo_message_id"] = update.message.message_id
     settings = get_settings()
     try:
         file = await update.message.photo[-1].get_file()

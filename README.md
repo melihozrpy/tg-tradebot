@@ -76,6 +76,16 @@ motoru (`/kirilsanaryo SEMBOL`).
 Her ikisi de (ve tüm önceki aşamalar) deterministik Python koduyla
 hesaplanır; Groq/LLM fiyat, stop, hedef veya AL/SAT/TUT kararı üretmez.
 
+**OpenRouter AI hisse asistanı (opsiyonel):** `/ai_analiz THYAO`, yalnız
+`THYAO` yazılması veya Telegram'a grafik fotoğrafı gönderilmesiyle kapsamlı
+teknik/temel/haber/risk raporu üretir. Onaylı sistem promptu
+`app/prompts/hisse_analysis_system_prompt.txt` içinde sürümlenir. Botun
+sağlayabildiği teknik veriler, temel veriler, KAP kayıtları ve haber URL/tarihleri
+modele doğrulanmış JSON bağlamı olarak verilir; erişilemeyen kaynaklar varmış
+gibi gösterilmez. Fotoğraf alarm kurulum akışındayken aynı görsel AI'a ikinci
+kez gönderilmez. OpenRouter kapalı, anahtar geçersiz veya ücretsiz kota doluysa
+bot çalışmayı sürdürür ve kural tabanlı komutlar etkilenmez.
+
 ---
 
 ## V3'te Yeni Olanlar

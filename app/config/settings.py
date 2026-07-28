@@ -96,6 +96,20 @@ class Settings(BaseSettings):
     groq_max_retries: int = Field(default=2)
     groq_daily_request_limit: int = Field(default=50)
 
+    # ---- OpenRouter: kapsamli metin + grafik gorseli analiz asistani ----
+    # Fiyat, indikatör ve finansal kalemler LLM tarafinda hesaplanmaz. Botun
+    # doğruladigi bağlam modele verilir; eksik alanlar açıkça "veri yok" kalır.
+    openrouter_enabled: bool = Field(default=False)
+    openrouter_api_key: str = Field(default="")
+    openrouter_base_url: str = Field(default="https://openrouter.ai/api/v1")
+    openrouter_model: str = Field(default="nvidia/nemotron-3-ultra-550b-a55b:free")
+    openrouter_vision_model: str = Field(default="openrouter/free")
+    openrouter_timeout_seconds: int = Field(default=90, ge=5, le=180)
+    openrouter_max_tokens: int = Field(default=3000, ge=256, le=16000)
+    openrouter_max_retries: int = Field(default=2, ge=0, le=5)
+    openrouter_daily_request_limit: int = Field(default=50, ge=1, le=1000)
+    openrouter_max_image_bytes: int = Field(default=10_485_760, ge=1024, le=20_971_520)
+
     # ---- V3.2 (Asama 4): GDELT haber radari ----
     gdelt_enabled: bool = Field(default=True)
     gdelt_timeout_seconds: int = Field(default=20)
