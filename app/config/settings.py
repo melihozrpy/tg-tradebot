@@ -136,7 +136,7 @@ class Settings(BaseSettings):
     chart_dpi: int = Field(default=120)
     chart_width: float = Field(default=13.0)
     chart_height: float = Field(default=11.0)
-    chart_theme: str = Field(default="light")  # light | dark
+    chart_theme: str = Field(default="dark")  # light | dark; Telegram için canlı koyu tema varsayılan
     chart_cache_ttl_minutes: int = Field(default=30)
     chart_cache_dir: str = Field(default="./data/cache/charts")
 

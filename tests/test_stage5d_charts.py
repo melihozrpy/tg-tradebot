@@ -50,7 +50,7 @@ def test_real_candles_have_body_wick_and_compact_trading_axis(mock_provider):
         plt.close(fig)
 
 
-def test_professional_chart_has_indicators_zones_plan_and_four_panels(
+def test_professional_chart_has_vivid_indicators_zones_and_no_volume_panel(
     mock_provider, monkeypatch, tmp_path
 ):
     _isolated_chart_cache(monkeypatch, tmp_path)
@@ -69,15 +69,17 @@ def test_professional_chart_has_indicators_zones_plan_and_four_panels(
     fig = chart_service.plt.gcf()
     try:
         assert os.path.exists(path)
-        assert len(fig.axes) == 4
-        price, volume, rsi_axis, macd_axis = fig.axes
+        assert len(fig.axes) == 1
+        price = fig.axes[0]
         price_labels = {line.get_label() for line in price.lines}
         assert {"EMA20", "EMA50", "EMA100", "EMA200", "Bollinger", "VWAP"} <= price_labels
-        assert len(price.patches) >= len(df)  # mum gövdeleri + fiyat zoneları
-        assert len(volume.patches) >= len(df)
-        assert rsi_axis.get_ylabel() == "RSI"
-        assert macd_axis.get_ylabel() == "MACD"
-        assert "MONTANA MELİH HİSSE BOT" in price.get_title(loc="left")
+        assert len(price.patches) >= 120  # son 120 mum + fiyat zoneları
+        assert all(axis.get_ylabel() != "Hacim" for axis in fig.axes)
+        figure_text = " ".join(text.get_text() for text in fig.texts)
+        assert "THYAO" in figure_text
+        assert "DETAYLI" in figure_text
+        assert "TEKNİK CHECKLIST" in figure_text
+        assert "MONTANA MELİH" in figure_text
     finally:
         delete_chart_file(path)
         real_close(fig)
@@ -115,7 +117,7 @@ def test_chart_cache_hit_and_data_change_invalidation(mock_provider, monkeypatch
         delete_chart_file(third)
 
 
-def test_intraday_chart_has_true_candles_volume_rsi_and_optional_context(
+def test_intraday_chart_has_vivid_candles_and_optional_context_without_volume(
     mock_provider, monkeypatch, tmp_path
 ):
     _isolated_chart_cache(monkeypatch, tmp_path)
@@ -134,12 +136,14 @@ def test_intraday_chart_has_true_candles_volume_rsi_and_optional_context(
     fig = chart_service.plt.gcf()
     try:
         assert os.path.exists(path)
-        assert len(fig.axes) == 3
-        price, volume, rsi_axis = fig.axes
-        assert len(price.patches) >= len(df)
+        assert len(fig.axes) == 1
+        price = fig.axes[0]
+        assert len(price.patches) >= 140  # okunabilirlik için son 140 bar
         assert {"VWAP", "EMA20", "EMA50"} <= {line.get_label() for line in price.lines}
-        assert len(volume.patches) >= len(df)
-        assert rsi_axis.get_ylabel() == "RSI"
+        assert all(axis.get_ylabel() != "Hacim" for axis in fig.axes)
+        figure_text = " ".join(text.get_text() for text in fig.texts)
+        assert "GÜN İÇİ" in figure_text
+        assert "GÜN İÇİ CHECKLIST" in figure_text
     finally:
         delete_chart_file(path)
         real_close(fig)

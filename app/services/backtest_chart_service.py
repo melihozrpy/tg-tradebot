@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 
 from app.backtest.engine_v5g import BacktestResultV5G
+from app.services.vivid_chart_style import VIVID, add_score_bar, add_watermark, style_axes
 
 
 def _temporary_chart_path(label: str) -> Path:
@@ -22,6 +23,13 @@ def _temporary_chart_path(label: str) -> Path:
     return Path(handle.name)
 
 
+def _style_backtest_figure(fig, axes) -> None:
+    fig.patch.set_facecolor(VIVID.background)
+    for axis in axes:
+        style_axes(axis)
+    add_watermark(fig)
+
+
 def generate_equity_chart(result: BacktestResultV5G) -> Path:
     path = _temporary_chart_path("equity")
     timestamps = pd.to_datetime([item.timestamp for item in result.equity_points])
@@ -30,29 +38,36 @@ def generate_equity_chart(result: BacktestResultV5G) -> Path:
     running_max = np.maximum.accumulate(equity) if len(equity) else np.array([])
     drawdown = (equity / running_max - 1.0) * 100.0 if len(equity) else np.array([])
 
-    fig, (ax, dd_ax) = plt.subplots(2, 1, figsize=(11, 7), sharex=True, gridspec_kw={"height_ratios": [3, 1]})
-    ax.plot(timestamps, equity, label="Strateji sermayesi", color="#1769aa", linewidth=1.8)
+    fig, (ax, dd_ax) = plt.subplots(
+        2, 1, figsize=(14, 8), sharex=True,
+        gridspec_kw={"height_ratios": [3, 1]}, facecolor=VIVID.background,
+    )
+    _style_backtest_figure(fig, (ax, dd_ax))
+    ax.plot(timestamps, equity, label="Strateji sermayesi", color=VIVID.bull, linewidth=2.1)
+    if len(equity):
+        ax.fill_between(timestamps, equity, float(np.nanmin(equity)), color=VIVID.bull, alpha=.08)
     if benchmark and any(value is not None for value in benchmark):
         values = [np.nan if value is None else value for value in benchmark]
-        ax.plot(timestamps, values, label="XU100 benchmark", color="#777777", linewidth=1.2)
+        ax.plot(timestamps, values, label="XU100 benchmark", color=VIVID.muted, linewidth=1.25)
     timestamp_index = pd.Index(timestamps)
     for trade in result.trades:
         if trade.entry_time is not None and len(timestamp_index):
             index = int(np.argmin(np.abs(timestamp_index - pd.Timestamp(trade.entry_time))))
-            ax.scatter(timestamps[index], equity[index], marker="^", color="#16833b", s=28, zorder=5)
+            ax.scatter(timestamps[index], equity[index], marker="^", color=VIVID.bull, s=32, zorder=5)
         if trade.exit_time is not None and len(timestamp_index):
             index = int(np.argmin(np.abs(timestamp_index - pd.Timestamp(trade.exit_time))))
-            ax.scatter(timestamps[index], equity[index], marker="v", color="#b3261e", s=28, zorder=5)
-    ax.set_title(f"{result.symbol} - Equity ve XU100")
+            ax.scatter(timestamps[index], equity[index], marker="v", color=VIVID.bear, s=32, zorder=5)
+    ax.set_title(f"MONTANA MELİH  •  {result.symbol}  •  EQUITY VE XU100", loc="left", fontsize=16, fontweight="bold")
     ax.set_ylabel("Sermaye (TRY)")
-    ax.grid(alpha=0.2)
-    ax.legend(loc="best")
-    dd_ax.fill_between(timestamps, drawdown, 0, where=drawdown < 0, color="#d1495b", alpha=0.35)
-    dd_ax.plot(timestamps, drawdown, color="#b3261e", linewidth=1)
+    ax.legend(loc="best", facecolor=VIVID.panel_alt, edgecolor=VIVID.grid, labelcolor=VIVID.text)
+    dd_ax.fill_between(timestamps, drawdown, 0, where=drawdown < 0, color=VIVID.bear, alpha=0.35)
+    dd_ax.plot(timestamps, drawdown, color=VIVID.bear, linewidth=1)
     dd_ax.set_ylabel("DD %")
-    dd_ax.grid(alpha=0.2)
-    fig.tight_layout()
-    fig.savefig(path, dpi=130, bbox_inches="tight")
+    if len(equity) and equity[0]:
+        return_score = max(0, min(100, 50 + (equity[-1] / equity[0] - 1) * 100))
+        add_score_bar(fig, return_score, label="BACKTEST GÜVENİ")
+    fig.subplots_adjust(left=.07, right=.94, top=.90, bottom=.11, hspace=.08)
+    fig.savefig(path, dpi=140, bbox_inches="tight", facecolor=VIVID.background)
     plt.close(fig)
     return path
 
@@ -65,17 +80,17 @@ def generate_monthly_returns_chart(result: BacktestResultV5G) -> Path:
         dtype=float,
     )
     monthly = series.resample("ME").last().pct_change().dropna() * 100.0 if not series.empty else pd.Series(dtype=float)
-    colors = ["#16833b" if value >= 0 else "#b3261e" for value in monthly]
-    fig, ax = plt.subplots(figsize=(10, 4.5))
+    colors = [VIVID.bull if value >= 0 else VIVID.bear for value in monthly]
+    fig, ax = plt.subplots(figsize=(13, 6), facecolor=VIVID.background)
+    _style_backtest_figure(fig, (ax,))
     labels = [item.strftime("%Y-%m") for item in monthly.index]
     ax.bar(labels, monthly.values, color=colors)
-    ax.axhline(0, color="#333333", linewidth=0.8)
-    ax.set_title("Aylik Net Getiri")
+    ax.axhline(0, color=VIVID.muted, linewidth=0.8)
+    ax.set_title("MONTANA MELİH  •  AYLIK NET GETİRİ", loc="left", fontsize=16, fontweight="bold")
     ax.set_ylabel("Getiri %")
     ax.tick_params(axis="x", rotation=45)
-    ax.grid(axis="y", alpha=0.2)
     fig.tight_layout()
-    fig.savefig(path, dpi=130, bbox_inches="tight")
+    fig.savefig(path, dpi=140, bbox_inches="tight", facecolor=VIVID.background)
     plt.close(fig)
     return path
 
@@ -87,17 +102,17 @@ def generate_calibration_chart(bins: Iterable[object]) -> Path:
     observed = [item.observed_success_rate for item in items]
     calibrated = [item.calibrated_success_rate for item in items]
     x = np.arange(len(items))
-    fig, ax = plt.subplots(figsize=(9, 4.5))
-    ax.bar(x - 0.18, observed, width=0.36, label="Gerceklesen", color="#1769aa")
-    ax.bar(x + 0.18, calibrated, width=0.36, label="Kalibre", color="#e28b20")
+    fig, ax = plt.subplots(figsize=(13, 6), facecolor=VIVID.background)
+    _style_backtest_figure(fig, (ax,))
+    ax.bar(x - 0.18, observed, width=0.36, label="Gerçekleşen", color=VIVID.cyan)
+    ax.bar(x + 0.18, calibrated, width=0.36, label="Kalibre", color=VIVID.amber)
     ax.set_xticks(x, labels)
     ax.set_ylim(0, 100)
     ax.set_ylabel("Basari %")
-    ax.set_title("Puan Araligina Gore Tarihsel Basari")
-    ax.legend()
-    ax.grid(axis="y", alpha=0.2)
+    ax.set_title("MONTANA MELİH  •  PUANA GÖRE TARİHSEL BAŞARI", loc="left", fontsize=16, fontweight="bold")
+    ax.legend(facecolor=VIVID.panel_alt, edgecolor=VIVID.grid, labelcolor=VIVID.text)
     fig.tight_layout()
-    fig.savefig(path, dpi=130, bbox_inches="tight")
+    fig.savefig(path, dpi=140, bbox_inches="tight", facecolor=VIVID.background)
     plt.close(fig)
     return path
 
@@ -112,13 +127,13 @@ def generate_outcome_distribution_chart(result: BacktestResultV5G) -> Path:
         sum(item.exit_reason == "STOP" for item in result.trades),
         sum(item.exit_reason == "TIME_EXIT" for item in result.trades),
     ]
-    fig, ax = plt.subplots(figsize=(8, 4.5))
-    ax.bar(labels, values, color=["#4caf50", "#2e7d32", "#155724", "#b3261e", "#777777"])
-    ax.set_title("Hedef / Stop Dagilimi")
+    fig, ax = plt.subplots(figsize=(13, 6), facecolor=VIVID.background)
+    _style_backtest_figure(fig, (ax,))
+    ax.bar(labels, values, color=[VIVID.bull, "#22c55e", "#16a34a", VIVID.bear, VIVID.muted])
+    ax.set_title("MONTANA MELİH  •  HEDEF / STOP DAĞILIMI", loc="left", fontsize=16, fontweight="bold")
     ax.set_ylabel("Islem")
-    ax.grid(axis="y", alpha=0.2)
     fig.tight_layout()
-    fig.savefig(path, dpi=130, bbox_inches="tight")
+    fig.savefig(path, dpi=140, bbox_inches="tight", facecolor=VIVID.background)
     plt.close(fig)
     return path
 
@@ -144,19 +159,24 @@ def generate_persisted_equity_chart(symbol: str, points: Iterable[object]) -> Pa
     timestamps = pd.to_datetime([item.trading_date for item in items])
     strategy = [item.strategy_equity for item in items]
     benchmark = [np.nan if item.benchmark_equity is None else item.benchmark_equity for item in items]
-    fig, (ax, dd_ax) = plt.subplots(2, 1, figsize=(10, 6.5), sharex=True, gridspec_kw={"height_ratios": [3, 1]})
-    ax.plot(timestamps, strategy, label="Strateji", color="#1769aa")
+    fig, (ax, dd_ax) = plt.subplots(
+        2, 1, figsize=(14, 8), sharex=True,
+        gridspec_kw={"height_ratios": [3, 1]}, facecolor=VIVID.background,
+    )
+    _style_backtest_figure(fig, (ax, dd_ax))
+    ax.plot(timestamps, strategy, label="Strateji", color=VIVID.bull, linewidth=2)
     if any(not np.isnan(value) for value in benchmark):
-        ax.plot(timestamps, benchmark, label="XU100", color="#777777")
+        ax.plot(timestamps, benchmark, label="XU100", color=VIVID.muted)
     equity = np.asarray(strategy, dtype=float)
     drawdown = (equity / np.maximum.accumulate(equity) - 1.0) * 100.0 if len(equity) else np.array([])
-    dd_ax.fill_between(timestamps, drawdown, 0, color="#d1495b", alpha=0.35)
+    dd_ax.fill_between(timestamps, drawdown, 0, color=VIVID.bear, alpha=0.35)
     dd_ax.set_ylabel("DD %")
-    ax.set_title(f"{symbol} - Kayitli Backtest Equity")
+    ax.set_title(f"MONTANA MELİH  •  {symbol}  •  KAYITLI BACKTEST EQUITY", loc="left", fontsize=16, fontweight="bold")
     ax.set_ylabel("TRY")
-    ax.legend()
-    ax.grid(alpha=0.2); dd_ax.grid(alpha=0.2)
-    fig.tight_layout(); fig.savefig(path, dpi=130, bbox_inches="tight"); plt.close(fig)
+    ax.legend(facecolor=VIVID.panel_alt, edgecolor=VIVID.grid, labelcolor=VIVID.text)
+    fig.subplots_adjust(left=.07, right=.94, top=.90, bottom=.09, hspace=.08)
+    fig.savefig(path, dpi=140, bbox_inches="tight", facecolor=VIVID.background)
+    plt.close(fig)
     return path
 
 

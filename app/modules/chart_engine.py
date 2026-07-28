@@ -18,22 +18,29 @@ from matplotlib.patches import Rectangle
 from matplotlib.ticker import FuncFormatter
 
 from app.analysis.smart_money_engine import SmartMoneyResult
+from app.services.vivid_chart_style import (
+    VIVID,
+    add_checklist as add_vivid_checklist,
+    add_price_card,
+    add_score_bar,
+    add_watermark,
+)
 
 
-BG = "#0d1117"
-PANEL = "#111827"
-GRID = "#263244"
-TEXT = "#f8fafc"
-MUTED = "#94a3b8"
-BULL = "#00e69a"
-BEAR = "#ff4d5a"
-ENTRY = "#3b82f6"
+BG = VIVID.background
+PANEL = VIVID.panel_alt
+GRID = VIVID.grid
+TEXT = VIVID.text
+MUTED = VIVID.muted
+BULL = VIVID.bull
+BEAR = VIVID.bear
+ENTRY = VIVID.blue
 TP = "#22c55e"
-SL = "#ef4444"
+SL = VIVID.bear
 OB_BULL = "#14b8a6"
 OB_BEAR = "#fb7185"
-FVG_BULL = "#38bdf8"
-FVG_BEAR = "#f59e0b"
+FVG_BULL = VIVID.cyan
+FVG_BEAR = VIVID.amber
 
 
 @dataclass(frozen=True)
@@ -205,32 +212,18 @@ def _draw_smart_money(ax, smart: SmartMoneyResult | None, *, offset: int, length
 
 
 def _draw_sentiment_bar(fig, score: float) -> None:
-    score = max(0.0, min(100.0, float(score)))
-    left, bottom, width, height = 0.105, 0.025, 0.49, 0.022
-    fig.patches.append(Rectangle((left, bottom), width, height, transform=fig.transFigure, color="#253247"))
-    color = BULL if score >= 65 else BEAR if score < 40 else "#f59e0b"
-    fig.patches.append(
-        Rectangle((left, bottom), width * score / 100.0, height, transform=fig.transFigure, color=color)
-    )
-    label = "RISK-ON" if score >= 65 else "RISK-OFF" if score < 40 else "NÖTR"
-    fig.text(left, bottom + 0.031, f"PİYASA GÜVENİ  {score:.0f}/100  •  {label}", color=TEXT, fontsize=10.5, fontweight="bold")
+    add_score_bar(fig, score, label="PİYASA GÜVENİ", left=0.105, bottom=0.025, width=0.49)
 
 
 def _draw_checklist(fig, checklist: Sequence[ChecklistVisual]) -> None:
     if not checklist:
         return
-    passed = sum(item.passed for item in checklist)
-    lines = [f"SMXM CHECKLIST  {passed}/{len(checklist)}"]
-    lines.extend(f"{'✓' if item.passed else '✗'}  {item.label}" for item in checklist)
-    fig.text(
-        0.705,
-        0.245,
-        "\n".join(lines),
-        color=TEXT,
-        fontsize=8.7,
-        linespacing=1.42,
-        va="bottom",
-        bbox={"boxstyle": "round,pad=0.65", "facecolor": PANEL, "edgecolor": GRID, "alpha": 0.96},
+    add_vivid_checklist(
+        fig,
+        [(item.label, item.passed) for item in checklist],
+        title="SMXM CHECKLIST",
+        x=0.705,
+        y=0.245,
     )
 
 
@@ -339,18 +332,15 @@ def render_report_chart(
         0.075, 0.87, f"{arrow}  {banner}", color="#ffffff", fontsize=15, fontweight="bold",
         bbox={"boxstyle": "round,pad=0.5", "facecolor": bias_color, "edgecolor": bias_color, "alpha": 0.9},
     )
-    fig.text(
-        0.815, 0.79, f"{current:.{decimals}f}", color="#ffffff", fontsize=24, fontweight="bold", ha="center",
-        bbox={"boxstyle": "round,pad=0.45", "facecolor": bias_color, "edgecolor": bias_color},
-    )
+    add_price_card(fig, current, bias_color, decimals=decimals, x=0.94, y=0.865)
     if spec.rr is not None:
-        fig.text(0.815, 0.70, f"RR  1:{spec.rr:.2f}", color=TEXT, fontsize=15, fontweight="bold", ha="center")
+        fig.text(0.94, 0.805, f"RR  1:{spec.rr:.2f}", color=TEXT, fontsize=15, fontweight="bold", ha="center")
 
     _draw_sentiment_bar(fig, spec.sentiment_score)
     _draw_checklist(fig, spec.checklist)
     if spec.report_kind == "evening":
         _draw_timeline(fig, spec.news_timeline)
-    fig.text(0.94, 0.025, "SMXM Analiz Sistemi • MONTANA MELİH", color="#64748b", fontsize=8, ha="right")
+    add_watermark(fig)
 
     target_dir = Path(output_dir)
     target_dir.mkdir(parents=True, exist_ok=True)
@@ -393,7 +383,7 @@ def render_equity_curve(
     ax_dd.set_ylabel("DD %", color=TEXT)
     ax_dd.xaxis.set_major_formatter(mdates.DateFormatter("%d.%m.%Y"))
     fig.autofmt_xdate()
-    fig.text(0.98, 0.015, "SMXM Analiz Sistemi • MONTANA MELİH", color="#64748b", fontsize=8, ha="right")
+    add_watermark(fig)
 
     target_dir = Path(output_dir)
     target_dir.mkdir(parents=True, exist_ok=True)

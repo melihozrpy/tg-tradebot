@@ -13,7 +13,10 @@ from app.config.settings import Settings
 
 def _frame(periods: int = 80, *, end=None, tz="UTC") -> pd.DataFrame:
     end = end or (datetime.now(timezone.utc) - timedelta(days=1))
-    dates = pd.bdate_range(end=end, periods=periods, tz=tz)
+    # Pandas 3 may count a weekend ``end`` as the first period and return one
+    # row short. Roll it back explicitly so the fixture is calendar-independent.
+    business_end = pd.offsets.BDay().rollback(pd.Timestamp(end))
+    dates = pd.bdate_range(end=business_end, periods=periods, tz=tz)
     close = np.linspace(90.0, 100.0, periods)
     return pd.DataFrame(
         {

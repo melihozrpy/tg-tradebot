@@ -597,6 +597,7 @@ async def cmd_analiz_v3(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             data_quality=outcome.data_quality, liquidity=outcome.liquidity,
             xu100_relative_strength=outcome.xu100_relative_strength,
             sector_relative_strength=outcome.sector_relative_strength,
+            chart_mode="standard",
         )
         short_text = format_short_summary(
             outcome.signal, symbol, outcome.mode, outcome.advanced_score, outcome.xu100_relative_strength,
@@ -694,6 +695,7 @@ async def cmd_analiz_detay(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             data_quality=outcome.data_quality, liquidity=outcome.liquidity,
             xu100_relative_strength=outcome.xu100_relative_strength,
             sector_relative_strength=outcome.sector_relative_strength,
+            chart_mode="detailed",
         )
 
         text = format_detailed_analysis(

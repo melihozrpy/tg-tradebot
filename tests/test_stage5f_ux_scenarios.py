@@ -263,10 +263,11 @@ def test_18_standard_chart_contains_only_primary_indicators(monkeypatch, tmp_pat
     fig = chart_service.plt.gcf()
     try:
         labels = {line.get_label() for line in fig.axes[0].lines}
-        assert len(fig.axes) == 3
+        assert len(fig.axes) == 1
         assert {"EMA20", "EMA50"} <= labels
         assert not {"EMA100", "EMA200", "Bollinger", "VWAP"} & labels
-        assert all(axis.get_ylabel() != "MACD" for axis in fig.axes)
+        assert all(axis.get_ylabel() not in {"Hacim", "MACD"} for axis in fig.axes)
+        assert "STANDART" in " ".join(text.get_text() for text in fig.texts)
     finally:
         delete_chart_file(path)
         real_close(fig)
@@ -284,9 +285,10 @@ def test_19_detailed_chart_contains_secondary_indicators(monkeypatch, tmp_path):
     fig = chart_service.plt.gcf()
     try:
         labels = {line.get_label() for line in fig.axes[0].lines}
-        assert len(fig.axes) == 4
+        assert len(fig.axes) == 1
         assert {"EMA100", "EMA200", "Bollinger", "VWAP"} <= labels
-        assert fig.axes[-1].get_ylabel() == "MACD"
+        assert all(axis.get_ylabel() not in {"Hacim", "MACD"} for axis in fig.axes)
+        assert "DETAYLI" in " ".join(text.get_text() for text in fig.texts)
     finally:
         delete_chart_file(path)
         real_close(fig)
