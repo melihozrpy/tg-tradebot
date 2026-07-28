@@ -103,7 +103,9 @@ class Settings(BaseSettings):
     openrouter_api_key: str = Field(default="")
     openrouter_base_url: str = Field(default="https://openrouter.ai/api/v1")
     openrouter_model: str = Field(default="nvidia/nemotron-3-ultra-550b-a55b:free")
-    openrouter_vision_model: str = Field(default="openrouter/free")
+    # openrouter/free bazen metin-only modele yonlenebildigi icin grafiklerde
+    # resmi dogrudan kabul eden sabit bir ucretsiz model kullanilir.
+    openrouter_vision_model: str = Field(default="google/gemma-4-31b-it:free")
     openrouter_timeout_seconds: int = Field(default=90, ge=5, le=180)
     openrouter_max_tokens: int = Field(default=3000, ge=256, le=16000)
     openrouter_max_retries: int = Field(default=2, ge=0, le=5)

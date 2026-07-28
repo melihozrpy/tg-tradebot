@@ -13,7 +13,10 @@ from app.services.openrouter_service import (
     OpenRouterStockAnalyst,
     load_stock_analysis_prompt,
 )
-from app.telegram.stock_ai_handlers import extract_requested_symbol
+from app.telegram.stock_ai_handlers import (
+    extract_chart_symbol_from_ocr_text,
+    extract_requested_symbol,
+)
 
 
 def _settings(**overrides) -> Settings:
@@ -22,7 +25,7 @@ def _settings(**overrides) -> Settings:
         "openrouter_api_key": "test-openrouter-secret",
         "openrouter_base_url": "https://openrouter.ai/api/v1",
         "openrouter_model": "nvidia/nemotron-3-ultra-550b-a55b:free",
-        "openrouter_vision_model": "openrouter/free",
+        "openrouter_vision_model": "google/gemma-4-31b-it:free",
         "openrouter_timeout_seconds": 5,
         "openrouter_max_tokens": 1200,
         "openrouter_max_retries": 0,
@@ -73,6 +76,7 @@ def test_text_analysis_uses_exact_system_prompt_and_verified_context():
         "content": load_stock_analysis_prompt(),
     }
     assert '"symbol": "THYAO"' in captured["body"]["messages"][1]["content"]
+    assert "Yanıtın tamamını Türkçe yaz" in captured["body"]["messages"][1]["content"]
 
 
 def test_image_analysis_uses_free_vision_router_and_base64_data_url():
@@ -80,19 +84,81 @@ def test_image_analysis_uses_free_vision_router_and_base64_data_url():
 
     def handler(request: httpx.Request) -> httpx.Response:
         captured["body"] = json.loads(request.content)
-        return httpx.Response(200, json={"choices": [{"message": {"content": "Grafik analizi."}}]})
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "message": {
+                            "content": (
+                                "🖼️ GÖRSEL OKUMA\nVarlık/Borsa: THYAO / BIST\n"
+                                "Zaman Dilimi: 1G\nGörünen Son Fiyat: 325,00 TL\n"
+                                "Okuma Güveni: Yüksek\n\nGrafik analizi."
+                            )
+                        }
+                    }
+                ]
+            },
+        )
 
     client = httpx.Client(transport=httpx.MockTransport(handler))
     analyst = OpenRouterStockAnalyst(_settings(), client=client)
     result = analyst.analyze_image(b"fake-jpeg", "image/jpeg", "Hisse: THYAO / BIST")
 
-    assert result == "Grafik analizi."
+    assert result.startswith("🖼️ GÖRSEL OKUMA")
     body = captured["body"]
-    assert body["model"] == "openrouter/free"
+    assert body["model"] == "google/gemma-4-31b-it:free"
     content = body["messages"][1]["content"]
     assert content[0]["type"] == "text"
+    assert "ZORUNLU GÖRSEL İNCELEME" in content[0]["text"]
     assert content[1]["type"] == "image_url"
     assert content[1]["image_url"]["url"].startswith("data:image/jpeg;base64,")
+
+
+def test_english_response_is_rewritten_in_turkish():
+    calls: list[dict] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        calls.append(body)
+        response_text = (
+            "Technical analysis shows bullish outlook. Current price is near support. "
+            "The resistance and target require confirmation."
+            if len(calls) == 1
+            else "Teknik analiz yükseliş görünümüne işaret ediyor; destek ve direnç teyidi beklenmeli."
+        )
+        return httpx.Response(200, json={"choices": [{"message": {"content": response_text}}]})
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    analyst = OpenRouterStockAnalyst(_settings(), client=client)
+
+    result = analyst.analyze_text("THYAO")
+
+    assert result.startswith("Teknik analiz")
+    assert len(calls) == 2
+    assert "yalnızca Türkçe" in calls[1]["messages"][0]["content"]
+
+
+def test_image_without_evidence_block_is_retried_once():
+    calls = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        response_text = (
+            "Grafik genel olarak yatay."
+            if calls == 1
+            else "🖼️ GÖRSEL OKUMA\nVarlık/Borsa: Okunamadı\nZaman Dilimi: Okunamadı\nGörünen Son Fiyat: Okunamadı\nOkuma Güveni: Düşük"
+        )
+        return httpx.Response(200, json={"choices": [{"message": {"content": response_text}}]})
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    analyst = OpenRouterStockAnalyst(_settings(), client=client)
+
+    result = analyst.analyze_image(b"fake-jpeg", "image/jpeg", "Grafiği incele")
+
+    assert result.startswith("🖼️ GÖRSEL OKUMA")
+    assert calls == 2
 
 
 def test_disabled_openrouter_never_calls_network():
@@ -140,3 +206,9 @@ def test_local_daily_limit_stops_extra_free_request():
 def test_symbol_extraction_is_deliberately_conservative(text, expected):
     assert extract_requested_symbol(text) == expected
 
+
+def test_chart_ocr_symbol_is_limited_to_known_universe():
+    known = {"THYAO", "ASELS", "XU100"}
+    assert extract_chart_symbol_from_ocr_text("THYAO 1G BIST grafik", known) == "THYAO"
+    assert extract_chart_symbol_from_ocr_text("XU100 ve ASELS 4H", known) == "ASELS"
+    assert extract_chart_symbol_from_ocr_text("UYDURMA 1G", known) is None

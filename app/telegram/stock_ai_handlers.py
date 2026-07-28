@@ -13,8 +13,9 @@ from zoneinfo import ZoneInfo
 from telegram import Update
 from telegram.ext import ContextTypes, MessageHandler, filters
 
+from app.alerts.ocr import extract_alarm_text
 from app.analysis.gyo_valuation_engine import collect_fundamental_payload
-from app.config.instruments import load_universe
+from app.config.instruments import load_universe, parse_instruments_env
 from app.config.settings import Settings, get_settings
 from app.data.gdelt_provider import build_gdelt_provider
 from app.data.provider_factory import (
@@ -68,6 +69,41 @@ def extract_requested_symbol(text: str) -> Optional[str]:
     if symbol in _SYMBOL_BLACKLIST:
         return None
     return symbol
+
+
+def extract_chart_symbol_from_ocr_text(
+    text: str,
+    known_symbols: set[str],
+) -> Optional[str]:
+    """OCR metninden yalnızca yapılandırılmış evrende bulunan kodu seçer."""
+
+    normalized_symbols = {
+        str(symbol).strip().upper().removesuffix(".IS")
+        for symbol in known_symbols
+        if str(symbol).strip()
+    }
+    matches: list[str] = []
+    for match in re.finditer(r"(?<![A-Z0-9])([A-Z][A-Z0-9]{2,15})(?:\.IS)?(?![A-Z0-9])", str(text or "").upper()):
+        symbol = match.group(1).removesuffix(".IS")
+        if symbol in normalized_symbols and symbol not in matches:
+            matches.append(symbol)
+    non_index_matches = [symbol for symbol in matches if symbol not in {"BIST", "XU100"}]
+    if non_index_matches:
+        return non_index_matches[0]
+    return matches[0] if matches else None
+
+
+def _known_chart_symbols(settings: Settings) -> set[str]:
+    symbols = {"EURUSD", "XAUUSD", "XAGUSD", "US100", "XU100"}
+    try:
+        symbols.update(item.symbol for item in load_universe(settings.bist_universe_json_path))
+    except Exception as exc:  # noqa: BLE001 - OCR yardımcı katmanı botu durdurmaz
+        logger.warning("AI OCR sembol evreni okunamadi error=%s", type(exc).__name__)
+    try:
+        symbols.update(parse_instruments_env(settings.instruments))
+    except (TypeError, ValueError):
+        pass
+    return symbols
 
 
 def _jsonable(value: Any) -> Any:
@@ -297,9 +333,39 @@ async def handle_stock_chart_photo(update: Update, context: ContextTypes.DEFAULT
         content = bytes(await telegram_file.download_as_bytearray())
         user_request = message.caption or "Grafiği prompttaki kurallara göre incele."
         symbol = extract_requested_symbol(user_request)
-        verified_context = None
+        image_evidence: dict[str, Any] = {
+            "telegram_image_bytes": len(content),
+            "local_ocr_status": "unavailable",
+        }
+        try:
+            ocr_result = await asyncio.to_thread(
+                extract_alarm_text,
+                content,
+                language=settings.user_price_alert_ocr_language,
+                maximum_bytes=settings.openrouter_max_image_bytes,
+            )
+            image_evidence = {
+                "local_ocr_status": "completed",
+                "local_ocr_confidence": ocr_result.confidence,
+                "visible_text_excerpt": ocr_result.text[:2000],
+                "warning": "OCR metni görsel kanıtıdır; finansal veri olarak tek başına doğrulanmış değildir.",
+            }
+            if symbol is None:
+                symbol = extract_chart_symbol_from_ocr_text(
+                    ocr_result.text,
+                    _known_chart_symbols(settings),
+                )
+        except Exception as exc:  # noqa: BLE001 - görsel model OCR olmadan da çalışır
+            logger.info("AI grafik yerel OCR kullanilamadi error=%s", type(exc).__name__)
+            image_evidence["local_ocr_error"] = type(exc).__name__
+
+        verified_context: dict[str, Any] = {"image_evidence": image_evidence}
         if symbol is not None:
             verified_context = await asyncio.to_thread(build_verified_stock_context, settings, symbol)
+            verified_context["image_evidence"] = image_evidence
+            verified_context["symbol_detection_source"] = (
+                "caption" if extract_requested_symbol(user_request) else "local_ocr"
+            )
         analysis = await asyncio.to_thread(
             analyst.analyze_image,
             content,
