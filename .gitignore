@@ -41,6 +41,7 @@ release/
 
 # Local IDE/OS files
 .idea/
-.vscode/
+.vscode/*
+!.vscode/settings.json
 .DS_Store
 Thumbs.db

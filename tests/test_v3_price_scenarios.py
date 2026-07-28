@@ -56,7 +56,7 @@ def test_main_dip_zone_is_computed(scenario_inputs):
 def test_extreme_scenario_not_created_without_enough_evidence():
     """Yalnizca tek bir destek/direnc adayi varsa 'asiri' senaryo
     UYDURULMAZ (None kalir)."""
-    from app.analysis.price_scenario_engine import PriceScenarioResult, _MergedTier, compute_price_scenarios
+    from app.analysis.price_scenario_engine import compute_price_scenarios
     from app.analysis.timeframe_levels_engine import (
         LevelDetail,
         MultiTimeframeLevelsResult,

@@ -15,7 +15,6 @@ from app.analysis.data_quality import DataQualityEngine, DataQualityResult
 from app.analysis.confluence_zone_engine import find_confluence_zones, strongest_confluence
 from app.analysis.indicator_engine import InsufficientDataError, compute_technical_snapshot
 from app.analysis.liquidity_engine import compute_liquidity
-from app.analysis.market_state import MODE_INTRADAY_PREVIEW
 from app.analysis.multi_timeframe_engine import STAGE5E_TIMEFRAMES, analyze_multi_timeframe
 from app.analysis.price_scenario_engine import compute_price_scenarios
 from app.analysis.gyo_valuation_engine import collect_fundamental_payload, evaluate_gyo_valuation
@@ -42,7 +41,6 @@ from app.models.database import (
     TargetRealismSnapshot,
     UserPriceTarget,
     ValuationSnapshot,
-    get_session_factory,
 )
 from app.risk.position_sizing import InvalidStopError, calculate_position_size
 from app.services.alert_service import VALID_ALERT_TYPES, InvalidAlertError, create_alert, delete_alert, list_alerts
@@ -83,7 +81,6 @@ from app.services.relative_strength_service import compute_symbol_relative_stren
 from app.services.scan_service import ScanBlockedByKillSwitchError, get_distinct_watchlist_symbols, run_evening_scan
 from app.services.sector_service import get_sector_info, list_sector_mappings, set_sector_mapping
 from app.services.settings_service import InvalidSettingError, get_or_create_settings, update_setting
-from app.services.signal_lifecycle_service import update_open_signals
 from app.services.stage5e_analysis_service import (
     Stage5EContextUnavailableError,
     build_stage5e_analysis_context,
@@ -94,8 +91,8 @@ from app.services.target_tracking_service import (
     persist_roadmap_steps,
     save_target_tracking,
 )
-from app.services.watchlist_service import InvalidSymbolError, get_or_create_user, normalize_symbol
-from app.telegram.handlers import _get_db, _is_whitelisted, _reject_unauthorized
+from app.services.watchlist_service import InvalidSymbolError, get_or_create_user
+from app.telegram.handlers import _get_db, _reject_unauthorized
 from app.telegram.message_templates_v3 import (
     format_ai_explanation,
     format_anomaly_list,
@@ -166,6 +163,7 @@ async def cmd_veri_durumu(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         symbol = context.args[0].strip().upper()
         end = datetime.now(timezone.utc)
         start = end - timedelta(days=500)
+        df = None
         try:
             df = provider.get_ohlcv(symbol, "1d", start, end)
             result = assess_and_persist_quality(
@@ -185,6 +183,8 @@ async def cmd_veri_durumu(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             )
         quality_text = format_data_quality_status(symbol, result)
         try:
+            if df is None:
+                raise DataUnavailableError("Fiyat bağlamı için günlük veri bulunamadı.")
             price_context = resolve_current_price(
                 provider, symbol, daily_df=df, timezone_name=settings.timezone_name
             )
@@ -300,7 +300,7 @@ def _get_open_position(db, user, symbol: str):
     return None
 
 
-def _position_portfolio_weight_pct(db, user, symbol: str, current_price: float) -> Optional[float]:
+def _position_portfolio_weight_pct(db, user, symbol: str, current_price: float) -> float | None:
     """Pozisyonun portfoy icindeki agirligini (%) hesaplar; diger pozisyonlar
     icin guncel fiyat bilinmiyorsa maliyet fiyati kullanilir (yaklasik deger)."""
     try:
@@ -479,86 +479,6 @@ def _current_user(db, update: Update):
     return get_or_create_user(
         db, update.effective_user.id, update.effective_user.id in settings.admin_ids, settings.default_total_capital
     )
-
-
-# ---------------------------------------------------------------------------
-# /start - gelistirilmis, inline butonlu
-# ---------------------------------------------------------------------------
-
-
-async def cmd_start_v3(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if await _reject_unauthorized(update):
-        return
-    keyboard = [
-        [InlineKeyboardButton("📊 Hisse Analiz Et", callback_data="menu_analiz"),
-         InlineKeyboardButton("📋 İzleme Listem", callback_data="menu_liste")],
-        [InlineKeyboardButton("🌙 Akşam Taraması", callback_data="menu_tara"),
-         InlineKeyboardButton("💼 Portföyüm", callback_data="menu_portfoy")],
-        [InlineKeyboardButton("🎯 Aktif Sinyaller", callback_data="menu_sinyaller"),
-         InlineKeyboardButton("📈 Performans", callback_data="menu_performans")],
-        [InlineKeyboardButton("🌍 Piyasa Durumu", callback_data="menu_piyasa"),
-         InlineKeyboardButton("⚙️ Ayarlar", callback_data="menu_ayarlar")],
-    ]
-    await update.message.reply_text(
-        "🏔️ MONTANA MELİH HİSSE BOT\n"
-        "Akıllı BIST Analiz ve Risk Sistemi\n\n"
-        "Ücretsiz veri kaynaklarıyla çalışan kural tabanlı analiz botu.\n"
-        "Yatırım tavsiyesi vermez; açıklanabilir, deterministik analiz üretir.\n\n"
-        "Aşağıdan hızlıca gezinebilir ya da /yardim yazabilirsin.",
-        reply_markup=InlineKeyboardMarkup(keyboard),
-    )
-
-
-async def handle_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    query = update.callback_query
-    await query.answer()
-    prompts = {
-        "menu_analiz": "Analiz etmek istediğin sembolü /analiz SEMBOL şeklinde yazabilirsin (örn: /analiz THYAO).",
-        "menu_liste": "/liste",
-        "menu_tara": "/tara",
-        "menu_portfoy": "/portfoy",
-        "menu_sinyaller": "/aktif_sinyaller",
-        "menu_performans": "/performans",
-        "menu_piyasa": "/piyasa",
-        "menu_ayarlar": "/ayarlar",
-    }
-    text = prompts.get(query.data, "Komut bulunamadı.")
-    if query.data.startswith("menu_stage5e_"):
-        _, _, action, symbol = query.data.split("_", 3)
-        stage5e_prompts = {
-            "coklu": f"/cokluzaman {symbol}",
-            "seviyeler": f"/seviyeler {symbol}",
-            "kisa": f"/senaryo {symbol}",
-            "uzun": f"/uzunsenaryo {symbol}",
-            "kontrol": f"Hedefini kontrol etmek için /hedefkontrol {symbol} FİYAT yaz.",
-            "yol": f"/hedefyolu {symbol}",
-            "degerleme": f"/degerleme {symbol}",
-            "uzungrafik": f"/uzungrafik {symbol}",
-            "data": f"/veri_durumu {symbol}",
-            "grafik": f"/grafik {symbol}",
-            "detaygrafik": f"/analiz_detay {symbol}",
-            "alarm": f"Alarm için /alarm_kur {symbol} TÜR DEĞER yaz.",
-            "portfoy": f"Portföye eklemek için /pozisyon_ekle {symbol} LOT MALİYET yaz.",
-        }
-        text = stage5e_prompts.get(action, "Komut bulunamadı.")
-    if text.startswith("/") and " " not in text:
-        await query.message.reply_text(f"Şunu yazabilirsin: {text}")
-    else:
-        await query.message.reply_text(text)
-
-
-def _analysis_action_keyboard(symbol: str) -> InlineKeyboardMarkup:
-    keyboard = [
-        [InlineKeyboardButton("Detaylı Analiz", callback_data=f"detay_{symbol}"), InlineKeyboardButton("Çoklu Zaman", callback_data=f"menu_stage5e_coklu_{symbol}")],
-        [InlineKeyboardButton("Seviyeler", callback_data=f"menu_stage5e_seviyeler_{symbol}"), InlineKeyboardButton("Kısa Vadeli Senaryo", callback_data=f"menu_stage5e_kisa_{symbol}")],
-        [InlineKeyboardButton("Uzun Vadeli Senaryo", callback_data=f"menu_stage5e_uzun_{symbol}"), InlineKeyboardButton("Hedef Kontrol", callback_data=f"menu_stage5e_kontrol_{symbol}")],
-        [InlineKeyboardButton("Hedef Yolu", callback_data=f"menu_stage5e_yol_{symbol}"), InlineKeyboardButton("Değerleme", callback_data=f"menu_stage5e_degerleme_{symbol}")],
-        [InlineKeyboardButton("Standart Grafik", callback_data=f"menu_stage5e_grafik_{symbol}"), InlineKeyboardButton("Detaylı Grafik", callback_data=f"menu_stage5e_detaygrafik_{symbol}")],
-        [InlineKeyboardButton("Uzun Grafik", callback_data=f"menu_stage5e_uzungrafik_{symbol}"), InlineKeyboardButton("Alarm Kur", callback_data=f"menu_stage5e_alarm_{symbol}")],
-        [InlineKeyboardButton("Sanal Islem Ac", callback_data=f"stage5g_paper_preview_{symbol}"), InlineKeyboardButton("Kararin Nedenleri", callback_data=f"stage5g_reason_{symbol}")],
-        [InlineKeyboardButton("Portföye Ekle", callback_data=f"menu_stage5e_portfoy_{symbol}")],
-    ]
-    return InlineKeyboardMarkup(keyboard)
 
 
 # ---------------------------------------------------------------------------

@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 from types import SimpleNamespace
 
-import pytest
 from telegram.ext import Application
 
 from app.telegram.bot import _build_evening_scan_scheduler, _register_scheduler_lifecycle
@@ -69,6 +68,8 @@ def test_scheduler_starts_once_event_loop_is_running():
     _register_scheduler_lifecycle(application, settings)
 
     async def _run():
+        assert application.post_init is not None
+        assert application.post_shutdown is not None
         await application.post_init(application)
         assert application.bot_data["scheduler_started"] is True
         assert application.bot_data["scheduler"].running is True

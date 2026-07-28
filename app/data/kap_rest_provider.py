@@ -101,8 +101,7 @@ class LicensedKapDisclosureProvider(KapProvider):
         except ValueError:
             return None
 
-    @staticmethod
-    def classify_disclosure(disclosure: dict) -> str:
+    def classify_disclosure(self, disclosure: dict) -> str:
         text = " ".join(str(disclosure.get(key) or "") for key in ("title", "subject", "summary")).casefold()
         negative = ("iflas", "konkordato", "faaliyet durdur", "zarar", "ceza", "dava", "temerrüt")
         positive = ("ihale", "sözleşme", "sipariş", "yatırım", "temettü", "geri alım", "kapasite art")

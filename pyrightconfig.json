@@ -1,0 +1,17 @@
+{
+  "include": ["app", "scripts", "tests"],
+  "exclude": [".venv", "build", "dist"],
+  "venvPath": ".",
+  "venv": ".venv",
+  "pythonVersion": "3.11",
+  "typeCheckingMode": "off",
+  "reportMissingImports": "error",
+  "reportMissingModuleSource": "warning",
+  "reportUndefinedVariable": "error",
+  "reportUnboundVariable": "error",
+  "reportPossiblyUnboundVariable": "error",
+  "reportRedeclaration": "error",
+  "reportIncompatibleMethodOverride": "error",
+  "reportReturnType": "error",
+  "reportOptionalCall": "error"
+}

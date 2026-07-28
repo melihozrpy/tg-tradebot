@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, cast
 
 import numpy as np
 import pandas as pd
@@ -14,11 +14,11 @@ class InsufficientDataError(Exception):
 
 
 def ema(series: pd.Series, period: int) -> pd.Series:
-    return series.ewm(span=period, adjust=False, min_periods=period).mean()
+    return cast(pd.Series, series.ewm(span=period, adjust=False, min_periods=period).mean())
 
 
 def sma(series: pd.Series, period: int) -> pd.Series:
-    return series.rolling(window=period, min_periods=period).mean()
+    return cast(pd.Series, series.rolling(window=period, min_periods=period).mean())
 
 
 def rsi(series: pd.Series, period: int = 14) -> pd.Series:
@@ -52,7 +52,7 @@ def atr(df: pd.DataFrame, period: int = 14) -> pd.Series:
         ],
         axis=1,
     ).max(axis=1)
-    return tr.ewm(alpha=1 / period, min_periods=period, adjust=False).mean()
+    return cast(pd.Series, tr.ewm(alpha=1 / period, min_periods=period, adjust=False).mean())
 
 
 def adx(df: pd.DataFrame, period: int = 14) -> pd.Series:
@@ -77,12 +77,12 @@ def adx(df: pd.DataFrame, period: int = 14) -> pd.Series:
         alpha=1 / period, min_periods=period, adjust=False
     ).mean() / atr_val.replace(0, np.nan)
     dx = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di).replace(0, np.nan)
-    return dx.ewm(alpha=1 / period, min_periods=period, adjust=False).mean().fillna(0)
+    return cast(pd.Series, dx.ewm(alpha=1 / period, min_periods=period, adjust=False).mean().fillna(0))
 
 
 def obv(df: pd.DataFrame) -> pd.Series:
     direction = np.sign(df["close"].diff().fillna(0))
-    return (direction * df["volume"]).cumsum()
+    return cast(pd.Series, (direction * df["volume"]).cumsum())
 
 
 def money_flow_index(df: pd.DataFrame, period: int = 14) -> pd.Series:

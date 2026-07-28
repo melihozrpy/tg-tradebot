@@ -179,8 +179,8 @@ def compute_price_scenarios(
         t = support_tiers[-1]
         decline_extreme = make_zone(
             t, "dusus", "asiri",
-            f"Teknik olarak izlenen en uzak dusus senaryo bolgesi; yalnizca genis capli, "
-            f"hacimli ve uzun sureli satis baskisinda gundeme gelir.",
+            "Teknik olarak izlenen en uzak dusus senaryo bolgesi; yalnizca genis capli, "
+            "hacimli ve uzun sureli satis baskisinda gundeme gelir.",
         )
 
     # --- YUKSELIS SENARYOLARI ---
@@ -208,8 +208,8 @@ def compute_price_scenarios(
         t = resistance_tiers[-1]
         rise_extreme = make_zone(
             t, "yukselis", "asiri",
-            f"Teknik olarak izlenen en uzak yukselis senaryo bolgesi; yalnizca guclu "
-            f"kirilim sonrasi surdurulen alim ile gundeme gelir.",
+            "Teknik olarak izlenen en uzak yukselis senaryo bolgesi; yalnizca guclu "
+            "kirilim sonrasi surdurulen alim ile gundeme gelir.",
         )
 
     return PriceScenarioResult(

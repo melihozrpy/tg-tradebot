@@ -5,9 +5,7 @@ from datetime import datetime, timedelta, timezone
 import pandas as pd
 
 from app.data.base_provider import BaseMarketDataProvider, DataFreshness, DataUnavailableError
-from app.services.alert_service import evaluate_alert
 from app.services.current_price_service import CurrentPriceResolver, FALLBACK_WARNING
-from app.services.portfolio_service import portfolio_summary
 
 
 NOW = datetime(2026, 7, 17, 12, 0, tzinfo=timezone.utc)

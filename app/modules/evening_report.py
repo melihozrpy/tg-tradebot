@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import asdict, dataclass, replace
+from dataclasses import asdict, dataclass
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Sequence
 from zoneinfo import ZoneInfo

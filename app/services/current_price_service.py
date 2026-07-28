@@ -33,6 +33,8 @@ def _as_datetime(value) -> Optional[datetime]:
         return None
     try:
         ts = pd.Timestamp(value)
+        if not isinstance(ts, pd.Timestamp):
+            return None
         if ts.tzinfo is None:
             ts = ts.tz_localize("UTC")
         else:

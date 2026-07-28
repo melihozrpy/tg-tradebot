@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
@@ -16,10 +17,27 @@ logging.basicConfig(
 install_sensitive_data_filter()
 logger = logging.getLogger("mergen_quant.main")
 
+
+def on_startup() -> None:
+    # Hatalı config ile uygulama başlamasın. Ayar validator'ları ve
+    # strategy.yaml doğrulaması web sunucusu trafiğe açılmadan çalışır.
+    settings = get_settings()
+    get_strategy_config()
+    init_db()
+    logger.info("Mergen Quant V3 baslatildi. app_env=%s provider=%s", settings.app_env, settings.market_data_provider)
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    on_startup()
+    yield
+
+
 app = FastAPI(
     title="MONTANA MELİH HİSSE BOT API",
     description="Akıllı BIST Analiz ve Risk Sistemi - MONTANA MELİH HİSSE BOT (analiz, tarama, sinyal takip, portföy risk ve backtest)",
     version="3.0.0",
+    lifespan=lifespan,
 )
 
 app.include_router(routes_health.router)
@@ -27,17 +45,6 @@ app.include_router(routes_analysis.router)
 app.include_router(routes_backtest.router)
 app.include_router(routes_portfolio.router)
 app.include_router(routes_dashboard.router)
-
-
-@app.on_event("startup")
-def on_startup() -> None:
-    # Hatali config ile uygulama baslamasin (config.settings icindeki
-    # validator'lar zaten kontrol eder, burada strategy.yaml de dogrulanir).
-    settings = get_settings()
-    get_strategy_config()
-    init_db()
-    logger.info(f"Mergen Quant V3 baslatildi. app_env={settings.app_env} provider={settings.market_data_provider}")
-
 
 @app.get("/")
 def root():

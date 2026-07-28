@@ -59,9 +59,10 @@ def extract_alarm_text(content: bytes, *, language: str = "tur+eng",
             raise OCRUnavailableError(
                 "Yerel OCR kurulu değil. Manuel veya toplu metin alarmı çalışmaya devam eder."
             ) from exc
-        def ocr_engine(value):
+        def _default_ocr_engine(value):
             return pytesseract.image_to_data(value, lang=language, config="--psm 6",
                                               output_type=pytesseract.Output.DICT)
+        ocr_engine = _default_ocr_engine
     candidates: list[tuple[str, float]] = []
     for variant in preprocessing_variants(image):
         payload = ocr_engine(variant)

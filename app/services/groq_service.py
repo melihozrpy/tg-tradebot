@@ -219,7 +219,7 @@ class GroqExplainer:
 
         cached = db.query(GroqExplanation).filter(GroqExplanation.cache_key == cache_key).first()
         if cached is not None:
-            return cached.response_text, cached.is_fallback
+            return str(cached.response_text), bool(cached.is_fallback)
 
         if not self.settings.groq_enabled:
             text = _deterministic_fallback(kind, symbol, structured_payload)

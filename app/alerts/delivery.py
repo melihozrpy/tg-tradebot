@@ -11,7 +11,7 @@ from telegram.error import BadRequest, Forbidden, RetryAfter, TelegramError
 
 from app.alerts.enums import AlarmMode, AlarmStatus, DeliveryStatus, SoundMode
 from app.alerts.messages import format_trigger_message
-from app.models.database import PriceAlertDelivery, PriceAlertTrigger, UserAlarmSetting, UserPriceAlert
+from app.models.database import PriceAlertDelivery, PriceAlertTrigger, UserPriceAlert
 from app.services.alarm_sound_service import generate_alarm_wav
 
 logger = logging.getLogger("mergen_quant.user_price_alerts.delivery")

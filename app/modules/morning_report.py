@@ -2,11 +2,10 @@ from __future__ import annotations
 
 import json
 import logging
-import math
 import re
-from dataclasses import asdict, dataclass, field, replace
+from dataclasses import asdict, dataclass, replace
 from datetime import date, datetime, time, timedelta, timezone
-from typing import Iterable, Sequence
+from typing import Sequence
 from zoneinfo import ZoneInfo
 
 import httpx

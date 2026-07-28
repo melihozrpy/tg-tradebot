@@ -10,14 +10,13 @@ import pandas as pd
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.analysis.data_quality import DataQualityEngine, DataQualityResult, DataQualityStatus
+from app.analysis.data_quality import DataQualityEngine, DataQualityResult
 from app.analysis.indicator_engine import atr as atr_series
-from app.analysis.indicator_engine import bollinger_bands, ema, macd, relative_volume as relative_volume_series, rsi
+from app.analysis.indicator_engine import bollinger_bands, ema, macd, rsi
 from app.analysis.timeframe_levels_engine import (
     TIMEFRAME_DAILY,
     TIMEFRAME_MONTHLY,
     TIMEFRAME_WEEKLY,
-    LevelDetail,
     MultiTimeframeLevelsResult,
 )
 from app.models.database import (
@@ -801,7 +800,6 @@ def evaluate_enhanced_alarm(
 async def scan_enhanced_alarms(application, db: Session, provider, settings) -> int:
     """Aktif kuralları sembol bazında izole tarar; tek hata diğerlerini durdurmaz."""
     from app.analysis.confluence_zone_engine import find_confluence_zones
-    from app.analysis.indicator_engine import compute_technical_snapshot
     from app.analysis.liquidity_engine import compute_liquidity
     from app.analysis.market_regime_engine import classify_market_regime
     from app.analysis.price_scenario_engine import compute_price_scenarios
@@ -849,7 +847,6 @@ async def scan_enhanced_alarms(application, db: Session, provider, settings) -> 
                     sent += 1
             levels = compute_timeframe_levels(daily_complete, current_price)
             supports, resistances = find_confluence_zones(levels, current_price)
-            snapshot = compute_technical_snapshot(daily_complete, symbol, "1d")
             liquidity = compute_liquidity(daily_complete)
             rule_types = {rule.alert_type for rule in symbol_rules}
             signal = SimpleNamespace(entry_zone=(None, None), entry_trigger=None, stop_price=None, target_1=None, target_2=None, target_3=None, risk_reward=None)

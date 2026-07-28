@@ -4,7 +4,6 @@ import asyncio
 
 import numpy as np
 import pandas as pd
-import pytest
 
 from app.models.database import User
 from app.services.alert_service import create_alert

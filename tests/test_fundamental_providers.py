@@ -15,6 +15,7 @@ from app.fundamentals import (
     FintablesMcpProvider,
     FundamentalCrossCheckService,
     FundamentalDataProvider,
+    FundamentalSnapshot,
     LicensedKapRestProvider,
     ProviderConfigurationError,
     ProviderResponseError,
@@ -409,14 +410,16 @@ def test_fallback_chain_uses_secondary_source_without_relabeling_it():
 
 
 class _StaticProvider(FundamentalDataProvider):
-    def __init__(self, name: str, snapshot=None, error: Exception | None = None):
+    def __init__(self, name: str, snapshot: FundamentalSnapshot | None = None, error: Exception | None = None):
         self.name = name
         self.snapshot = snapshot
         self.error = error
 
-    def fetch(self, symbol: str):
+    def fetch(self, symbol: str) -> FundamentalSnapshot:
         if self.error:
             raise self.error
+        if self.snapshot is None:
+            raise ProviderUnavailableError(f"{self.name} snapshot sağlamadı")
         return self.snapshot
 
 
@@ -565,7 +568,7 @@ def test_legacy_adapter_cache_expires_and_never_caches_provider_outage():
         def __init__(self):
             self.calls = 0
 
-        def fetch(self, _symbol):
+        def fetch(self, symbol: str) -> FundamentalSnapshot:
             self.calls += 1
             if self.calls == 1:
                 raise ProviderUnavailableError("temporary")

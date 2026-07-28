@@ -7,7 +7,6 @@ from app.analysis.news_impact_engine import (
     CATEGORY_UNCERTAIN,
     MIN_COMPANY_MATCH_CONFIDENCE,
     NEWS_MAX_SCORE_CONTRIBUTION,
-    NewsImpactAssessment,
     assess_article,
     classify_category,
     summarize_impact,

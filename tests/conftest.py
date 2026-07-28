@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import pytest
 from sqlalchemy.orm import sessionmaker
 
-from app.config.settings import get_settings, get_strategy_config
+from app.config.settings import get_strategy_config
 from app.data.mock_provider import MockMarketDataProvider
 from app.models.database import Base, build_engine
 

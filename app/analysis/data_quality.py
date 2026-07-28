@@ -90,6 +90,8 @@ class DataQualityResult:
 def _as_utc_timestamp(value) -> Optional[pd.Timestamp]:
     try:
         ts = pd.Timestamp(value)
+        if not isinstance(ts, pd.Timestamp):
+            return None
         if ts.tzinfo is None:
             ts = ts.tz_localize("UTC")
         else:

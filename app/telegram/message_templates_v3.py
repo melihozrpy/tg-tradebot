@@ -70,8 +70,8 @@ def resolve_signal_label(signal_type: str, holds_position: bool) -> str:
     'satis riski' gibi ELDE OLAN bir pozisyonu varsayan ifadeler asla kullanilmaz.
     """
     if signal_type in _SELL_ORIENTED_SIGNAL_TYPES and not holds_position:
-        return _NO_POSITION_SIGNAL_LABELS.get(signal_type, SIGNAL_TYPE_LABELS_TR.get(signal_type, signal_type))
-    return SIGNAL_TYPE_LABELS_TR.get(signal_type, signal_type)
+        return _NO_POSITION_SIGNAL_LABELS.get(signal_type) or SIGNAL_TYPE_LABELS_TR.get(signal_type) or signal_type
+    return SIGNAL_TYPE_LABELS_TR.get(signal_type) or signal_type
 
 
 def resolve_decision_label(decision, holds_position: bool) -> str:
@@ -79,8 +79,8 @@ def resolve_decision_label(decision, holds_position: bool) -> str:
     if decision is None:
         return ""
     if decision.decision_class in _SELL_ORIENTED_DECISION_CLASSES and not holds_position:
-        return _NO_POSITION_DECISION_LABELS.get(decision.decision_class, decision.decision_label_tr)
-    return decision.decision_label_tr
+        return _NO_POSITION_DECISION_LABELS.get(decision.decision_class) or decision.decision_label_tr or ""
+    return decision.decision_label_tr or ""
 
 
 def _portfolio_note(signal_type: str, decision, holds_position: bool) -> str:
@@ -947,6 +947,8 @@ def format_multi_timeframe(result, display_symbol: str, price_context=None) -> s
         f"🕰 MONTANA MELİH HİSSE BOT — {display_symbol} ÇOKLU ZAMAN DİLİMİ",
         f"Güncel fiyat: {price_text(current_price)}",
         f"Son kapanış: {price_text(analysis_close)}",
+        f"Fiyat kaynağı: {source}",
+        f"Fiyat zamanı: {_to_istanbul(price_ts) if price_ts is not None else '-'}",
         "",
         "UZUN VADE",
         _line("1wk"),

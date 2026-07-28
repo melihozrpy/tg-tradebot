@@ -45,7 +45,6 @@ def test_short_summary_marks_intraday_mode(mock_provider, strategy_config):
 
 
 def test_detailed_analysis_contains_score_breakdown(mock_provider, strategy_config):
-    from app.services.sector_service import get_sector_info
 
     signal, advanced, xu100_rs = _build(mock_provider, strategy_config)
     text = format_detailed_analysis(

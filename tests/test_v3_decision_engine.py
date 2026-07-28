@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-import pytest
 
 from app.analysis.decision_engine import (
     DECISION_BUY,

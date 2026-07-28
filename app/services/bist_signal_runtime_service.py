@@ -1608,6 +1608,7 @@ class BistSignalRuntimeService:
             if lifecycle.status == SignalStatus.EXIT_PENDING:
                 remaining = int(signal.remaining_quantity or 0)
                 if remaining > 0:
+                    fill = None
                     still_locked = (
                         observation.lower_limit_locked
                         and (
@@ -1627,7 +1628,7 @@ class BistSignalRuntimeService:
                             market_rules=self.market_rules,
                         )
                         fill_status = fill.status
-                    if not still_locked and fill.has_fill:
+                    if fill is not None and fill.has_fill:
                         new_remaining = max(0, remaining - fill.filled_quantity)
                         if new_remaining == 0:
                             row = self._transition(

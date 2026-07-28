@@ -548,7 +548,6 @@ def compute_timeframe_levels(df_daily: pd.DataFrame, current_price: float) -> Mu
     iceren, TAMAMLANMIS (kesinlesmis) gunluk mumlardan olusan DataFrame.
     """
     if df_daily is None or df_daily.empty:
-        empty = TimeframeLevelResult(timeframe=TIMEFRAME_DAILY, reliable=False, note=RELIABLE_NOTE)
         return MultiTimeframeLevelsResult(
             daily=TimeframeLevelResult(timeframe=TIMEFRAME_DAILY, reliable=False, note=RELIABLE_NOTE),
             weekly=TimeframeLevelResult(timeframe=TIMEFRAME_WEEKLY, reliable=False, note=RELIABLE_NOTE),

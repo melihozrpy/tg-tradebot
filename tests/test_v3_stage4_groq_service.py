@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 
 import httpx
-import pytest
 
 from app.config.settings import Settings
 from app.models.database import GroqExplanation

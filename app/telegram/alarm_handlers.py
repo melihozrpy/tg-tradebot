@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import math
-from datetime import datetime, timezone
 from decimal import Decimal
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -18,7 +17,7 @@ from app.alerts.schemas import AlarmDraft
 from app.alerts.schemas import BulkParseResult
 from app.alerts.service import (
     AlarmServiceError, DuplicateAlarmError, acknowledge_alarm, confirm_import, create_alarm,
-    create_import_preview, delete_alarm, get_alarm_settings, pause_alarm, resume_alarm, snooze_alarm,
+    create_import_preview, delete_alarm, get_alarm_settings, resume_alarm, snooze_alarm,
 )
 from app.config.settings import get_settings
 from app.models.database import AlarmImportJob, AlarmImportRow, get_session_factory

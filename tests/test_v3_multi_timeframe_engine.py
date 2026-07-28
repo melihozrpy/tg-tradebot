@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 import numpy as np
 import pandas as pd
-import pytest
 
 from app.analysis.multi_timeframe_engine import (
     TREND_DOWN,
@@ -107,11 +106,6 @@ def test_analyze_multi_timeframe_missing_timeframe_does_not_break_others(monkeyp
 def test_big_trend_down_small_trend_up_flags_counter_trend():
     """Buyuk zaman dilimi (gunluk/haftalik) dususte, kucuk zaman dilimi (5dk)
     yukseliste ise 'karsi trend' uyarisi verilmeli ve guclu AL olusmamali."""
-    from app.analysis.multi_timeframe_engine import (
-        MultiTimeframeResult,
-        _compute_confluence_score,
-    )
-    import app.analysis.multi_timeframe_engine as mtf
 
     snapshots = {
         "1wk": compute_timeframe_snapshot(_trending_df(120, drift=-0.01), "1wk"),

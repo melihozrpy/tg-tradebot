@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-import pytest
 
 from app.config.settings import Settings
 from app.data.gdelt_provider import GdeltUnavailableError, RawNewsArticle

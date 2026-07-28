@@ -10,7 +10,6 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.database import (
-    TargetPerformanceSummary,
     TargetRoadmapStepRecord,
     TargetTrackingRecord,
 )

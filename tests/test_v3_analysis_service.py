@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 import pandas as pd
 import pytest
 
 from app.data.csv_provider import CsvMarketDataProvider
-from app.config.settings import Settings, get_strategy_config
+from app.config.settings import Settings
 from app.data.base_provider import BaseMarketDataProvider, DataFreshness, DataUnavailableError
 from app.data.mock_provider import MockMarketDataProvider
 from app.models.database import Signal

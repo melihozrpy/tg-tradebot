@@ -5,7 +5,6 @@ from app.data.base_provider import (
     BaseMarketDataProvider,
     BrokerFlowProvider,
     DisabledBrokerFlowProvider,
-    DisabledFundamentalProvider,
     DisabledKapProvider,
     FundamentalProvider,
     KapProvider,

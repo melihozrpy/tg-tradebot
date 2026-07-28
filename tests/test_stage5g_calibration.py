@@ -7,7 +7,7 @@ import pytest
 from app.analysis.score_calibration_engine import (
     DISCLAIMER, CalibrationObservation, ScoreCalibrationEngine, persist_calibration_model,
 )
-from app.models.database import ScoreCalibrationBin, ScoreCalibrationModel
+from app.models.database import ScoreCalibrationBin
 
 
 NOW = datetime(2026, 1, 1, tzinfo=timezone.utc)

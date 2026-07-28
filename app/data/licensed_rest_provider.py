@@ -93,7 +93,7 @@ class LicensedRestMarketDataProvider(BaseMarketDataProvider):
     def _datetime(value: Any) -> datetime:
         try:
             parsed = pd.Timestamp(value)
-            if parsed.tzinfo is None:
+            if not isinstance(parsed, pd.Timestamp) or parsed.tzinfo is None:
                 raise ValueError
             return parsed.tz_convert("UTC").to_pydatetime()
         except Exception as exc:

@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.config.settings import get_settings
 from app.models.database import get_db_session
-from app.services.portfolio_service import add_position, list_positions, portfolio_summary, remove_position
+from app.services.portfolio_service import add_position, portfolio_summary, remove_position
 from app.services.watchlist_service import get_or_create_user
 
 router = APIRouter()

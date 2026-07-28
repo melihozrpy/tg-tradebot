@@ -241,7 +241,7 @@ def get_recent_articles(db: Session, symbol: str, limit: int = 10) -> list[NewsA
 
 
 def get_recent_events_with_articles(db: Session, symbol: str, limit: int = 10) -> list[tuple[NewsEvent, NewsArticle]]:
-    return (
+    rows = (
         db.query(NewsEvent, NewsArticle)
         .join(NewsArticle, NewsEvent.article_id == NewsArticle.id)
         .filter(NewsEvent.symbol == symbol.upper())
@@ -249,6 +249,7 @@ def get_recent_events_with_articles(db: Session, symbol: str, limit: int = 10) -
         .limit(limit)
         .all()
     )
+    return [(event, article) for event, article in rows]
 
 
 @dataclass

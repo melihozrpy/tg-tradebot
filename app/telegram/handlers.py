@@ -28,7 +28,6 @@ from app.services.watchlist_service import (
 from app.telegram.message_templates import (
     format_full_analysis_message,
     format_help_message,
-    format_risk_warning_message,
 )
 
 logger = logging.getLogger("mergen_quant.telegram")

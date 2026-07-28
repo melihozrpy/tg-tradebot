@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-import pytest
 
 from app.analysis.indicator_engine import compute_technical_snapshot
 from app.analysis.market_regime_engine import classify_market_regime

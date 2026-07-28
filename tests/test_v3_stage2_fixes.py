@@ -1,14 +1,10 @@
 from __future__ import annotations
 
-from app.analysis.decision_engine import DECISION_STRONG_SELL_RISK
 from app.services.analysis_service_v3 import run_symbol_analysis_v3
 from app.services.intraday_service import run_intraday_preview
 from app.telegram.message_templates_v3 import (
     _NO_POSITION_NOTE,
-    format_detailed_analysis,
-    format_intraday_preview,
     format_short_summary,
-    resolve_decision_label,
     resolve_signal_label,
 )
 
@@ -69,7 +65,6 @@ def test_short_summary_omits_no_position_note_when_signal_is_neutral(strategy_co
 
 def test_trade_plan_explains_missing_plan_instead_of_fabricating_price(strategy_config, mock_provider):
     """Stop hesaplanamadiginda mesaj rastgele bir fiyat UYDURMAMALI; nedenini aciklamali."""
-    from app.analysis.decision_engine import decide
     from app.analysis.signal_engine import SignalReasonItem, SignalResult
     from datetime import datetime, timezone
 

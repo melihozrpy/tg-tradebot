@@ -3,12 +3,11 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Optional
 
 from sqlalchemy.orm import Session
 
 from app.data.base_provider import BaseMarketDataProvider
-from app.models.database import Anomaly, PriceAlert, User, WatchlistItem
+from app.models.database import PriceAlert, User, WatchlistItem
 from app.services.alert_service import evaluate_alert
 from app.services.anomaly_service import run_symbol_anomaly_scan
 

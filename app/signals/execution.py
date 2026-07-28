@@ -20,7 +20,6 @@ from app.signals.market_rules import (
     DEFAULT_BIST_MARKET_RULES,
     BistMarketRules,
     DecimalLike,
-    MarketRuleError,
     as_decimal,
 )
 

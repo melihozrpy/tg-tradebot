@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
-from app.analysis.indicator_engine import InsufficientDataError, ema
+from app.analysis.indicator_engine import ema
 from app.data.base_provider import BaseMarketDataProvider, DataUnavailableError
 
 

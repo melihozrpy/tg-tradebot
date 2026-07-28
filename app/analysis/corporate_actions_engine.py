@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date
 from typing import Any, Iterable, Optional
 
 import pandas as pd
@@ -39,7 +39,8 @@ def _date(value: Any) -> Optional[date]:
     if value is None:
         return None
     try:
-        return pd.Timestamp(value).date()
+        parsed = pd.Timestamp(value)
+        return parsed.date() if isinstance(parsed, pd.Timestamp) else None
     except Exception:  # noqa: BLE001
         return None
 
