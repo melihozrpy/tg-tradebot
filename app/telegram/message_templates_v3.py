@@ -646,17 +646,88 @@ Bu mesaj yatırım tavsiyesi değildir."""
 def format_market_breadth(breadth) -> str:
     if not breadth.available:
         return f"📈 Piyasa genişliği hesaplanamadı: {breadth.note}"
-    return f"""📈 PİYASA GENİŞLİĞİ
+    def candidate_lines(rows, empty: str) -> str:
+        if not rows:
+            return empty
+        return "\n".join(
+            f"• {row.symbol} • {row.score}/100 • %{row.change_percent:+.2f} • "
+            f"hacim {row.relative_volume:.1f}x\n  ↳ {', '.join(row.reasons[:3])}"
+            for row in rows[:8]
+        )
 
-Taranan evren: {breadth.scanned}/{breadth.universe_size} sembol
-Yükselen: {breadth.advancers}  Düşen: {breadth.decliners}  Değişmeyen: {breadth.unchanged}
-EMA20 üzerinde: %{breadth.above_ema20_ratio}
-EMA50 üzerinde: %{breadth.above_ema50_ratio}
-Yeni 20g zirve: {breadth.new_20d_highs}  Yeni 20g dip: {breadth.new_20d_lows}
-Hacmi artan oranı: %{breadth.rising_volume_ratio}
+    ema200 = (
+        f"%{breadth.above_ema200_ratio:.1f}"
+        if breadth.above_ema200_ratio is not None else "veri yetersiz"
+    )
+    volume_ratio = (
+        f"{breadth.up_down_volume_ratio:.2f}"
+        if breadth.up_down_volume_ratio is not None else "hesaplanamadı"
+    )
+    return f"""📊 BIST • 571 HİSSE PİYASA RADARI
+━━━━━━━━━━━━━━━━━━━━
+🧭 Piyasa puanı: {breadth.breadth_score}/100 • {breadth.regime}
+🔮 Sonraki seans eğilimi: {breadth.tomorrow_bias}
 
-{breadth.note}
-"""
+📡 VERİ KAPSAMI
+• Doğrulanan: {breadth.scanned}/{breadth.universe_size} (%{breadth.coverage_ratio:.1f})
+• Veri alınamayan/yetersiz: {breadth.failed}
+
+📈 PİYASA GENİŞLİĞİ
+• Yükselen: {breadth.advancers}  • Düşen: {breadth.decliners}  • Yatay: {breadth.unchanged}
+• Net genişlik: {breadth.net_breadth:+d}  • Yükselen/Düşen: {breadth.advance_decline_ratio:.2f}
+• Ortalama değişim: %{breadth.average_change_percent:+.2f}
+• Medyan değişim: %{breadth.median_change_percent:+.2f}
+
+📐 TREND VE HACİM
+• EMA20 üstü: %{breadth.above_ema20_ratio:.1f}
+• EMA50 üstü: %{breadth.above_ema50_ratio:.1f}
+• EMA200 üstü: {ema200}
+• Yeni 20 günlük zirve/dip: {breadth.new_20d_highs}/{breadth.new_20d_lows}
+• Hacmi ortalamanın üstünde: %{breadth.rising_volume_ratio:.1f}
+• Yükselen/Düşen hacim oranı: {volume_ratio}
+
+🟢 LONG ADAYLARI • {breadth.long_count}
+{candidate_lines(breadth.long_candidates, '• Puan eşiğini geçen teyitli aday yok.')}
+
+🔴 SHORT/RİSK ADAYLARI • {breadth.short_count}
+{candidate_lines(breadth.short_candidates, '• Puan eşiğini geçen teknik zayıflık adayı yok.')}
+
+⚪ Nötr/teyitsiz: {breadth.neutral_count}
+
+ℹ️ {breadth.note}
+⚠️ Bu sınıflama kapanmış günlük barlardan üretilir; tek başına emir değildir. Giriş için seviye, kapanış ve risk/getiri teyidi gerekir."""
+
+
+def format_breadth_candidate_messages(breadth, direction: str = "tum") -> list[str]:
+    """İstenirse puan eşiğini geçen bütün LONG/SHORT-RİSK adlarını sayfalar."""
+
+    normalized = str(direction or "tum").strip().casefold()
+    groups = []
+    if normalized in {"tum", "tüm", "long"}:
+        groups.append(("🟢 LONG ADAYLARI", breadth.long_candidates))
+    if normalized in {"tum", "tüm", "short", "risk"}:
+        groups.append(("🔴 SHORT/RİSK ADAYLARI", breadth.short_candidates))
+    messages: list[str] = []
+    for title, rows in groups:
+        header = f"{title} • {len(rows)} hisse\n━━━━━━━━━━━━━━━━━━\n"
+        current = header
+        if not rows:
+            messages.append(current + "Puan eşiğini geçen aday yok.")
+            continue
+        for rank, row in enumerate(rows, start=1):
+            block = (
+                f"{rank:03d}. {row.symbol} • {row.score}/100 • %{row.change_percent:+.2f} • "
+                f"hacim {row.relative_volume:.1f}x\n"
+                f"     {', '.join(row.reasons[:4])}\n"
+            )
+            if len(current) + len(block) > 3900:
+                messages.append(current.rstrip())
+                current = f"{title} • DEVAM\n━━━━━━━━━━━━━━━━━━\n{block}"
+            else:
+                current += block
+        current += "\n⚠️ İzleme sınıfıdır; teyitsiz emir değildir."
+        messages.append(current.rstrip())
+    return messages
 
 
 def format_performance_report(report) -> str:

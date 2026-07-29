@@ -59,7 +59,7 @@ def test_normalize_lowercase_input():
 
 
 def test_normalize_index_symbol_special_case():
-    assert normalize_bist_symbol("XU100") == "^XU100"
+    assert normalize_bist_symbol("XU100") == "XU100.IS"
 
 
 # ---------------------------------------------------------------------------

@@ -74,7 +74,16 @@ def build_fundamental_provider(settings) -> FundamentalDataProvider:
         primary = fintables or kap or yahoo
         missing = "Yetkili temel veri sağlayıcısı yapılandırılmadı."
     elif mode == "disabled":
-        return DisabledFundamentalDataProvider("Temel analiz sağlayıcısı devre dışı.")
+        # Eski Coolify kurulumlarında bu değer kalmış olsa bile operatör Yahoo
+        # fallback'ine açıkça izin verdiyse temel analizi tamamen kapatma.
+        # Kaynak ikincil/gecikmeli olarak etiketlenir; KAP verisiymiş gibi sunulmaz.
+        if yahoo is not None:
+            primary = yahoo
+            missing = "Yahoo ikincil temel veri sağlayıcısı kullanılamıyor."
+        else:
+            return DisabledFundamentalDataProvider(
+                "Temel analiz kapalı ve FUNDAMENTAL_ALLOW_YAHOO_FALLBACK=false."
+            )
     else:
         return DisabledFundamentalDataProvider(f"Bilinmeyen temel veri sağlayıcısı: {mode}")
 

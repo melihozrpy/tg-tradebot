@@ -60,12 +60,13 @@ def normalize_bist_symbol(raw_symbol: str) -> str:
 
     'SVGYO' -> 'SVGYO.IS'
     'SVGYO.IS' -> 'SVGYO.IS' (tekrar eklenmez)
-    Endeks sembolleri (orn. 'XU100') istisna olarak '.IS' almaz; XU100 icin
-    yfinance karsiligi '^XU100' kullanilir.
+    BIST 100 endeksi Yahoo'da ``XU100.IS`` koduyla yayımlanır. Eski ``^XU100``
+    kodu bazı dönemlerde boş sonuç verdiği için bütün kullanıcı biçimleri aynı
+    doğrulanmış sağlayıcı koduna çevrilir.
     """
     symbol = raw_symbol.strip().upper()
-    if symbol in ("XU100", "^XU100"):
-        return "^XU100"
+    if symbol in ("XU100", "^XU100", "XU100.IS"):
+        return "XU100.IS"
     # INSTRUMENTS yalnızca BIST ile sınırlı değildir. Kullanıcı doğrudan
     # Yahoo kodu verdiyse (.NYB, =X, =F, ^VIX gibi) kodu bozmayız. Yaygın
     # kullanıcı dostu adlar da burada yalnızca sağlayıcı sembolüne çevrilir;

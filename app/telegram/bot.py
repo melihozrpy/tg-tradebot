@@ -92,7 +92,7 @@ def build_telegram_application() -> Application:
     application.add_handler(CommandHandler("tara", handlers_v3.cmd_tara))
     application.add_handler(CommandHandler("tara_liste", handlers_v3.cmd_tara_liste))
     application.add_handler(CommandHandler("tarama_durumu", handlers_v3.cmd_tarama_durumu))
-    application.add_handler(CommandHandler("aksam_raporu", handlers_v3.cmd_aksam_raporu))
+    application.add_handler(CommandHandler("aksam_raporu", smxm_report_handlers.cmd_smxm_aksam_raporu))
     application.add_handler(CommandHandler("tarama_ayarlari", handlers_v3.cmd_tarama_ayarlari))
     application.add_handler(CommandHandler("tum_hisseler", smxm_report_handlers.cmd_tum_hisseler))
     application.add_handler(CommandHandler("eniyi50", smxm_report_handlers.cmd_eniyi50))
@@ -327,11 +327,22 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
             from app.data.provider_factory import build_market_data_provider
             from app.models.database import get_session_factory
             from app.modules.chart_engine import render_report_chart
+            from app.services.market_breadth_service import compute_market_breadth
 
             db = get_session_factory()()
             try:
                 provider = build_market_data_provider(settings)
                 instruments = resolve_report_instruments(settings)
+                breadth = compute_market_breadth(
+                    provider,
+                    settings.bist_universe_json_path,
+                    max_symbols=settings.universe_scan_max_symbols_per_run,
+                    provider_factory=lambda: build_market_data_provider(settings),
+                    max_workers=settings.universe_scan_workers,
+                    minimum_signal_score=settings.universe_scan_minimum_score,
+                    top_n=12,
+                    cache_minutes=settings.universe_scan_cache_minutes,
+                )
                 if kind == "morning":
                     from app.modules.morning_report import (
                         build_morning_chart_spec,
@@ -339,8 +350,10 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
                         format_morning_report,
                     )
 
-                    report = build_morning_report(provider, settings, instruments, db=db)
-                    primary = report.instruments[0]
+                    report = build_morning_report(
+                        provider, settings, instruments, db=db, breadth=breadth
+                    )
+                    primary = report.index_analysis
                     spec = build_morning_chart_spec(report, primary.symbol)
                     text = format_morning_report(report)
                     caption = f"🌅 {primary.symbol} • 08:00 SMXM sabah görünümü"
@@ -351,8 +364,10 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
                         format_evening_report,
                     )
 
-                    report = build_evening_report(provider, settings, instruments, db=db)
-                    primary = report.instruments[0]
+                    report = build_evening_report(
+                        provider, settings, instruments, db=db, breadth=breadth
+                    )
+                    primary = report.index_analysis
                     spec = build_evening_chart_spec(report, primary.symbol)
                     text = format_evening_report(report)
                     caption = f"🌙 {primary.symbol} • 21:00 kapanış görünümü"

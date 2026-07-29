@@ -17,7 +17,9 @@ biçimi korunmuştur.
 | `/tum_hisseler [sayfa]` | PDF'ten alınan 571 kodu 50'şer ve ileri/geri düğmeleriyle gösterir. |
 | `/eniyi50 [adet]` | Evreni tarar; setup puanı, giriş uzaklığı ve en az 2R hedefe göre en iyi 50 adayı sıralar. Tek sembol hatası taramayı durdurmaz. |
 | `/sabah_raporu` | 08:00 SMXM raporunu elle üretir. |
-| `/smxm_aksam_raporu` | 21:00 kapanış ve sabah bias karşılaştırmasını elle üretir. |
+| `/aksam_raporu`, `/smxm_aksam_raporu` | Aynı kapsamlı XU100 + 571 hisse kapanış ve sabah bias karşılaştırmasını üretir. |
+| `/piyasa` | 571 hissenin yükselen/düşen, EMA20/50/200, hacim, zirve/dip ve piyasa puanı özetini verir. |
+| `/piyasa long`, `/piyasa short`, `/piyasa tum` | Puan eşiğini geçen adayların tamamını Telegram sınırına göre sayfalar. |
 | `/sanal_portfoy_olustur Ana 10000` | Gerçek para içermeyen sanal portföy açar. |
 | `/sanal_portfoyler` | Sanal portföy bakiyelerini listeler. |
 | `/smxm_backtest THYAO 2025-01-01 2025-06-01 10000` | Tarih ve başlangıç bakiyesi parametreli SMXM testi ve equity curve üretir. |
@@ -28,10 +30,12 @@ başarısız sayılır; sahte fiyatla sıralanmaz. Sonuç bir saat önbelleğe a
 
 ## Zamanlanmış işler
 
-- Sabah: her gün `08:00`, `Europe/Istanbul`. Dünün O/H/L/C özeti, ATR ve trend;
+- Sabah: her gün `08:00`, `Europe/Istanbul`. Ana varlık yalnızca `XU100.IS`
+  endeksidir; veri yoksa THYAO'ya veya başka hisseye sessizce geçmez. Dünün O/H/L/C özeti, ATR ve trend;
   altı maddelik SMXM checklist; VIX/DXY, volatilite, hacim ve haber sentiment'i
   ile 0-100 piyasa güveni; ekonomik takvim ve enstrüman etki eşlemesi üretir.
-- Akşam: her gün `21:00`, `Europe/Istanbul`. Kapanış ve günlük değişim, takvim
+- Akşam: her gün `21:00`, `Europe/Istanbul`. XU100 kapanışı ve günlük değişim,
+  571 hissenin piyasa genişliği, puanlı LONG/SHORT-RİSK sayımı, takvim
   zaman çizelgesi, kesin nedensellik iddia etmeyen olası etki açıklaması ve
   sabah bias'ı ile gerçekleşeni karşılaştırır.
 - Her iki job da `try/except` korumalıdır. Bir rapor veya sembol hatası bot
@@ -131,6 +135,13 @@ VIRTUAL_TRADE_AFTER_LOSS_RISK_PERCENT=0.5
 VIRTUAL_TRADE_MINIMUM_RR=2.0
 VIRTUAL_TRADE_MINIMUM_CHECKLIST=5
 VIRTUAL_TRADE_BLOCKED_WEEKDAYS=0,4
+
+OPENROUTER_DAILY_REQUEST_LIMIT=0
+OPENROUTER_LOCAL_RATE_LIMIT_ENABLED=false
+OPENROUTER_MODEL_FALLBACKS=inclusionai/ling-3.0-flash:free,nvidia/nemotron-3-super-120b-a12b:free,openai/gpt-oss-20b:free
+OPENROUTER_VISION_MODEL_FALLBACKS=google/gemma-4-26b-a4b-it:free,nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free,nvidia/nemotron-nano-12b-v2-vl:free
+FUNDAMENTAL_PROVIDER=auto
+FUNDAMENTAL_ALLOW_YAHOO_FALLBACK=true
 ```
 
 `GROQ_ENABLED=true` kullanılacaksa `GROQ_API_KEY` de Coolify secret olarak
@@ -168,11 +179,12 @@ Telegram smoke testi:
 
 1. `/tum_hisseler` yazın; ilk sayfa ve ileri düğmesi gelmelidir.
 2. `/eniyi50 10` yazın; tarama botu kilitlemeden sonuçlanmalıdır.
-3. `/sabah_raporu` ve `/smxm_aksam_raporu` ile iki PNG'yi kontrol edin.
-4. `/sanal_portfoy_olustur Ana 10000` ve `/sanal_portfoyler` çalıştırın.
-5. En az bir aylık aralıkla `/smxm_backtest THYAO 2025-01-01 2025-06-01 10000`
+3. `/piyasa`, `/piyasa long` ve `/piyasa short` ile 571 kodluk kapsamı kontrol edin.
+4. `/sabah_raporu` ve `/smxm_aksam_raporu` ile iki PNG'nin XU100 olduğunu kontrol edin.
+5. `/sanal_portfoy_olustur Ana 10000` ve `/sanal_portfoyler` çalıştırın.
+6. En az bir aylık aralıkla `/smxm_backtest THYAO 2025-01-01 2025-06-01 10000`
    çalıştırın; özet ve equity curve gelmelidir.
-6. Coolify loglarında `smxm_morning_report` ve `smxm_evening_report` job'larının
+7. Coolify loglarında `smxm_morning_report` ve `smxm_evening_report` job'larının
    sırasıyla 08:00 ve 21:00'a kurulduğunu doğrulayın.
 
 ## Dosya yerleşimi

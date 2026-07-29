@@ -190,11 +190,40 @@ def test_local_daily_limit_stops_extra_free_request():
         return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]})
 
     client = httpx.Client(transport=httpx.MockTransport(handler))
-    analyst = OpenRouterStockAnalyst(_settings(openrouter_daily_request_limit=1), client=client)
+    analyst = OpenRouterStockAnalyst(
+        _settings(openrouter_daily_request_limit=1, openrouter_local_rate_limit_enabled=True),
+        client=client,
+    )
     assert analyst.analyze_text("THYAO") == "ok"
     with pytest.raises(OpenRouterQuotaExceededError):
         analyst.analyze_text("ASELS")
     assert calls == 1
+
+
+def test_quota_on_primary_model_automatically_uses_free_fallback():
+    models: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        models.append(body["model"])
+        if len(models) == 1:
+            return httpx.Response(429, json={"error": {"message": "busy"}})
+        return httpx.Response(200, json={"choices": [{"message": {"content": "Türkçe analiz hazır."}}]})
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    analyst = OpenRouterStockAnalyst(
+        _settings(
+            openrouter_model_fallbacks="inclusionai/ling-3.0-flash:free",
+            openrouter_daily_request_limit=0,
+        ),
+        client=client,
+    )
+
+    assert analyst.analyze_text("THYAO") == "Türkçe analiz hazır."
+    assert models == [
+        "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "inclusionai/ling-3.0-flash:free",
+    ]
 
 
 @pytest.mark.parametrize(

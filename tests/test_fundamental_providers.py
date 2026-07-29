@@ -536,6 +536,21 @@ def test_factory_fails_closed_without_licensed_credentials_or_explicit_fallback(
         provider.fetch("THYAO")
 
 
+def test_legacy_disabled_mode_uses_explicitly_allowed_yahoo_fallback():
+    settings = SimpleNamespace(
+        fundamental_provider="disabled",
+        fintables_mcp_url="https://evo.fintables.com/mcp",
+        fintables_mcp_bearer_token="",
+        fintables_mcp_tool_name="",
+        kap_rest_base_url="",
+        kap_rest_api_key="",
+        fundamental_allow_yahoo_fallback=True,
+        fundamental_cross_check_enabled=False,
+    )
+    provider = build_fundamental_provider(settings)
+    assert isinstance(provider, YahooFundamentalProvider)
+
+
 def test_company_analysis_accepts_normalized_provider_and_displays_provenance():
     provider = _StaticProvider("kap", snapshot=_snapshot())
     analysis = analyze_company("THYAO", fundamental_provider=provider)

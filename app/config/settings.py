@@ -103,13 +103,29 @@ class Settings(BaseSettings):
     openrouter_api_key: str = Field(default="")
     openrouter_base_url: str = Field(default="https://openrouter.ai/api/v1")
     openrouter_model: str = Field(default="nvidia/nemotron-3-ultra-550b-a55b:free")
+    openrouter_model_fallbacks: str = Field(
+        default=(
+            "inclusionai/ling-3.0-flash:free,"
+            "nvidia/nemotron-3-super-120b-a12b:free,"
+            "openai/gpt-oss-20b:free"
+        )
+    )
     # openrouter/free bazen metin-only modele yonlenebildigi icin grafiklerde
     # resmi dogrudan kabul eden sabit bir ucretsiz model kullanilir.
     openrouter_vision_model: str = Field(default="google/gemma-4-31b-it:free")
+    openrouter_vision_model_fallbacks: str = Field(
+        default=(
+            "google/gemma-4-26b-a4b-it:free,"
+            "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free,"
+            "nvidia/nemotron-nano-12b-v2-vl:free"
+        )
+    )
     openrouter_timeout_seconds: int = Field(default=90, ge=5, le=180)
     openrouter_max_tokens: int = Field(default=3000, ge=256, le=16000)
     openrouter_max_retries: int = Field(default=2, ge=0, le=5)
-    openrouter_daily_request_limit: int = Field(default=50, ge=1, le=1000)
+    # 0 = yapay bot kotası kapalı. Gerçek sağlayıcı kotası ve model fallback'i geçerlidir.
+    openrouter_daily_request_limit: int = Field(default=0, ge=0, le=100000)
+    openrouter_local_rate_limit_enabled: bool = Field(default=False)
     openrouter_max_image_bytes: int = Field(default=10_485_760, ge=1024, le=20_971_520)
 
     # ---- V3.2 (Asama 4): GDELT haber radari ----

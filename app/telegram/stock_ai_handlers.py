@@ -194,6 +194,28 @@ def build_verified_stock_context(settings: Settings, symbol: str) -> dict[str, A
                 "analysis_mode": outcome.mode,
                 "warnings": _jsonable(outcome.warnings),
             }
+            signal = outcome.signal
+            context["technical_fallback_summary"] = {
+                "signal_type": getattr(signal, "signal_type", None),
+                "score": getattr(outcome.advanced_score, "total", None),
+                "confidence": getattr(signal, "confidence", None),
+                "timeframe": getattr(signal, "timeframe", None),
+                "entry_zone": _jsonable(getattr(signal, "entry_zone", None)),
+                "entry_trigger": getattr(signal, "entry_trigger", None),
+                "stop": getattr(signal, "stop_price", None),
+                "targets": [
+                    getattr(signal, "target_1", None),
+                    getattr(signal, "target_2", None),
+                    getattr(signal, "target_3", None),
+                ],
+                "risk_reward": getattr(signal, "risk_reward", None),
+                "market_regime": getattr(signal, "market_regime", None),
+                "data_timestamp": _jsonable(getattr(signal, "data_timestamp", None)),
+                "reasons": [
+                    getattr(reason, "description", str(reason))
+                    for reason in getattr(signal, "reasons", [])[:6]
+                ],
+            }
         except AnalysisUnavailableErrorV3 as exc:
             context["technical"] = {"status": "unavailable", "reason": str(exc)}
             context["warnings"].append("Teknik analiz için doğrulanmış veri alınamadı.")
@@ -258,12 +280,57 @@ async def _deliver_analysis(update: Update, status_message, analysis: str) -> No
         await update.effective_message.reply_text(chunk)
 
 
+def _deterministic_ai_fallback(context: dict[str, Any], *, visual: bool) -> str:
+    """Ücretsiz modeller aynı anda yoğunsa doğrulanmış veriyi yine kullanıcıya verir."""
+
+    symbol = context.get("symbol") or "Görseldeki varlık"
+    summary = context.get("technical_fallback_summary") or {}
+    if not summary:
+        return (
+            f"⚠️ {symbol} için ücretsiz AI modellerinin tamamı şu anda yoğun. "
+            "Görsel/teknik veri de yeterince doğrulanamadığı için seviye uydurulmadı. "
+            "Biraz sonra aynı görseli yeniden gönder veya /analiz SEMBOL komutunu kullan."
+        )
+
+    entry = summary.get("entry_zone") or []
+    entry_text = "–".join(f"{float(value):.2f}" for value in entry if value is not None) or "hesaplanamadı"
+    targets = "/".join(
+        f"{float(value):.2f}" for value in summary.get("targets", []) if value is not None
+    ) or "hesaplanamadı"
+    reasons = summary.get("reasons") or []
+    lines = [
+        f"🧠 {symbol} • DOĞRULANMIŞ YEDEK ANALİZ",
+        "⚠️ Ücretsiz görsel modeller şu an yoğun; bot boş dönmek yerine kendi teknik motorunun doğrulanmış sonucunu gösteriyor.",
+        "📌 Bu çıktı yüklenen görselin yapısal okuması değil, sağlayıcıdan alınan teknik veridir." if visual else "",
+        f"• Sinyal sınıfı: {summary.get('signal_type') or 'belirsiz'}",
+        f"• Kurulum puanı: {summary.get('score') if summary.get('score') is not None else 'hesaplanamadı'}/100",
+        f"• Güven sınıfı: {summary.get('confidence') or 'belirsiz'}",
+        f"• Piyasa rejimi: {summary.get('market_regime') or 'belirsiz'}",
+        f"• Giriş bölgesi: {entry_text}",
+        f"• Tetik: {summary.get('entry_trigger') or 'hesaplanamadı'}",
+        f"• Geçersizlik/SL: {summary.get('stop') or 'hesaplanamadı'}",
+        f"• Hedefler: {targets}",
+        f"• Plan RR: {summary.get('risk_reward') or 'hesaplanamadı'}",
+    ]
+    if reasons:
+        lines.extend(["", "🔎 Teknik gerekçeler:", *(f"• {reason}" for reason in reasons[:5])])
+    lines.extend(
+        [
+            "",
+            f"🕒 Veri zamanı: {summary.get('data_timestamp') or 'doğrulanamadı'}",
+            "ℹ️ Tetik ve mum kapanışı görülmeden aktif işlem sayılmaz; kişiye özel yatırım tavsiyesi değildir.",
+        ]
+    )
+    return "\n".join(line for line in lines if line is not None)
+
+
 async def _run_text_analysis(update: Update, user_request: str, symbol: str) -> None:
     settings = get_settings()
     status = await update.effective_message.reply_text(
         f"🧠 {symbol} için doğrulanmış veriler hazırlanıyor ve AI analizi oluşturuluyor…"
     )
     analyst = OpenRouterStockAnalyst(settings)
+    verified_context: dict[str, Any] = {}
     try:
         verified_context = await asyncio.to_thread(build_verified_stock_context, settings, symbol)
         analysis = await asyncio.to_thread(
@@ -277,7 +344,7 @@ async def _run_text_analysis(update: Update, user_request: str, symbol: str) -> 
     except OpenRouterAuthenticationError:
         await status.edit_text("🔐 OpenRouter API anahtarı eksik veya reddedildi. Anahtarı Coolify secret alanında kontrol et.")
     except OpenRouterQuotaExceededError:
-        await status.edit_text("⏳ Ücretsiz OpenRouter günlük kotası doldu. Teknik komutlar AI olmadan çalışmaya devam eder.")
+        await status.edit_text(_deterministic_ai_fallback(verified_context, visual=False))
     except OpenRouterError as exc:
         logger.warning("OpenRouter metin analizi basarisiz symbol=%s error=%s", symbol, type(exc).__name__)
         await status.edit_text(f"⚠️ AI analizi şu anda üretilemedi: {exc}")
@@ -328,6 +395,7 @@ async def handle_stock_chart_photo(update: Update, context: ContextTypes.DEFAULT
     settings = get_settings()
     status = await message.reply_text("🖼️ Grafik okunuyor, doğrulanmış veriler kontrol ediliyor…")
     analyst = OpenRouterStockAnalyst(settings)
+    verified_context: dict[str, Any] = {}
     try:
         telegram_file = await message.photo[-1].get_file()
         content = bytes(await telegram_file.download_as_bytearray())
@@ -359,7 +427,7 @@ async def handle_stock_chart_photo(update: Update, context: ContextTypes.DEFAULT
             logger.info("AI grafik yerel OCR kullanilamadi error=%s", type(exc).__name__)
             image_evidence["local_ocr_error"] = type(exc).__name__
 
-        verified_context: dict[str, Any] = {"image_evidence": image_evidence}
+        verified_context = {"image_evidence": image_evidence}
         if symbol is not None:
             verified_context = await asyncio.to_thread(build_verified_stock_context, settings, symbol)
             verified_context["image_evidence"] = image_evidence
@@ -379,7 +447,7 @@ async def handle_stock_chart_photo(update: Update, context: ContextTypes.DEFAULT
     except OpenRouterAuthenticationError:
         await status.edit_text("🔐 OpenRouter API anahtarı eksik veya reddedildi.")
     except OpenRouterQuotaExceededError:
-        await status.edit_text("⏳ Ücretsiz grafik analiz kotası bugün için doldu.")
+        await status.edit_text(_deterministic_ai_fallback(verified_context, visual=True))
     except OpenRouterInvalidImageError as exc:
         await status.edit_text(f"⚠️ Grafik işlenemedi: {exc}")
     except OpenRouterError as exc:

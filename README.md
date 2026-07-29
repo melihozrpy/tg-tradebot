@@ -413,7 +413,7 @@ Sektör endeksi yfinance'ten alınamazsa analiz çökmez; sektör gücü
 `CLOSE_SCAN_ENABLED=true` ve `CLOSE_SCAN_TIME=18:20` iken, `run_bot.py`
 çalışırken APScheduler her gün belirtilen saatte otomatik tarama yapar.
 Tarama yalnızca **izleme listesindeki** sembolleri kapsar; ayrıca yerel
-`data/symbols/bist_symbols.csv` sembol evreni piyasa genişliği (`/piyasa`)
+`app/config/bist_instruments.json` içindeki 571 kod piyasa genişliği (`/piyasa`)
 için kullanılır (bot internetten kontrolsüz şekilde tüm BIST'i taramaz).
 
 Manuel tetikleme: `/tara`. Diğer komutlar: `/tara_liste`, `/tarama_durumu`,
@@ -636,7 +636,7 @@ tablolar oluşturulur, mevcut tablolara **dokunulmaz**.
 /alarm_detay ID
 /grafik SEMBOL [6ay|1yil]
 /rs_grafik SEMBOL
-/piyasa / /genislik  Piyasa genisligi
+/piyasa / /genislik  571 hisse piyasa genişliği; /piyasa long|short|tum detay listesi
 /backtest SEMBOL [ZAMAN_DILIMI DONEM | BASLANGIC_TARIHI BITIS_TARIHI]
 /backtest_signal ID  Kayitli sinyal planini tarihsel mumlarla salt-okunur replay et
 /backtest_gecmisi   Kayitli backtest ozetleri

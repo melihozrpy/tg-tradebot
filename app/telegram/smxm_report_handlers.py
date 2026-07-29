@@ -34,6 +34,7 @@ from app.services.instrument_universe_service import (
     save_scan_cache,
     scan_best_entries,
 )
+from app.services.market_breadth_service import compute_market_breadth
 from app.services.watchlist_service import get_or_create_user
 
 
@@ -186,7 +187,17 @@ def _run_morning(settings):
     try:
         provider = build_market_data_provider(settings)
         instruments = resolve_report_instruments(settings)
-        return build_morning_report(provider, settings, instruments, db=db)
+        breadth = compute_market_breadth(
+            provider,
+            settings.bist_universe_json_path,
+            max_symbols=settings.universe_scan_max_symbols_per_run,
+            provider_factory=lambda: build_market_data_provider(settings),
+            max_workers=settings.universe_scan_workers,
+            minimum_signal_score=settings.universe_scan_minimum_score,
+            top_n=12,
+            cache_minutes=settings.universe_scan_cache_minutes,
+        )
+        return build_morning_report(provider, settings, instruments, db=db, breadth=breadth)
     finally:
         db.close()
 
@@ -196,7 +207,17 @@ def _run_evening(settings):
     try:
         provider = build_market_data_provider(settings)
         instruments = resolve_report_instruments(settings)
-        return build_evening_report(provider, settings, instruments, db=db)
+        breadth = compute_market_breadth(
+            provider,
+            settings.bist_universe_json_path,
+            max_symbols=settings.universe_scan_max_symbols_per_run,
+            provider_factory=lambda: build_market_data_provider(settings),
+            max_workers=settings.universe_scan_workers,
+            minimum_signal_score=settings.universe_scan_minimum_score,
+            top_n=12,
+            cache_minutes=settings.universe_scan_cache_minutes,
+        )
+        return build_evening_report(provider, settings, instruments, db=db, breadth=breadth)
     finally:
         db.close()
 
@@ -209,7 +230,7 @@ async def cmd_sabah_raporu(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     chart_path: str | None = None
     try:
         report = await asyncio.to_thread(_run_morning, settings)
-        primary = report.instruments[0]
+        primary = report.index_analysis
         provider = build_market_data_provider(settings)
         end = datetime.now(timezone.utc)
         frame = await asyncio.to_thread(
@@ -243,7 +264,7 @@ async def cmd_smxm_aksam_raporu(update: Update, context: ContextTypes.DEFAULT_TY
     chart_path: str | None = None
     try:
         report = await asyncio.to_thread(_run_evening, settings)
-        primary = report.instruments[0]
+        primary = report.index_analysis
         provider = build_market_data_provider(settings)
         end = datetime.now(timezone.utc)
         frame = await asyncio.to_thread(

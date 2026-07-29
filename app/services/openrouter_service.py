@@ -158,18 +158,27 @@ class OpenRouterStockAnalyst:
             raise OpenRouterUnavailableError("OPENROUTER_BASE_URL HTTPS olmali.")
 
     def _reserve_daily_slot(self) -> None:
+        if not bool(self.settings.openrouter_local_rate_limit_enabled):
+            return
+        limit = int(self.settings.openrouter_daily_request_limit)
+        if limit <= 0:
+            return
         now = datetime.now(timezone.utc)
         cutoff = now - timedelta(hours=24)
         with self._usage_lock:
             while self._usage_times and self._usage_times[0] < cutoff:
                 self._usage_times.popleft()
-            if len(self._usage_times) >= self.settings.openrouter_daily_request_limit:
+            if len(self._usage_times) >= limit:
                 raise OpenRouterQuotaExceededError("OpenRouter gunluk bot limiti doldu.")
             self._usage_times.append(now)
 
-    def _request(self, messages: list[dict[str, Any]], *, model: str) -> str:
+    @staticmethod
+    def _model_chain(primary: str, fallbacks: str) -> tuple[str, ...]:
+        values = [primary, *(part.strip() for part in str(fallbacks or "").split(","))]
+        return tuple(dict.fromkeys(value for value in values if value))
+
+    def _request_single(self, messages: list[dict[str, Any]], *, model: str) -> str:
         self._check_configuration()
-        self._reserve_daily_slot()
         endpoint = f"{self.settings.openrouter_base_url.rstrip('/')}/chat/completions"
         headers = {
             "Authorization": f"Bearer {self.settings.openrouter_api_key.strip()}",
@@ -221,6 +230,39 @@ class OpenRouterStockAnalyst:
             f"OpenRouter analiz servisine ulasilamadi ({type(last_error).__name__})."
         )
 
+    def _request(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        model: str,
+        fallbacks: str = "",
+    ) -> str:
+        """Bir ücretsiz model yoğun/uyumsuzsa sıradaki sabit modele geçer."""
+
+        failures: list[str] = []
+        quota_failures = 0
+        chain = self._model_chain(model, fallbacks)
+        for candidate in chain:
+            try:
+                return self._request_single(messages, model=candidate)
+            except OpenRouterAuthenticationError:
+                raise
+            except OpenRouterQuotaExceededError:
+                quota_failures += 1
+                failures.append(f"{candidate}: kota/yoğunluk")
+                logger.info("OpenRouter model yoğun; fallback deneniyor model=%s", candidate)
+            except OpenRouterUnavailableError as exc:
+                failures.append(f"{candidate}: {type(exc).__name__}")
+                logger.info("OpenRouter model kullanılamadı; fallback deneniyor model=%s", candidate)
+        detail = ", ".join(failures[:4])
+        if quota_failures == len(chain):
+            raise OpenRouterQuotaExceededError(
+                f"Yapılandırılmış {len(chain)} ücretsiz modelin tamamı şu anda yoğun/kotalı ({detail})."
+            )
+        raise OpenRouterUnavailableError(
+            f"Yapılandırılmış ücretsiz AI modelleri yanıt vermedi ({detail})."
+        )
+
     @staticmethod
     def _user_text(
         user_request: str,
@@ -260,7 +302,11 @@ class OpenRouterStockAnalyst:
             },
             {"role": "user", "content": response_text},
         ]
-        translated = self._request(messages, model=self.settings.openrouter_model)
+        translated = self._request(
+            messages,
+            model=self.settings.openrouter_model,
+            fallbacks=self.settings.openrouter_model_fallbacks,
+        )
         if _looks_primarily_english(translated):
             raise OpenRouterUnavailableError("Model iki denemede de Türkçe yanıt üretemedi.")
         return translated
@@ -271,12 +317,18 @@ class OpenRouterStockAnalyst:
         *,
         verified_context: Optional[dict[str, Any]] = None,
     ) -> str:
+        self._check_configuration()
+        self._reserve_daily_slot()
         messages = [
             {"role": "system", "content": load_stock_analysis_prompt()},
             {"role": "user", "content": self._user_text(user_request, verified_context)},
         ]
         return self._ensure_turkish(
-            self._request(messages, model=self.settings.openrouter_model)
+            self._request(
+                messages,
+                model=self.settings.openrouter_model,
+                fallbacks=self.settings.openrouter_model_fallbacks,
+            )
         )
 
     def analyze_image(
@@ -287,6 +339,8 @@ class OpenRouterStockAnalyst:
         *,
         verified_context: Optional[dict[str, Any]] = None,
     ) -> str:
+        self._check_configuration()
+        self._reserve_daily_slot()
         normalized_type = str(mime_type or "").split(";", 1)[0].strip().casefold()
         if normalized_type not in _SUPPORTED_IMAGE_TYPES:
             raise OpenRouterInvalidImageError("Desteklenen gorsel turleri: JPEG, PNG, WEBP ve GIF.")
@@ -315,14 +369,22 @@ class OpenRouterStockAnalyst:
             {"role": "system", "content": load_stock_analysis_prompt()},
             {"role": "user", "content": content},
         ]
-        result = self._request(messages, model=self.settings.openrouter_vision_model)
+        result = self._request(
+            messages,
+            model=self.settings.openrouter_vision_model,
+            fallbacks=self.settings.openrouter_vision_model_fallbacks,
+        )
         if not _has_image_evidence_block(result):
             # Genel/geçiştiren yanıtı kullanıcıya gerçek görsel analizi gibi sunma.
             content[0]["text"] += (
                 "\n\nUYARI: Önceki deneme zorunlu GÖRSEL OKUMA kanıt bloğunu üretmedi. "
                 "Bu kez ekli resmi piksel içeriğiyle incele ve yanıtı zorunlu blokla başlat."
             )
-            result = self._request(messages, model=self.settings.openrouter_vision_model)
+            result = self._request(
+                messages,
+                model=self.settings.openrouter_vision_model,
+                fallbacks=self.settings.openrouter_vision_model_fallbacks,
+            )
         result = self._ensure_turkish(result)
         if not _has_image_evidence_block(result):
             raise OpenRouterUnavailableError(

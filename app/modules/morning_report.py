@@ -17,6 +17,7 @@ from app.analysis.indicator_engine import atr, compute_technical_snapshot
 from app.analysis.smart_money_engine import SmartMoneyResult, detect_smart_money
 from app.models.database import MarketDailyReportLog, NewsArticle, NewsEvent
 from app.modules.chart_engine import ChecklistVisual, ReportChartSpec
+from app.services.market_breadth_service import MarketBreadthResult
 
 logger = logging.getLogger("mergen_quant.modules.morning_report")
 
@@ -84,6 +85,16 @@ class MorningReport:
     confidence: MarketConfidence
     calendar_events: tuple[EconomicCalendarEvent, ...]
     failures: tuple[tuple[str, str], ...] = ()
+    breadth: MarketBreadthResult | None = None
+    index_symbol: str = "XU100"
+
+    @property
+    def index_analysis(self) -> InstrumentMorningAnalysis:
+        normalized = self.index_symbol.upper().removesuffix(".IS").removeprefix("^")
+        item = next((row for row in self.instruments if row.symbol == normalized), None)
+        if item is None:
+            raise ValueError(f"{normalized} endeks analizi raporda bulunamadı; hisseye otomatik geçiş yapılmadı.")
+        return item
 
 
 _BIST_RE = re.compile(r"^[A-Z0-9]{4,6}$")
@@ -557,6 +568,7 @@ def build_morning_report(
     db: Session | None = None,
     now: datetime | None = None,
     calendar_events: Sequence[EconomicCalendarEvent] | None = None,
+    breadth: MarketBreadthResult | None = None,
 ) -> MorningReport:
     generated_at = now or datetime.now(timezone.utc)
     events = list(calendar_events) if calendar_events is not None else fetch_economic_calendar(
@@ -581,7 +593,12 @@ def build_morning_report(
         raise ValueError("Sabah raporu için hiçbir enstrümanda doğrulanabilir OHLCV alınamadı.")
 
     primary_symbol = str(settings.xu100_symbol).upper().removesuffix(".IS").removeprefix("^")
-    primary = next((item for item in analyses if item.symbol == primary_symbol), analyses[0])
+    primary = next((item for item in analyses if item.symbol == primary_symbol), None)
+    if primary is None:
+        reason = next((reason for symbol, reason in failures if symbol == primary_symbol), "veri alınamadı")
+        raise ValueError(
+            f"{primary_symbol} endeks verisi doğrulanamadı ({reason}); rapor THYAO veya başka hisseye düşürülmedi."
+        )
     vix_change = dxy_change = None
     for setting_name, output_name in (("vix_symbol", "vix"), ("dxy_symbol", "dxy")):
         risk_symbol = getattr(settings, setting_name)
@@ -610,6 +627,8 @@ def build_morning_report(
         confidence=confidence,
         calendar_events=tuple(events),
         failures=tuple(failures),
+        breadth=breadth,
+        index_symbol=primary_symbol,
     )
     if db is not None:
         _persist_morning(db, report, settings.timezone_name)
@@ -617,10 +636,10 @@ def build_morning_report(
 
 
 def build_morning_chart_spec(report: MorningReport, symbol: str | None = None) -> ReportChartSpec:
-    item = next(
-        (entry for entry in report.instruments if entry.symbol == (symbol or "").upper()),
-        report.instruments[0],
-    )
+    requested = (symbol or report.index_symbol).upper().removesuffix(".IS").removeprefix("^")
+    item = next((entry for entry in report.instruments if entry.symbol == requested), None)
+    if item is None:
+        raise ValueError(f"{requested} raporda bulunamadı; grafik başka hisseyle üretilmedi.")
     plan = _pick_direction_plan(item.trade_plan, item.predicted_direction)
     rr = next((value for value in plan.risk_multiples if value >= 2), plan.risk_multiples[-1])
     target_count = max(1, min(len(plan.targets), plan.risk_multiples.index(rr) + 1))
@@ -643,24 +662,59 @@ def build_morning_chart_spec(report: MorningReport, symbol: str | None = None) -
 
 def format_morning_report(report: MorningReport) -> str:
     direction_map = {"bullish": "YUKARI", "bearish": "AŞAĞI", "range": "YATAY"}
+    item = report.index_analysis
+    summary = item.yesterday
+    plan = _pick_direction_plan(item.trade_plan, item.predicted_direction)
     lines = [
-        "🌅 MONTANA MELİH • 08:00 SABAH RAPORU",
+        "🌅 MONTANA MELİH • 08:00 XU100 AÇILIŞ RAPORU",
         f"📅 {report.report_date:%d.%m.%Y}",
         "",
         f"🛡️ Piyasa güveni: {report.confidence.score:.0f}/100 • {report.confidence.label}",
+        f"🧭 Bugünün koşullu yönü: {direction_map.get(item.predicted_direction, item.predicted_direction.upper())}",
+        "",
+        "📊 XU100 • DÜNÜN KANITI",
+        f"• Kapanış {summary.close:.2f} • %{summary.change_percent:+.2f}",
+        f"• Açılış/Yüksek/Düşük: {summary.open:.2f} / {summary.high:.2f} / {summary.low:.2f}",
+        f"• ATR {summary.atr:.2f} • ADR {summary.adr:.2f} • Yapı: {summary.trend}",
+        "",
+        f"🧩 SMXM CHECKLIST • {item.checklist_score}/6 • {item.setup_label}",
     ]
-    for item in report.instruments[:12]:
-        summary = item.yesterday
+    lines.extend(
+        f"{'✅' if check.passed else '❌'} {check.label}: {check.detail[:110]}"
+        for check in item.checklist
+    )
+    lines.extend(
+        [
+            "",
+            f"🎯 {plan.direction} PLANI • kalite {plan.score}/100 • {plan.status}",
+            f"• Teyit/giriş: {plan.entry_low:.2f}–{plan.entry_high:.2f} • Tetik {plan.trigger:.2f}",
+            f"• Geçersizlik/SL: {plan.stop_standard:.2f}",
+            f"• TP1/TP2/TP3: {plan.targets[0]:.2f} / {plan.targets[1]:.2f} / {plan.targets[2]:.2f}",
+            f"• Plan RR: {plan.risk_multiples[0]:.2f}R / {plan.risk_multiples[1]:.2f}R / {plan.risk_multiples[2]:.2f}R",
+            f"• İşleme geçiş: {plan.entry_method[:180]}",
+        ]
+    )
+    breadth = report.breadth
+    if breadth and breadth.available:
         lines.extend(
             [
                 "",
-                f"📊 {item.symbol} • {direction_map.get(item.predicted_direction, item.predicted_direction.upper())}",
-                f"Dün: {summary.close:.2f} • %{summary.change_percent:+.2f} • Y/D {summary.high:.2f}/{summary.low:.2f}",
-                f"ATR {summary.atr:.2f} • SMXM {item.checklist_score}/6 • {item.setup_label}",
+                "🌐 571 HİSSE • PİYASA İÇ YAPISI",
+                f"• Kapsam: {breadth.scanned}/{breadth.universe_size} (%{breadth.coverage_ratio:.1f})",
+                f"• Puan: {breadth.breadth_score}/100 • {breadth.regime}",
+                f"• Yükselen/Düşen/Yatay: {breadth.advancers}/{breadth.decliners}/{breadth.unchanged}",
+                f"• EMA20/50/200 üstü: %{breadth.above_ema20_ratio:.1f} / %{breadth.above_ema50_ratio:.1f} / "
+                + (f"%{breadth.above_ema200_ratio:.1f}" if breadth.above_ema200_ratio is not None else "veri yetersiz"),
+                f"• Long {breadth.long_count} • Short/Risk {breadth.short_count} • Nötr {breadth.neutral_count}",
+                f"🔮 Açılış çerçevesi: {breadth.tomorrow_bias}",
             ]
         )
-    if len(report.instruments) > 12:
-        lines.append(f"\n… {len(report.instruments) - 12} enstrüman daha analiz edildi.")
+        if breadth.long_candidates:
+            lines.append("🟢 Güçlü long izleme: " + ", ".join(f"{x.symbol}({x.score})" for x in breadth.long_candidates[:6]))
+        if breadth.short_candidates:
+            lines.append("🔴 Zayıf/short-risk: " + ", ".join(f"{x.symbol}({x.score})" for x in breadth.short_candidates[:6]))
+    elif breadth is not None:
+        lines.extend(["", f"⚠️ 571 hisse taraması doğrulanamadı: {breadth.note}"])
     lines.extend(["", "🗓️ BUGÜNÜN ÖNEMLİ TAKVİMİ"])
     important = [event for event in report.calendar_events if event.impact in {"high", "medium"}]
     if not important:
@@ -674,5 +728,8 @@ def format_morning_report(report: MorningReport) -> str:
             lines.append(f"   🧠 {event.probable_effect[:240]}")
     if report.failures:
         lines.append(f"\n⚠️ Veri alınamayan: {len(report.failures)} sembol (/veri_durumu ile kontrol et)")
-    lines.append("\nℹ️ Olası yön ve setup puanı olasılık garantisi veya yatırım tavsiyesi değildir.")
+    lines.append(
+        "\nℹ️ Yön tahmini; XU100 kapanışı, 571 hisse genişliği ve doğrulanmış teknik kanıtların koşullu birleşimidir. "
+        "Açılış boşluğu ve ilk 15–30 dakikalık teyit görülmeden işlem sinyali sayılmaz; yatırım tavsiyesi değildir."
+    )
     return "\n".join(lines)[:4096]

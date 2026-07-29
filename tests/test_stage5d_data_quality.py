@@ -133,7 +133,7 @@ def test_quality_daily_intraday_mismatch_warns():
 
 @pytest.mark.parametrize(
     ("symbol", "expected"),
-    [("SVGYO", "SVGYO.IS"), ("svgyo.is", "SVGYO.IS"), ("XU100", "^XU100")],
+    [("SVGYO", "SVGYO.IS"), ("svgyo.is", "SVGYO.IS"), ("XU100", "XU100.IS")],
 )
 def test_quality_symbol_normalization(symbol, expected):
     result = DataQualityEngine().evaluate(_frame(), min_bars=20, symbol=symbol)

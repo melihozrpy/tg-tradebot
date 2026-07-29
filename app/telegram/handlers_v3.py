@@ -102,6 +102,7 @@ from app.telegram.message_templates_v3 import (
     format_intraday_preview,
     format_liquidity,
     format_market_breadth,
+    format_breadth_candidate_messages,
     format_multi_timeframe,
     format_news_detail,
     format_news_list,
@@ -1578,17 +1579,9 @@ async def cmd_sinyaller(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             .limit(20)
             .all()
         )
-        if not rows:
-            await update.message.reply_text("Henüz kayıtlı sinyal yok.")
-            return
-        lines = [
-            f"• #{s.id} {s.symbol}: {s.signal_type.value} • skor {s.score:.0f} • {s.state.value}"
-            + (" • benim takibim" if s.user_id == user.id else " • analiz")
-            for s in rows
-        ]
-        await update.message.reply_text(
-            "📌 SON SİNYALLER\n" + "\n".join(lines) + "\n\nDetay: /sinyal <id>  •  Takip: /takip <id>"
-        )
+        from app.telegram.signal_list_formatter import format_recent_signals
+
+        await update.message.reply_text(format_recent_signals(rows))
     finally:
         db.close()
 
@@ -2204,8 +2197,26 @@ async def cmd_piyasa(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         return
     settings = get_settings()
     provider = build_market_data_provider(settings)
-    breadth = compute_market_breadth(provider, settings.bist_symbols_csv_path)
+    await update.message.reply_text(
+        "⏳ 571 hisselik BIST evreni taranıyor. Veri sağlayıcısının hızına göre biraz sürebilir…"
+    )
+    breadth = await asyncio.to_thread(
+        compute_market_breadth,
+        provider,
+        settings.bist_universe_json_path,
+        "1d",
+        settings.universe_scan_max_symbols_per_run,
+        provider_factory=lambda: build_market_data_provider(settings),
+        max_workers=settings.universe_scan_workers,
+        minimum_signal_score=settings.universe_scan_minimum_score,
+        top_n=12,
+        cache_minutes=settings.universe_scan_cache_minutes,
+    )
     await update.message.reply_text(format_market_breadth(breadth))
+    detail = context.args[0].casefold() if context.args else ""
+    if breadth.available and detail in {"long", "short", "risk", "tum", "tüm"}:
+        for message in format_breadth_candidate_messages(breadth, detail):
+            await update.message.reply_text(message)
 
 
 cmd_genislik = cmd_piyasa
@@ -2859,7 +2870,7 @@ async def handle_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         "menu_tara": "Piyasa taraması için /tara yaz.",
         "menu_portfoy": "Portföyün için /portfoy yaz.",
         "menu_sinyaller": "Aktif sinyaller için /aktif_sinyaller yaz.",
-        "menu_piyasa": "Piyasa özeti için /piyasa yaz.",
+        "menu_piyasa": "571 hisse piyasa özeti: /piyasa • tüm adaylar: /piyasa tum • yalnız long/short: /piyasa long veya /piyasa short",
         "menu_ayarlar": "Ayarların için /ayarlar yaz.",
     }
     if data in direct:
@@ -3089,7 +3100,8 @@ async def cmd_komutlar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "/ekle THYAO — izleme listesine ekler\n"
         "/liste — izleme listesini gösterir\n"
         "/tara — listedeki hisseleri tarar\n"
-        "/piyasa — piyasa genişliğini gösterir\n"
+        "/piyasa — 571 hisse piyasa genişliği ve yarın yön çerçevesi\n"
+        "/piyasa long|short|tum — puan eşiğini geçen tüm adayları sayfalar\n"
         "/aksam_raporu — kapanış raporunu hemen üretir\n\n"
         "💼 PORTFÖY\n"
         "/portfoy — portföy özetini gösterir\n"

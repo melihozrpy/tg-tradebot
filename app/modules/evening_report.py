@@ -14,6 +14,7 @@ from app.analysis.smart_money_engine import SmartMoneyResult, detect_smart_money
 from app.models.database import MarketDailyReportLog
 from app.modules.chart_engine import NewsTimelineItem, ReportChartSpec
 from app.modules.morning_report import EconomicCalendarEvent, fetch_economic_calendar
+from app.services.market_breadth_service import MarketBreadthResult
 
 logger = logging.getLogger("mergen_quant.modules.evening_report")
 
@@ -48,6 +49,16 @@ class EveningReport:
     calendar_events: tuple[EconomicCalendarEvent, ...]
     consistency_percent: float | None
     failures: tuple[tuple[str, str], ...] = ()
+    breadth: MarketBreadthResult | None = None
+    index_symbol: str = "XU100"
+
+    @property
+    def index_analysis(self) -> InstrumentEveningAnalysis:
+        normalized = self.index_symbol.upper().removesuffix(".IS").removeprefix("^")
+        item = next((row for row in self.instruments if row.symbol == normalized), None)
+        if item is None:
+            raise ValueError(f"{normalized} endeks analizi raporda bulunamadı; hisseye otomatik geçiş yapılmadı.")
+        return item
 
 
 def _completed_rows(df: pd.DataFrame) -> pd.DataFrame:
@@ -214,6 +225,7 @@ def build_evening_report(
     db: Session | None = None,
     now: datetime | None = None,
     calendar_events: Sequence[EconomicCalendarEvent] | None = None,
+    breadth: MarketBreadthResult | None = None,
 ) -> EveningReport:
     generated_at = now or datetime.now(timezone.utc)
     events = list(calendar_events) if calendar_events is not None else fetch_economic_calendar(
@@ -264,6 +276,12 @@ def build_evening_report(
             failures.append((symbol, f"{type(exc).__name__}: {str(exc)[:180]}"))
     if not analyses:
         raise ValueError("Akşam raporu için hiçbir enstrümanda doğrulanabilir OHLCV alınamadı.")
+    index_symbol = str(settings.xu100_symbol).upper().removesuffix(".IS").removeprefix("^")
+    if not any(item.symbol == index_symbol for item in analyses):
+        reason = next((reason for symbol, reason in failures if symbol == index_symbol), "veri alınamadı")
+        raise ValueError(
+            f"{index_symbol} endeks verisi doğrulanamadı ({reason}); kapanış raporu THYAO'ya düşürülmedi."
+        )
     compared = [item.comparison.consistent for item in analyses if item.comparison.consistent is not None]
     consistency = round(sum(bool(value) for value in compared) / len(compared) * 100.0, 1) if compared else None
     report = EveningReport(
@@ -273,6 +291,8 @@ def build_evening_report(
         calendar_events=tuple(events),
         consistency_percent=consistency,
         failures=tuple(failures),
+        breadth=breadth,
+        index_symbol=index_symbol,
     )
     if db is not None:
         _persist_evening(db, report, settings.timezone_name)
@@ -280,10 +300,10 @@ def build_evening_report(
 
 
 def build_evening_chart_spec(report: EveningReport, symbol: str | None = None) -> ReportChartSpec:
-    item = next(
-        (entry for entry in report.instruments if entry.symbol == (symbol or "").upper()),
-        report.instruments[0],
-    )
+    requested = (symbol or report.index_symbol).upper().removesuffix(".IS").removeprefix("^")
+    item = next((entry for entry in report.instruments if entry.symbol == requested), None)
+    if item is None:
+        raise ValueError(f"{requested} raporda bulunamadı; grafik başka hisseyle üretilmedi.")
     timeline = tuple(
         NewsTimelineItem(
             event.event_time.strftime("%H:%M") if event.event_time else "--:--",
@@ -309,24 +329,42 @@ def format_evening_report(report: EveningReport) -> str:
     consistency = (
         f"%{report.consistency_percent:.1f}" if report.consistency_percent is not None else "karşılaştırma yok"
     )
+    item = report.index_analysis
     lines = [
-        "🌙 MONTANA MELİH • 21:00 KAPANIŞ RAPORU",
+        "🌙 MONTANA MELİH • 21:00 XU100 KAPANIŞ RAPORU",
         f"📅 {report.report_date:%d.%m.%Y}",
         f"🎯 Sabah tahmini tutarlılığı: {consistency}",
+        "",
+        f"📊 XU100 KAPANIŞI • {item.close:.2f} • %{item.change_percent:+.2f}",
+        f"• Açılış/Yüksek/Düşük/Kapanış: {item.open:.2f} / {item.high:.2f} / {item.low:.2f} / {item.close:.2f}",
+        f"• Gerçekleşen yön: {item.comparison.realised.upper()}",
+        f"• Sabah karşılaştırması: {item.comparison.note}",
+        f"🧠 Olası etki: {item.probable_effect_analysis}",
     ]
-    for item in report.instruments[:10]:
-        icon = "✅" if item.comparison.consistent else "❌" if item.comparison.consistent is False else "➖"
+    breadth = report.breadth
+    if breadth and breadth.available:
         lines.extend(
             [
                 "",
-                f"📊 {item.symbol} • {item.close:.2f} • %{item.change_percent:+.2f}",
-                f"A/Y/D/K: {item.open:.2f} / {item.high:.2f} / {item.low:.2f} / {item.close:.2f}",
-                f"{icon} {item.comparison.note}",
-                f"🧠 Olası etki: {item.probable_effect_analysis}",
+                "🌐 571 HİSSE • KAPANIŞIN İÇ YAPISI",
+                f"• Kapsam: {breadth.scanned}/{breadth.universe_size} (%{breadth.coverage_ratio:.1f}) • Eksik {breadth.failed}",
+                f"• Piyasa puanı: {breadth.breadth_score}/100 • {breadth.regime}",
+                f"• Yükselen/Düşen/Yatay: {breadth.advancers}/{breadth.decliners}/{breadth.unchanged}",
+                f"• Net genişlik {breadth.net_breadth:+d} • Y/D oranı {breadth.advance_decline_ratio:.2f}",
+                f"• Ortalama/medyan değişim: %{breadth.average_change_percent:+.2f} / %{breadth.median_change_percent:+.2f}",
+                f"• EMA20/50/200 üstü: %{breadth.above_ema20_ratio:.1f} / %{breadth.above_ema50_ratio:.1f} / "
+                + (f"%{breadth.above_ema200_ratio:.1f}" if breadth.above_ema200_ratio is not None else "veri yetersiz"),
+                f"• Yeni 20g zirve/dip: {breadth.new_20d_highs}/{breadth.new_20d_lows} • Hacim artışı %{breadth.rising_volume_ratio:.1f}",
+                f"• LONG {breadth.long_count} • SHORT/RİSK {breadth.short_count} • NÖTR {breadth.neutral_count}",
+                f"🔮 Yarın için koşullu çerçeve: {breadth.tomorrow_bias}",
             ]
         )
-    if len(report.instruments) > 10:
-        lines.append(f"\n… {len(report.instruments) - 10} enstrüman daha işlendi.")
+        if breadth.long_candidates:
+            lines.append("🟢 Long izleme: " + ", ".join(f"{x.symbol}({x.score}, %{x.change_percent:+.1f})" for x in breadth.long_candidates[:8]))
+        if breadth.short_candidates:
+            lines.append("🔴 Short/risk: " + ", ".join(f"{x.symbol}({x.score}, %{x.change_percent:+.1f})" for x in breadth.short_candidates[:8]))
+    elif breadth is not None:
+        lines.extend(["", f"⚠️ 571 hisse taraması doğrulanamadı: {breadth.note}"])
     important = [event for event in report.calendar_events if event.impact in {"high", "medium"}]
     lines.extend(["", "📰 GÜN İÇİ HABER / VERİ ZAMAN ÇİZELGESİ"])
     if not important:
@@ -339,5 +377,8 @@ def format_evening_report(report: EveningReport) -> str:
         )
     if report.failures:
         lines.append(f"\n⚠️ Veri alınamayan: {len(report.failures)} sembol")
-    lines.append("\nℹ️ Haber-hareket eşleşmesi olası açıklamadır; kesin nedensellik veya yatırım tavsiyesi değildir.")
+    lines.append(
+        "\nℹ️ Yarın yönü kesin tahmin değildir: XU100 + 571 hisse genişliği kapanmış barlara dayanır. "
+        "Açılış boşluğu, ilk 15–30 dakika yapısı ve haber akışı yönü değiştirebilir; SHORT etiketi spot emir değildir."
+    )
     return "\n".join(lines)[:4096]
