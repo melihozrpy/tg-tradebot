@@ -1,7 +1,7 @@
 # Tüm Hisseler, SMXM Günlük Rapor ve Sanal Portföy
 
 Bu paket; verilen `BIST_Tum_Hisseler_Listesi.pdf` dosyasındaki 571 kodu
-Telegram evrenine, 08:00/21:00 raporlarına, sanal portföye ve geçmiş veri
+Telegram evrenine, 09:00/21:00 raporlarına, sanal portföye ve geçmiş veri
 backtestine bağlar. Mevcut `mergen_quant` paket adı ve Coolify/Docker çalışma
 biçimi korunmuştur.
 
@@ -16,7 +16,7 @@ biçimi korunmuştur.
 |---|---|
 | `/tum_hisseler [sayfa]` | PDF'ten alınan 571 kodu 50'şer ve ileri/geri düğmeleriyle gösterir. |
 | `/eniyi50 [adet]` | Evreni tarar; setup puanı, giriş uzaklığı ve en az 2R hedefe göre en iyi 50 adayı sıralar. Tek sembol hatası taramayı durdurmaz. |
-| `/sabah_raporu` | 08:00 SMXM raporunu elle üretir. |
+| `/sabah_raporu` | 09:00 SMXM raporunu elle üretir. |
 | `/aksam_raporu`, `/smxm_aksam_raporu` | Aynı kapsamlı XU100 + 571 hisse kapanış ve sabah bias karşılaştırmasını üretir. |
 | `/piyasa` | 571 hissenin yükselen/düşen, EMA20/50/200, hacim, zirve/dip ve piyasa puanı özetini verir. |
 | `/piyasa long`, `/piyasa short`, `/piyasa tum` | Puan eşiğini geçen adayların tamamını Telegram sınırına göre sayfalar. |
@@ -30,7 +30,7 @@ başarısız sayılır; sahte fiyatla sıralanmaz. Sonuç bir saat önbelleğe a
 
 ## Zamanlanmış işler
 
-- Sabah: her gün `08:00`, `Europe/Istanbul`. Ana varlık yalnızca `XU100.IS`
+- Sabah: her gün `09:00`, `Europe/Istanbul`. Ana varlık yalnızca `XU100.IS`
   endeksidir; veri yoksa THYAO'ya veya başka hisseye sessizce geçmez. Dünün O/H/L/C özeti, ATR ve trend;
   altı maddelik SMXM checklist; VIX/DXY, volatilite, hacim ve haber sentiment'i
   ile 0-100 piyasa güveni; ekonomik takvim ve enstrüman etki eşlemesi üretir.
@@ -40,7 +40,7 @@ başarısız sayılır; sahte fiyatla sıralanmaz. Sonuç bir saat önbelleğe a
   sabah bias'ı ile gerçekleşeni karşılaştırır.
 - Her iki job da `try/except` korumalıdır. Bir rapor veya sembol hatası bot
   prosesini durdurmaz; yöneticiye kısa hata bildirimi gönderilir.
-- Yeni 08:00 raporu açıkken eski `DAILY_BRIEF` planlanmaz; çift mesaj oluşmaz.
+- Yeni 09:00 raporu açıkken eski `DAILY_BRIEF` planlanmaz; çift mesaj oluşmaz.
 
 Sabah checklist maddeleri: günlük bias, HTF/LTF OB-FVG zone, sweep ve CHoCH/BOS,
 A+ plan uyumu, haber riskinin temizliği, minimum 1:2 risk/getiri. Her madde
@@ -109,7 +109,7 @@ INSTRUMENTS=["THYAO","ASELS","KCHOL","GARAN","AKBNK","SASA","BIMAS","EREGL","TCE
 BIST_UNIVERSE_JSON_PATH=app/config/bist_instruments.json
 
 MORNING_REPORT_ENABLED=true
-MORNING_REPORT_TIME=08:00
+MORNING_REPORT_TIME=09:00
 EVENING_MARKET_REPORT_ENABLED=true
 EVENING_MARKET_REPORT_TIME=21:00
 DAILY_BRIEF_ENABLED=false
@@ -185,7 +185,7 @@ Telegram smoke testi:
 6. En az bir aylık aralıkla `/smxm_backtest THYAO 2025-01-01 2025-06-01 10000`
    çalıştırın; özet ve equity curve gelmelidir.
 7. Coolify loglarında `smxm_morning_report` ve `smxm_evening_report` job'larının
-   sırasıyla 08:00 ve 21:00'a kurulduğunu doğrulayın.
+   sırasıyla 09:00 ve 21:00'a kurulduğunu doğrulayın.
 
 ## Dosya yerleşimi
 

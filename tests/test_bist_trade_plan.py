@@ -33,8 +33,9 @@ def test_clean_message_and_tradingview_style_chart():
     data = _ohlcv()
     plan = build_bist_trade_plan(data, "THYAO")
     message = format_bist_trade_plan(plan)
-    assert "ÖNCELİKLİ" in message and "ALTERNATİF" in message
-    assert "TP5" in message and "STOP SEÇENEKLERİ" in message
+    assert "ÖNCELİKLİ" in message and "EN YAKIN KALİTELİ BÖLGE" in message
+    assert "Güncel fiyattan doğrudan giriş" in message
+    assert "ALTERNATİF YÖN" not in message
     assert "ÄŸ" not in message and "Ã" not in message
     path = generate_bist_trade_plan_chart(data, plan)
     try:

@@ -1,8 +1,8 @@
-# 🏔️ Montana Melih Hisse Bot — BIST Analiz, Alarm ve Risk Sistemi
+# 🏔️ Montana Finans Robotu Hisse Bot — BIST Analiz, Alarm ve Risk Sistemi
 
 BIST hisselerini izleyen; açıklanabilir teknik/temel analiz, çoklu fiyat alarmı,
 sinyal yaşam döngüsü, portföy riski ve point-in-time backtest sunan Telegram botu
-ve API. Kullanıcıya görünen aktif marka **Montana Melih Hisse Bot**'tur. Geriye
+ve API. Kullanıcıya görünen aktif marka **Montana Finans Robotu Hisse Bot**'tur. Geriye
 uyumluluk için Python paket adı (`mergen-quant`), veritabanı dosyası
 (`mergen_quant.db`), Docker kullanıcısı ve logger adları gibi iç teknik
 tanımlayıcılar kasıtlı olarak korunur.
@@ -23,14 +23,14 @@ Yeni alarm, sinyal ve veri kaynağı kurulumunun tamamı için
 [`docs/ULTRA_BIST_ALARM_SIGNAL_DATA.md`](docs/ULTRA_BIST_ALARM_SIGNAL_DATA.md)
 dosyasına bakın.
 
-571 kodluk PDF evreni, `/tum_hisseler`, `/eniyi50`, 08:00/21:00 SMXM
+571 kodluk PDF evreni, `/tum_hisseler`, `/eniyi50`, 09:00/21:00 SMXM
 raporları, sanal portföy ve yeni backtest kurulumu için
 [`docs/SMXM_DAILY_REPORTS_AND_UNIVERSE.md`](docs/SMXM_DAILY_REPORTS_AND_UNIVERSE.md)
 dosyasına bakın.
 
 ---
 
-## Montana Melih Hisse Bot — Aşama 5d + Veri Güvenilirliği
+## Montana Finans Robotu Hisse Bot — Aşama 5d + Veri Güvenilirliği
 
 **Aşama 5d (tamamlandı):**
 
@@ -927,7 +927,7 @@ başarısız olursa veritabanınız DEĞİŞTİRİLMEMİŞ olur (migration
 matplotlib `Agg` backend ile (GUI'siz) çalışır; sunucu ortamında ek bir
 ayar gerekmez. Disk alanı/yazma izni sorunlarını kontrol edin.
 
-## Montana Melih Hisse Bot — Aşama 5e
+## Montana Finans Robotu Hisse Bot — Aşama 5e
 
 Aşama 5e, mevcut kısa vadeli analizleri kaldırmadan güncel işlem fiyatını son
 kesinleşmiş kapanıştan ayırır. Teknik indikatörler tamamlanmış mumlarla; seviye,
@@ -975,7 +975,7 @@ ekler; mevcut kullanıcı, portföy, sinyal, alarm, haber, seviye ve senaryo
 kayıtlarını değiştirmez. Temel veri veya kurumsal işlem verisi sağlayıcıda yoksa
 değer üretilmez; çıktı açıkça “Veri bulunamadı / Veri yetersiz” olarak işaretlenir.
 
-## Montana Melih Hisse Bot — Aşama 5f
+## Montana Finans Robotu Hisse Bot — Aşama 5f
 
 Aşama 5f yeni bir kısa vadeli AL/SAT modeli eklemez. Telegram metinlerini
 sadeleştirir, uzun vadeli senaryoları bağımsız teknik kaynaklarla doğrular,
@@ -1027,7 +1027,7 @@ scripti bilinçli olarak bu klasörü doğrudan paketlemeyi reddeder. Script tem
 bir kaynak staging klasöründe çalıştırılmalıdır. Mevcut migration geçmişi Aşama
 5f'te değiştirilmemiştir.
 
-## Montana Melih Hisse Bot — Aşama 5g
+## Montana Finans Robotu Hisse Bot — Aşama 5g
 
 Aşama 5g, mevcut analiz ve sinyal motorlarını kaldırmadan onları point-in-time
 geçmiş veri üzerinde çalıştırır. Varsayılan gerçekleşme modeli `next_open`,

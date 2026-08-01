@@ -6,6 +6,7 @@ from datetime import datetime
 import pandas as pd
 
 from app.analysis.indicator_engine import compute_technical_snapshot
+from app.analysis.quality_zone_engine import QualityZoneScenario, select_closest_quality_zone
 from app.analysis.smart_money_engine import SmartMoneyResult, detect_smart_money
 from app.analysis.support_resistance_engine import compute_support_resistance
 
@@ -48,6 +49,7 @@ class BistTradePlan:
     decision: str
     data_timestamp: datetime | pd.Timestamp
     warnings: tuple[str, ...]
+    quality_zone: QualityZoneScenario | None = None
 
 
 def _ordered_unique(values, *, reverse: bool = False) -> list[float]:
@@ -292,6 +294,13 @@ def build_bist_trade_plan(df: pd.DataFrame, symbol: str, multi_timeframe_result=
     supports = _ordered_unique((sr.support_1, sr.support_2, sr.main_support), reverse=True)
     resistances = _ordered_unique((sr.resistance_1, sr.resistance_2, sr.main_resistance))
     smart = detect_smart_money(data)
+    quality_zone = select_closest_quality_zone(
+        close,
+        atr_value,
+        smart,
+        support_levels=supports,
+        resistance_levels=resistances,
+    )
 
     long_candidates = [(value, "yapısal destek", 3.0) for value in supports]
     short_candidates = [(value, "yapısal direnç", 3.0) for value in resistances]
@@ -406,4 +415,5 @@ def build_bist_trade_plan(df: pd.DataFrame, symbol: str, multi_timeframe_result=
             "Short senaryosu spot BIST'te her hissede uygulanamaz; açığa satış/ödünç/VİOP uygunluğu kontrol edilmelidir.",
             "Puan olasılık veya kesin AL/SAT kararı değildir; açıklanabilir teknik kurulum kalitesidir.",
         ),
+        quality_zone=quality_zone,
     )

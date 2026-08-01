@@ -83,7 +83,7 @@ def test_58_fastapi_smoke_passes():
     with TestClient(app) as client:
         response = client.get("/")
     assert response.status_code == 200
-    assert response.json()["name"] == "MONTANA MELİH HİSSE BOT"
+    assert response.json()["name"] == "MONTANA FİNANS ROBOTU"
 
 
 def test_59_stage5g_telegram_commands_are_registered():

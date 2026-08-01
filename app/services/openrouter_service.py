@@ -183,7 +183,7 @@ class OpenRouterStockAnalyst:
         headers = {
             "Authorization": f"Bearer {self.settings.openrouter_api_key.strip()}",
             "Content-Type": "application/json",
-            "X-Title": "Montana Melih Hisse Bot",
+            "X-Title": self.settings.bot_name,
         }
         body = {
             "model": model,

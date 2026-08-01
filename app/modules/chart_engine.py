@@ -39,7 +39,7 @@ TP = "#22c55e"
 SL = VIVID.bear
 OB_BULL = "#14b8a6"
 OB_BEAR = "#fb7185"
-FVG_BULL = VIVID.cyan
+FVG_BULL = VIVID.amber
 FVG_BEAR = VIVID.amber
 
 
@@ -67,6 +67,7 @@ class ReportChartSpec:
     checklist: Sequence[ChecklistVisual] = field(default_factory=tuple)
     entry_low: float | None = None
     entry_high: float | None = None
+    entry_price: float | None = None
     stop: float | None = None
     targets: Sequence[float] = field(default_factory=tuple)
     rr: float | None = None
@@ -150,6 +151,7 @@ def _draw_zone(
     x_end: float,
     alpha: float = 0.16,
     decimals: int = 2,
+    label_offset_points: float = 3.0,
 ) -> None:
     lower, upper = sorted((float(low), float(high)))
     if not math.isfinite(lower) or not math.isfinite(upper) or upper <= 0:
@@ -161,14 +163,18 @@ def _draw_zone(
             facecolor=color, edgecolor=color, linewidth=1.0, alpha=alpha, zorder=1,
         )
     )
-    ax.text(
-        x_start + 0.5,
-        upper,
+    label_x = x_start + max(0.5, (x_end - x_start) * 0.32)
+    ax.annotate(
         f"{label}  {lower:.{decimals}f}-{upper:.{decimals}f}",
+        xy=(label_x, upper),
+        xytext=(0, label_offset_points),
+        textcoords="offset points",
+        ha="center",
         color=color,
-        fontsize=8.5,
+        fontsize=8.2,
         fontweight="bold",
         va="bottom",
+        bbox={"boxstyle": "round,pad=0.18", "facecolor": BG, "edgecolor": color, "alpha": 0.86},
         zorder=8,
     )
 
@@ -177,7 +183,8 @@ def _draw_smart_money(ax, smart: SmartMoneyResult | None, *, offset: int, length
     if smart is None:
         return
     x_end = length - 0.2
-    for zone in (*smart.order_blocks[-3:], *smart.fvg[-3:]):
+    zones = [*smart.order_blocks[-3:], *smart.fvg[-3:]]
+    for slot, zone in enumerate(zones):
         local_index = max(0.0, float((zone.origin_index if zone.origin_index is not None else zone.index) - offset))
         if local_index > length:
             continue
@@ -187,7 +194,11 @@ def _draw_smart_money(ax, smart: SmartMoneyResult | None, *, offset: int, length
             color = FVG_BULL if zone.direction == "bullish" else FVG_BEAR
         _draw_zone(
             ax, zone.low, zone.high, zone.kind, color,
-            x_start=local_index, x_end=x_end, alpha=0.13, decimals=decimals,
+            x_start=local_index,
+            x_end=x_end,
+            alpha=0.15 if zone.kind == "OB" else 0.18,
+            decimals=decimals,
+            label_offset_points=4.0 + (slot % 3) * 12.0,
         )
 
     for event in smart.structure[-5:]:
@@ -211,8 +222,30 @@ def _draw_smart_money(ax, smart: SmartMoneyResult | None, *, offset: int, length
         )
 
 
-def _draw_sentiment_bar(fig, score: float) -> None:
-    add_score_bar(fig, score, label="PİYASA GÜVENİ", left=0.105, bottom=0.025, width=0.49)
+def _draw_market_status(
+    fig,
+    score: float,
+    *,
+    direction: str,
+    smart: SmartMoneyResult | None,
+) -> None:
+    add_score_bar(fig, score, label="PİYASA GÜVENİ", left=0.075, bottom=0.025, width=0.49)
+    normalized = direction.strip().upper()
+    if normalized in {"BULLISH", "YUKARI", "LONG", "RISK-ON"}:
+        trend_text, trend_color = "▲ Yükseliş", BULL
+    elif normalized in {"BEARISH", "AŞAĞI", "ASAGI", "SHORT", "RISK-OFF"}:
+        trend_text, trend_color = "▼ Düşüş", BEAR
+    else:
+        trend_text, trend_color = "◆ Yatay", VIVID.amber
+    ob_count = len(smart.order_blocks) if smart is not None else 0
+    fvg_count = len(smart.fvg) if smart is not None else 0
+    last_mss = None
+    if smart is not None:
+        last_mss = next((event for event in reversed(smart.structure) if event.kind == "MSS"), None)
+    mss_text = last_mss.direction.title() if last_mss is not None else "Yok"
+    fig.text(0.59, 0.061, f"TREND  {trend_text}", color=trend_color, fontsize=9.5, fontweight="bold")
+    fig.text(0.59, 0.033, f"AKTİF BÖLGE  {ob_count} OB • {fvg_count} FVG", color=TEXT, fontsize=9.2, fontweight="bold")
+    fig.text(0.76, 0.033, f"SON MSS  {mss_text}", color=TEXT, fontsize=9.2, fontweight="bold")
 
 
 def _draw_checklist(fig, checklist: Sequence[ChecklistVisual]) -> None:
@@ -278,7 +311,11 @@ def render_report_chart(
             ax, spec.entry_low, spec.entry_high, zone_label, zone_color,
             x_start=x_start, x_end=x_end, alpha=0.18, decimals=decimals,
         )
-        entry = (float(spec.entry_low) + float(spec.entry_high)) / 2.0
+        entry = (
+            float(spec.entry_price)
+            if spec.entry_price is not None
+            else (float(spec.entry_low) + float(spec.entry_high)) / 2.0
+        )
         ax.axhline(entry, color=ENTRY, linewidth=1.35, zorder=9)
         _label_price(ax, entry, "ENTRY", ENTRY, decimals)
     if spec.stop is not None:
@@ -291,7 +328,7 @@ def render_report_chart(
         ax.axhline(level, color="#c084fc", linestyle=(0, (2, 5)), linewidth=1.0, alpha=0.9)
         ax.text(0.7, level, f"Liquidity Sweep • {label}", color="#d8b4fe", fontsize=8, va="bottom")
 
-    ax.axhline(current, color=bias_color, linewidth=0.8, alpha=0.55)
+    ax.axhline(current, color=bias_color, linestyle=(0, (5, 4)), linewidth=1.0, alpha=0.72)
     _label_price(ax, current, "GÜNCEL", bias_color, decimals)
     ax.set_xlim(-1, len(data) + 2)
     price_min_candidates = [float(data["low"].min())]
@@ -302,7 +339,7 @@ def render_report_chart(
     price_max = max(price_max_candidates)
     padding = max((price_max - price_min) * 0.12, current * 0.015)
     ax.set_ylim(max(0, price_min - padding), price_max + padding)
-    ax.grid(True, color=GRID, linewidth=0.55, alpha=0.55)
+    ax.grid(True, color=GRID, linewidth=0.45, alpha=0.28)
     ax.tick_params(colors=MUTED, labelsize=9)
     ax.yaxis.set_major_formatter(FuncFormatter(lambda value, _pos: f"{value:.{decimals}f}"))
     tick_positions = list(range(0, len(data), max(1, len(data) // 8)))
@@ -332,11 +369,11 @@ def render_report_chart(
         0.075, 0.87, f"{arrow}  {banner}", color="#ffffff", fontsize=15, fontweight="bold",
         bbox={"boxstyle": "round,pad=0.5", "facecolor": bias_color, "edgecolor": bias_color, "alpha": 0.9},
     )
-    add_price_card(fig, current, bias_color, decimals=decimals, x=0.94, y=0.865)
+    add_price_card(fig, current, BULL, decimals=decimals, x=0.94, y=0.865)
     if spec.rr is not None:
         fig.text(0.94, 0.805, f"RR  1:{spec.rr:.2f}", color=TEXT, fontsize=15, fontweight="bold", ha="center")
 
-    _draw_sentiment_bar(fig, spec.sentiment_score)
+    _draw_market_status(fig, spec.sentiment_score, direction=direction, smart=smart_money)
     _draw_checklist(fig, spec.checklist)
     if spec.report_kind == "evening":
         _draw_timeline(fig, spec.news_timeline)

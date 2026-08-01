@@ -123,7 +123,7 @@ async def deliver_alarm_outbox(application, db: Session, settings, *, now: datet
                 try:
                     path = generate_alarm_wav(alert.sound_name)
                     with open(path, "rb") as audio:
-                        await application.bot.send_audio(chat_id=row.chat_id, audio=audio, title="Montana fiyat alarmı")
+                        await application.bot.send_audio(chat_id=row.chat_id, audio=audio, title="Montana Finans Robotu fiyat alarmı")
                 except (OSError, ValueError, RuntimeError, TelegramError) as exc:
                     # Text has already been accepted by Telegram. A local WAV
                     # generation/open failure must not retry and duplicate it.

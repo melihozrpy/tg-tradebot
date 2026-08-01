@@ -101,7 +101,7 @@ def test_30_existing_user_and_portfolio_rows_are_preserved(tmp_path):
 def test_31_fastapi_smoke_test_passes():
     response = TestClient(app).get("/")
     assert response.status_code == 200
-    assert response.json()["name"] == "MONTANA MELİH HİSSE BOT"
+    assert response.json()["name"] == "MONTANA FİNANS ROBOTU"
 
 
 def test_32_telegram_bot_and_stage5f_buttons_load(monkeypatch):

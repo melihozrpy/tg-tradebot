@@ -62,8 +62,9 @@ def _get_db():
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if await _reject_unauthorized(update):
         return
+    bot_name = get_settings().bot_name
     await update.message.reply_text(
-        "🏔️ MONTANA MELİH HİSSE BOT • Akıllı BIST Analiz ve Risk Sistemi'ne hoş geldin.\n"
+        f"🏔️ {bot_name.replace('i', 'İ').replace('ı', 'I').upper()} • Akıllı BIST Analiz ve Risk Sistemi'ne hoş geldin.\n"
         "Bu bot yatirim tavsiyesi vermez; kural tabanli, aciklanabilir analiz uretir.\n"
         "Komutlar icin /yardim yazabilirsin."
     )

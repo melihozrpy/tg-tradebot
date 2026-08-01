@@ -246,7 +246,7 @@ async def cmd_sabah_raporu(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             dpi=settings.chart_dpi,
         )
         with open(chart_path, "rb") as image:
-            await update.message.reply_photo(image, caption=f"🌅 {primary.symbol} • 08:00 SMXM görünümü")
+            await update.message.reply_photo(image, caption=f"🌅 {primary.symbol} • 09:00 SMXM görünümü")
         await update.message.reply_text(format_morning_report(report))
         await wait.delete()
     except Exception as exc:  # noqa: BLE001

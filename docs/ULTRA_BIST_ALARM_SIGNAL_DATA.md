@@ -1,11 +1,11 @@
-# 🏔️ Montana Melih Hisse Bot — Ultra BIST Alarm, Sinyal ve Veri Rehberi
+# 🏔️ Montana Finans Robotu Hisse Bot — Ultra BIST Alarm, Sinyal ve Veri Rehberi
 
 Bu belge, **BIST Fiyat Alarm Sistemi Uygulama Talimatı** ile `borsaist.txt`
 gereksinimlerinin mevcut projeye nasıl uygulandığını, hangi işlevlerin lisanslı
 veri veya kullanıcı yetkisi istediğini ve Coolify üzerinde güvenli işletim
 adımlarını tek yerde toplar.
 
-Kullanıcıya görünen marka **Montana Melih Hisse Bot**'tur. Geriye uyumluluğu
+Kullanıcıya görünen marka **Montana Finans Robotu Hisse Bot**'tur. Geriye uyumluluğu
 bozmamak için `mergen-quant` Python paket adı, `mergen_quant.db`, Docker
 kullanıcısı ve logger adları gibi iç teknik tanımlayıcılar değiştirilmemiştir.
 
@@ -753,8 +753,8 @@ API anahtarı ve gerçek DB dosyasını Git'e eklemeyin.
 ### 2. İmajı oluştur
 
 ```bash
-docker build --pull -t montana-melih-hisse-bot:ultra .
-docker run --rm --entrypoint sh montana-melih-hisse-bot:ultra -c \
+docker build --pull -t montana-finans-robotu:ultra .
+docker run --rm --entrypoint sh montana-finans-robotu:ultra -c \
   "tesseract --list-langs && python -c 'from PIL import Image; import openpyxl, pytesseract'"
 ```
 

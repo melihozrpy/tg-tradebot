@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-"""Montana Melih grafiklerinin ortak, yüksek kontrastlı görsel dili.
+"""Montana Finans Robotu grafiklerinin ortak, yüksek kontrastlı görsel dili.
 
 Bu modül veri veya sinyal üretmez. Yalnızca bütün PNG grafiklerinin aynı koyu
 zemini, canlı renkleri, fiyat rozetlerini ve imzasını kullanmasını sağlar.
@@ -13,14 +13,14 @@ from matplotlib.patches import Rectangle
 
 @dataclass(frozen=True)
 class VividPalette:
-    background: str = "#0b0f17"
+    background: str = "#0d1117"
     panel: str = "#0d1117"
     panel_alt: str = "#111827"
     grid: str = "#263244"
     text: str = "#f8fafc"
     muted: str = "#94a3b8"
-    bull: str = "#00e69a"
-    bear: str = "#ff4d5a"
+    bull: str = "#00d9a3"
+    bear: str = "#ff4d6d"
     amber: str = "#f59e0b"
     blue: str = "#3b82f6"
     cyan: str = "#38bdf8"
@@ -45,7 +45,7 @@ def style_axes(ax, *, right_axis: bool = True, grid_alpha: float = 0.52) -> None
         ax.yaxis.set_label_position("right")
 
 
-def add_watermark(fig, *, text: str = "SMXM Analiz Sistemi • MONTANA MELİH") -> None:
+def add_watermark(fig, *, text: str = "SMXM Analiz Sistemi • MONTANA FİNANS ROBOTU") -> None:
     fig.text(0.975, 0.018, text, color="#64748b", fontsize=7.8, ha="right")
 
 
@@ -59,8 +59,8 @@ def add_score_bar(
     width: float = 0.49,
 ) -> None:
     bounded = max(0.0, min(100.0, float(score)))
-    color = VIVID.bull if bounded >= 65 else VIVID.bear if bounded < 40 else VIVID.amber
-    status = "GÜÇLÜ" if bounded >= 65 else "ZAYIF" if bounded < 40 else "NÖTR"
+    color = VIVID.bull if bounded >= 67 else VIVID.bear if bounded <= 33 else VIVID.amber
+    status = "GÜÇLÜ" if bounded >= 67 else "ZAYIF" if bounded <= 33 else "NÖTR"
     fig.patches.append(
         Rectangle((left, bottom), width, 0.021, transform=fig.transFigure, color="#253247", zorder=30)
     )
@@ -101,7 +101,7 @@ def add_price_card(
         x,
         y,
         f"{float(price):.{decimals}f}",
-        color="#ffffff",
+        color="#06110d",
         fontsize=23,
         fontweight="bold",
         ha="center",

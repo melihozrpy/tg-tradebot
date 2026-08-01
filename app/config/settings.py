@@ -27,6 +27,7 @@ class Settings(BaseSettings):
 
     app_env: str = Field(default="development")
     log_level: str = Field(default="INFO")
+    bot_name: str = Field(default="Montana Finans Robotu")
 
     telegram_bot_token: str = Field(default="")
     admin_telegram_user_ids: str = Field(default="")
@@ -188,7 +189,7 @@ class Settings(BaseSettings):
     instruments: str = Field(default="")
     bist_universe_json_path: str = Field(default="app/config/bist_instruments.json")
     morning_report_enabled: bool = Field(default=True)
-    morning_report_time: str = Field(default="08:00")
+    morning_report_time: str = Field(default="09:00")
     evening_market_report_enabled: bool = Field(default=True)
     evening_market_report_time: str = Field(default="21:00")
     report_chart_output_dir: str = Field(default="/tmp/mergen_quant_reports")

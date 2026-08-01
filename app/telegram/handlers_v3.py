@@ -151,7 +151,7 @@ async def cmd_veri_durumu(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             components = health["components"]
             provider_status = components["providers"]
             await update.message.reply_text(
-                "🏔️ MONTANA MELİH HİSSE BOT — VERİ DURUMU\n\n"
+                "🏔️ MONTANA FİNANS ROBOTU HİSSE BOT — VERİ DURUMU\n\n"
                 f"Genel durum: {health['status'].upper()}\n"
                 f"Provider: {provider_status.get('provider', settings.market_data_provider)}\n"
                 f"Provider sağlığı: {provider_status.get('status', 'unknown')}\n"
@@ -1306,6 +1306,26 @@ async def cmd_kirilsanaryo(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         liquidity_config = get_strategy_config().get("liquidity", {})
         liquidity = compute_liquidity(df, config=liquidity_config)
 
+        # Hedefler ATR ile uydurulmaz: mevcut çoklu-zaman seviyeleri, gerçek
+        # OB/FVG sınırları ve teyit edilmiş swing/MSS fiyatları birlikte verilir.
+        from app.analysis.smart_money_engine import detect_smart_money
+
+        smart_money = detect_smart_money(df)
+        pd_array_levels: list[tuple[float, str]] = []
+        for level in levels_result.all_zones():
+            pd_array_levels.append(
+                (float(level.mid), f"{level.timeframe} {level.strength_class} yapı bölgesi")
+            )
+        for zone in (*smart_money.order_blocks, *smart_money.fvg):
+            target_edge = zone.low if zone.direction == "bearish" else zone.high
+            pd_array_levels.append(
+                (float(target_edge), f"{zone.direction} {zone.kind} bölgesi")
+            )
+        for event in smart_money.structure:
+            pd_array_levels.append(
+                (float(event.price), f"{event.kind} / {event.direction} swing likiditesi")
+            )
+
         breakout_result = compute_breakout_scenarios(
             resistance_zone=resistance_zone,
             support_zone=support_zone,
@@ -1314,6 +1334,7 @@ async def cmd_kirilsanaryo(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             relative_volume=snapshot.relative_volume,
             adx=snapshot.adx,
             liquidity_score=liquidity.score if liquidity.available else None,
+            pd_array_levels=pd_array_levels,
         )
 
         _persist_breakout_scenarios(db, symbol, breakout_result)
@@ -1322,6 +1343,32 @@ async def cmd_kirilsanaryo(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             symbol, current_price, breakout_result,
             price_context=price_context, quality=quality,
         )
+        chart_path = None
+        try:
+            from app.modules.scenario_chart import render_breakout_scenario_chart
+            from app.services.chart_service import delete_chart_file
+
+            chart_path = await asyncio.to_thread(
+                render_breakout_scenario_chart,
+                df,
+                symbol=symbol,
+                result=breakout_result,
+                output_dir=settings.report_chart_output_dir,
+                dpi=settings.chart_dpi,
+            )
+            with open(chart_path, "rb") as image:
+                await update.message.reply_photo(
+                    photo=image,
+                    caption=(
+                        f"📊 {symbol} • Koşullu kırılım haritası\n"
+                        "Mum kapanışı ve hacim teyidi olmadan hiçbir rota aktif değildir."
+                    ),
+                )
+        except Exception as exc:  # noqa: BLE001 - görsel aksasa da metin gönderilir
+            logger.warning("Kırılım senaryo grafiği üretilemedi symbol=%s: %s", symbol, exc)
+        finally:
+            if chart_path:
+                delete_chart_file(chart_path)
         for chunk in split_long_message(text):
             await update.message.reply_text(chunk)
     finally:
@@ -2816,7 +2863,7 @@ async def cmd_start_v3(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
          InlineKeyboardButton("⚙️ Ayarlar", callback_data="menu_ayarlar")],
     ]
     await update.message.reply_text(
-        "🏔️✨ MONTANA MELİH HİSSE BOT ✨📈\n"
+        "🏔️✨ MONTANA FİNANS ROBOTU HİSSE BOT ✨📈\n"
         "BIST Teknik • Temel Analiz • Alarm Asistanı\n\n"
         "🧭 Hızlı başlangıç:\n"
         "• /analiz THYAO — teknik + 5dk/15dk/1s/4s\n"
@@ -2856,7 +2903,7 @@ async def handle_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         "menu_islemplani": "Bir sembol yaz: /islemplani THYAO",
         "menu_all_stocks": "PDF'den aktarılan 571 kodu görmek için /tum_hisseler yaz.",
         "menu_best50": "Tüm evrende en kaliteli giriş bölgelerini taramak için /eniyi50 yaz.",
-        "menu_morning_report": "08:00 raporunu şimdi üretmek için /sabah_raporu yaz.",
+        "menu_morning_report": "09:00 raporunu şimdi üretmek için /sabah_raporu yaz.",
         "menu_smxm_evening": "21:00 kapanış raporunu şimdi üretmek için /smxm_aksam_raporu yaz.",
         "menu_fundamental_prompt": "Şirketi bilanço, borç, kârlılık ve riskleriyle incelemek için: /sirket THYAO",
         "menu_kap_prompt": "Son resmî şirket bildirimleri için: /kap THYAO",
@@ -3051,7 +3098,7 @@ async def cmd_komutlar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "İpucu: Fotoğraf açıklamasına hisse, süre ve risk toleransını yaz."
     )
     await update.message.reply_text(
-        "🏔️📚 MONTANA MELİH BOT • KOMUT REHBERİ\n"
+        "🏔️📚 MONTANA FİNANS ROBOTU BOT • KOMUT REHBERİ\n"
         "━━━━━━━━━━━━━━━━━━\n\n"
         "📊 ANALİZ\n"
         "/analiz THYAO — teknik analiz + 5dk/15dk/1s/4s okuması\n"
@@ -3063,7 +3110,7 @@ async def cmd_komutlar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "📚 TÜM HİSSELER VE RAPORLAR\n"
         "/tum_hisseler — PDF'den aktarılan 571 kodu sayfalı gösterir\n"
         "/eniyi50 — tüm evrende en kaliteli 50 giriş bölgesini tarar\n"
-        "/sabah_raporu — 08:00 SMXM raporunu şimdi üretir\n"
+        "/sabah_raporu — 09:00 SMXM raporunu şimdi üretir\n"
         "/smxm_aksam_raporu — 21:00 kapanış ve tahmin karşılaştırmasını üretir\n\n"
         "🧪 GEÇMİŞ PERFORMANS\n"
         "/backtest THYAO — son 2 yılı masraflarla test eder\n"

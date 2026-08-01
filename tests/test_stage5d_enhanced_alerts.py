@@ -356,7 +356,7 @@ def test_alarm_message_contains_required_provider_and_quality_fields(db_session)
     df = _df()
     df.loc[len(df) - 1, ["high", "low", "close"]] = [102, 100, 101]
     trigger = evaluate_enhanced_alarm(db_session, rule, _context(df, xu100_strength=78, sector_strength=81, market_regime="pozitif"))
-    assert "MONTANA MELİH HİSSE BOT — ALARM" in trigger.message
+    assert "MONTANA FİNANS ROBOTU HİSSE BOT — ALARM" in trigger.message
     assert "Veri sağlayıcısı: fake" in trigger.message
     assert "XU100 göreceli gücü: 78" in trigger.message
 

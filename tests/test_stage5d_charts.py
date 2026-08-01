@@ -79,7 +79,7 @@ def test_professional_chart_has_vivid_indicators_zones_and_no_volume_panel(
         assert "THYAO" in figure_text
         assert "DETAYLI" in figure_text
         assert "TEKNİK CHECKLIST" in figure_text
-        assert "MONTANA MELİH" in figure_text
+        assert "MONTANA FİNANS ROBOTU" in figure_text
     finally:
         delete_chart_file(path)
         real_close(fig)

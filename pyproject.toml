@@ -1,7 +1,7 @@
 [project]
 name = "mergen-quant"
 version = "3.0.0"
-description = "Montana Melih Hisse Bot - BIST analiz, alarm, sinyal, portfoy risk ve backtest sistemi"
+description = "Montana Finans Robotu Hisse Bot - BIST analiz, alarm, sinyal, portfoy risk ve backtest sistemi"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.111.0",

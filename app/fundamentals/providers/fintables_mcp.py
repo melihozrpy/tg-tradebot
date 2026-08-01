@@ -139,7 +139,7 @@ class FintablesMcpProvider(FundamentalDataProvider):
                 "params": {
                     "protocolVersion": self.protocol_version,
                     "capabilities": {},
-                    "clientInfo": {"name": "montana-melih-hisse-bot", "version": "1.0"},
+                    "clientInfo": {"name": "montana-finans-robotu", "version": "1.0"},
                 },
             }
         )

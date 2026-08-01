@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
@@ -227,6 +228,47 @@ class AlarmTrigger:
     main_risk: str = ""
     active_scenario: str = "-"
     message: str = ""
+    next_target: Optional[float] = None
+    next_target_reason: str = ""
+
+
+def _next_breakout_target(
+    context: AlarmEvaluationContext,
+    df: pd.DataFrame,
+    *,
+    boundary: float,
+    direction: str,
+) -> tuple[Optional[float], str]:
+    """Alarm anında bir sonraki gerçek swing/OB/FVG/MTF seviyesini bulur."""
+    candidates: list[tuple[float, str]] = []
+    if context.levels is not None:
+        candidates.extend(
+            (float(level.mid), f"{level.timeframe} yapı bölgesi")
+            for level in context.levels.all_zones()
+        )
+    try:
+        from app.analysis.smart_money_engine import detect_smart_money
+
+        smart = detect_smart_money(df)
+        candidates.extend(
+            (
+                float(zone.low if zone.direction == "bearish" else zone.high),
+                f"{zone.direction} {zone.kind} bölgesi",
+            )
+            for zone in (*smart.order_blocks, *smart.fvg)
+        )
+        candidates.extend(
+            (float(event.price), f"{event.kind} / {event.direction} swing likiditesi")
+            for event in smart.structure
+        )
+    except (TypeError, ValueError):
+        pass
+
+    if direction == "up":
+        valid = sorted((item for item in candidates if item[0] > boundary), key=lambda item: item[0])
+    else:
+        valid = sorted((item for item in candidates if 0 < item[0] < boundary), key=lambda item: item[0], reverse=True)
+    return valid[0] if valid else (None, "")
 
 
 def normalize_enhanced_alert_type(raw_type: str, extra_args: Optional[list[str]] = None) -> tuple[str, Optional[str], Optional[int]]:
@@ -492,6 +534,16 @@ def _evaluate_condition(rule: EnhancedAlarmRule, context: AlarmEvaluationContext
         if not triggered:
             return None
         direction = "up" if broke_up else ("down" if broke_down else "touch")
+        next_target, next_target_reason = (
+            _next_breakout_target(
+                context,
+                df,
+                boundary=high if direction == "up" else low,
+                direction=direction,
+            )
+            if direction in {"up", "down"}
+            else (None, "")
+        )
         return AlarmTrigger(
             **base_kwargs,
             state_key=f"{rule.alert_type}:{direction}:{low:.4f}:{high:.4f}",
@@ -500,6 +552,8 @@ def _evaluate_condition(rule: EnhancedAlarmRule, context: AlarmEvaluationContext
             level_confidence=float(getattr(zone, "confidence", 0.0)),
             strong_confirmation=confirmation if (broke_up or broke_down) else True,
             main_risk=main_risk,
+            next_target=next_target,
+            next_target_reason=next_target_reason,
         )
 
     if rule.alert_type in TRADE_PLAN_TYPES:
@@ -666,12 +720,24 @@ def format_alarm_message(trigger: AlarmTrigger, context: AlarmEvaluationContext)
         if trigger.level_high is not None and abs(trigger.level_high - trigger.level_low) >= 0.005:
             level = f"{trigger.level_low:.2f}-{trigger.level_high:.2f}"
     data_time = trigger.candle_key.split(":", 1)[-1]
+    if trigger.next_target is not None and trigger.alert_type == "direnc_kirilimi":
+        target_line = (
+            f"\n🔺 {level} direnci kırıldı → olası hedef: "
+            f"{trigger.next_target:.2f} ({trigger.next_target_reason})"
+        )
+    elif trigger.next_target is not None and trigger.alert_type == "destek_kirilimi":
+        target_line = (
+            f"\n🔻 {level} desteği kırıldı → olası hedef: "
+            f"{trigger.next_target:.2f} ({trigger.next_target_reason})"
+        )
+    else:
+        target_line = ""
     return (
-        "🚨 MONTANA MELİH HİSSE BOT — ALARM\n\n"
+        "🚨 MONTANA FİNANS ROBOTU HİSSE BOT — ALARM\n\n"
         f"Sembol: {context.symbol.upper()}\n"
         f"Alarm türü: {trigger.label}\n"
         f"Güncel fiyat: {trigger.current_price:.2f}\n"
-        f"Tetiklenen seviye veya bölge: {level}\n"
+        f"Tetiklenen seviye veya bölge: {level}{target_line}\n"
         f"Zaman dilimi: {trigger.timeframe}\n"
         f"Kapanış doğrulaması: {'Güçlü' if trigger.strong_confirmation else 'Düşük güvenli'}\n"
         f"Hacim oranı: {trigger.volume_ratio:.2f}x\n"
@@ -969,6 +1035,62 @@ async def scan_enhanced_alarms(application, db: Session, provider, settings) -> 
                     user = db.query(User).filter(User.id == rule.user_id).first()
                     if user is not None:
                         await application.bot.send_message(chat_id=user.telegram_user_id, text=trigger.message)
+                        if trigger.alert_type in {"direnc_kirilimi", "destek_kirilimi"}:
+                            chart_path = None
+                            try:
+                                from app.analysis.breakout_scenario_engine import compute_breakout_scenarios
+                                from app.analysis.smart_money_engine import detect_smart_money
+                                from app.modules.scenario_chart import render_breakout_scenario_chart
+
+                                tf_levels = _timeframe_result(levels, rule.timeframe or TIMEFRAME_DAILY)
+                                resistance_zone = tf_levels.resistance_1 or tf_levels.main_resistance
+                                support_zone = tf_levels.support_1 or tf_levels.main_support
+                                smart = detect_smart_money(context.df)
+                                pd_arrays = [
+                                    (float(level.mid), f"{level.timeframe} yapı bölgesi")
+                                    for level in levels.all_zones()
+                                ]
+                                pd_arrays.extend(
+                                    (
+                                        float(zone.low if zone.direction == "bearish" else zone.high),
+                                        f"{zone.direction} {zone.kind} bölgesi",
+                                    )
+                                    for zone in (*smart.order_blocks, *smart.fvg)
+                                )
+                                pd_arrays.extend(
+                                    (float(event.price), f"{event.kind} / {event.direction} swing likiditesi")
+                                    for event in smart.structure
+                                )
+                                scenario = compute_breakout_scenarios(
+                                    resistance_zone=resistance_zone,
+                                    support_zone=support_zone,
+                                    current_price=current_price,
+                                    atr_value=max(_indicator_values(context.df)["atr_now"], current_price * 0.005),
+                                    relative_volume=trigger.volume_ratio,
+                                    liquidity_score=context.liquidity_score,
+                                    pd_array_levels=pd_arrays,
+                                )
+                                chart_path = await asyncio.to_thread(
+                                    render_breakout_scenario_chart,
+                                    context.df,
+                                    symbol=symbol,
+                                    result=scenario,
+                                    output_dir=settings.report_chart_output_dir,
+                                    dpi=settings.chart_dpi,
+                                )
+                                with open(chart_path, "rb") as image:
+                                    await application.bot.send_photo(
+                                        chat_id=user.telegram_user_id,
+                                        photo=image,
+                                        caption=f"📊 {symbol} • Kırılım sonrası koşullu hedef haritası",
+                                    )
+                            except Exception as exc:  # noqa: BLE001 - alarm metni gönderildi, bot yaşamaya devam eder
+                                logger.warning("Alarm senaryo grafiği üretilemedi symbol=%s: %s", symbol, exc)
+                            finally:
+                                if chart_path:
+                                    from app.services.chart_service import delete_chart_file
+
+                                    delete_chart_file(chart_path)
                         sent += 1
                 except Exception as exc:  # noqa: BLE001
                     logger.warning("Alarm kuralı değerlendirilemedi rule=%s symbol=%s: %s", rule.id, symbol, exc)

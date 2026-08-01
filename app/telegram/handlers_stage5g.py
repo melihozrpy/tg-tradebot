@@ -158,7 +158,7 @@ def _format_run(record: BacktestRun) -> str:
     costs = json.loads(record.transaction_cost_config or "{}")
     warning = metrics.get("sample_warning") or "Ornek yeterli."
     return (
-        "🏔️🧪 MONTANA MELİH • BACKTEST RAPORU\n"
+        "🏔️🧪 MONTANA FİNANS ROBOTU • BACKTEST RAPORU\n"
         "━━━━━━━━━━━━━━━━━━\n\n"
         f"📌 Sembol: {record.symbol}\n"
         f"🗓️ Dönem: {record.start_date:%Y-%m-%d} → {record.end_date:%Y-%m-%d}\n"

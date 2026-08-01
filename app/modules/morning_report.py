@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from app.analysis.bist_trade_plan import BistTradePlan, DirectionPlan, build_bist_trade_plan
 from app.analysis.indicator_engine import atr, compute_technical_snapshot
 from app.analysis.smart_money_engine import SmartMoneyResult, detect_smart_money
+from app.analysis.quality_zone_engine import format_quality_zone_scenario
 from app.models.database import MarketDailyReportLog, NewsArticle, NewsEvent
 from app.modules.chart_engine import ChecklistVisual, ReportChartSpec
 from app.services.market_breadth_service import MarketBreadthResult
@@ -641,6 +642,31 @@ def build_morning_chart_spec(report: MorningReport, symbol: str | None = None) -
     if item is None:
         raise ValueError(f"{requested} raporda bulunamadı; grafik başka hisseyle üretilmedi.")
     plan = _pick_direction_plan(item.trade_plan, item.predicted_direction)
+    quality_zone = item.trade_plan.quality_zone
+    if quality_zone is not None:
+        quality_targets = tuple(
+            value for value in (quality_zone.target_1, quality_zone.target_2) if value is not None
+        )
+        quality_rr = max(
+            (value for value in (quality_zone.rr_1, quality_zone.rr_2) if value is not None),
+            default=0.0,
+        )
+        return ReportChartSpec(
+            instrument=item.symbol,
+            timeframe="1D",
+            report_kind="morning",
+            direction=quality_zone.direction,
+            sentiment_score=report.confidence.score,
+            checklist=tuple(ChecklistVisual(entry.label, entry.passed) for entry in item.checklist),
+            entry_low=quality_zone.zone_low,
+            entry_high=quality_zone.zone_high,
+            entry_price=quality_zone.entry,
+            stop=quality_zone.invalidation,
+            targets=quality_targets,
+            rr=quality_rr,
+            liquidity_levels=item.sweep_levels,
+            date_label=report.report_date.strftime("%d.%m.%Y"),
+        )
     rr = next((value for value in plan.risk_multiples if value >= 2), plan.risk_multiples[-1])
     target_count = max(1, min(len(plan.targets), plan.risk_multiples.index(rr) + 1))
     return ReportChartSpec(
@@ -665,8 +691,9 @@ def format_morning_report(report: MorningReport) -> str:
     item = report.index_analysis
     summary = item.yesterday
     plan = _pick_direction_plan(item.trade_plan, item.predicted_direction)
+    quality_zone = item.trade_plan.quality_zone
     lines = [
-        "🌅 MONTANA MELİH • 08:00 XU100 AÇILIŞ RAPORU",
+        "🌅 MONTANA FİNANS ROBOTU • 09:00 XU100 AÇILIŞ RAPORU",
         f"📅 {report.report_date:%d.%m.%Y}",
         "",
         f"🛡️ Piyasa güveni: {report.confidence.score:.0f}/100 • {report.confidence.label}",
@@ -683,17 +710,16 @@ def format_morning_report(report: MorningReport) -> str:
         f"{'✅' if check.passed else '❌'} {check.label}: {check.detail[:110]}"
         for check in item.checklist
     )
-    lines.extend(
-        [
-            "",
-            f"🎯 {plan.direction} PLANI • kalite {plan.score}/100 • {plan.status}",
-            f"• Teyit/giriş: {plan.entry_low:.2f}–{plan.entry_high:.2f} • Tetik {plan.trigger:.2f}",
-            f"• Geçersizlik/SL: {plan.stop_standard:.2f}",
-            f"• TP1/TP2/TP3: {plan.targets[0]:.2f} / {plan.targets[1]:.2f} / {plan.targets[2]:.2f}",
-            f"• Plan RR: {plan.risk_multiples[0]:.2f}R / {plan.risk_multiples[1]:.2f}R / {plan.risk_multiples[2]:.2f}R",
-            f"• İşleme geçiş: {plan.entry_method[:180]}",
-        ]
-    )
+    if quality_zone is not None:
+        lines.extend(["", format_quality_zone_scenario(quality_zone)])
+    else:
+        lines.extend(
+            [
+                "",
+                f"🎯 {plan.direction} PLANI • kalite {plan.score}/100 • {plan.status}",
+                "• Doğrulanmış OB/FVG yok; güncel fiyattan işlem açılmaz ve yeni bölge beklenir.",
+            ]
+        )
     breadth = report.breadth
     if breadth and breadth.available:
         lines.extend(

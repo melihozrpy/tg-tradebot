@@ -55,7 +55,7 @@ def test_format_price_scenarios_contains_sections():
     result = compute_price_scenarios(levels, supports, resistances, current_price)
 
     text = format_price_scenarios("THYAO", current_price, result)
-    assert "MONTANA MELİH HİSSE BOT" in text
+    assert "MONTANA FİNANS ROBOTU HİSSE BOT" in text
     assert "DÜŞÜŞ SENARYOLARI" in text
     assert "YÜKSELİŞ SENARYOLARI" in text
     assert "yatırım tavsiyesi değildir" in text.lower()
@@ -83,7 +83,7 @@ def test_format_breakout_scenarios_contains_sections():
     )
 
     text = format_breakout_scenarios("THYAO", current_price, result)
-    assert "MONTANA MELİH HİSSE BOT" in text
+    assert "MONTANA FİNANS ROBOTU HİSSE BOT" in text
     assert "DİRENÇ KIRILIRSA" in text
     assert "DESTEK KIRILIRSA" in text
     assert "sahte kırılım" in text.lower() or "kirilim" in text.lower()

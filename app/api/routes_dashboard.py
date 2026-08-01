@@ -8,7 +8,7 @@ router = APIRouter()
 def dashboard() -> str:
     return """<!doctype html>
 <html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MONTANA MELİH HİSSE BOT | BIST Kontrol Merkezi</title>
+<title>MONTANA FİNANS ROBOTU HİSSE BOT | BIST Kontrol Merkezi</title>
 <style>
 :root{--bg:#061019;--card:#0c1925;--line:#1e3343;--text:#e6f1f8;--muted:#86a0b2;--cyan:#00c8ff;--green:#00e5a8;--red:#ff3b69;--amber:#ffd43b}
 *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 85% 0,#0b2940 0,transparent 32%),var(--bg);color:var(--text);font:15px Inter,Segoe UI,sans-serif}
@@ -21,7 +21,7 @@ def dashboard() -> str:
 table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:11px;border-bottom:1px solid var(--line)}th{color:var(--muted)}.note{border-left:3px solid var(--amber);padding:10px 13px;background:#251f0b;color:#f7e7a1;border-radius:6px}
 @media(max-width:850px){.card,.wide{grid-column:1/-1}.flow{grid-template-columns:1fr}.hero h1{font-size:28px}.top{align-items:flex-start;flex-direction:column}}
 </style></head><body><main class="wrap">
-<div class="top"><div class="brand">🏔️ MONTANA MELİH <b>HİSSE BOT</b> 📈</div><div class="live">● Sistem çevrimiçi</div></div>
+<div class="top"><div class="brand">🏔️ MONTANA FİNANS ROBOTU <b>HİSSE BOT</b> 📈</div><div class="live">● Sistem çevrimiçi</div></div>
 <section class="hero"><div class="tag">BIST TEKNİK • TEMEL • ALARM KONTROL MERKEZİ</div><h1>Karışık sinyal değil; net plan, görünür kanıt.</h1><p>Her işlem planı trend, momentum, hacim, piyasa yapısı ve risk/getiri üzerinden puanlanır. Puan olasılık değildir; hangi kanıtın kaç puan verdiği kullanıcıya açıkça gösterilir.</p><span class="pill">FVG</span><span class="pill">Order Block</span><span class="pill">BOS / MSS</span><span class="pill">TP1–TP5</span><span class="pill">KAP / Fintables</span></section>
 <section class="grid">
  <article class="card"><div class="muted">Piyasa</div><div class="kpi cyan">Borsa İstanbul</div><span class="muted">Lisanslı canlı veri veya açıkça işaretli gecikmeli analiz</span></article>

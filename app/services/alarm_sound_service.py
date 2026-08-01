@@ -39,4 +39,4 @@ async def send_alarm(bot, chat_id: int, text: str, sound: str = "zil") -> None:
     await bot.send_message(chat_id=chat_id, text=text)
     path = generate_alarm_wav(sound)
     with open(path, "rb") as audio:
-        await bot.send_audio(chat_id=chat_id, audio=audio, title=f"MONTANA MELİH alarmı • {normalize_sound(sound)}")
+        await bot.send_audio(chat_id=chat_id, audio=audio, title=f"MONTANA FİNANS ROBOTU alarmı • {normalize_sound(sound)}")

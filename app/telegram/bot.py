@@ -356,7 +356,7 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
                     primary = report.index_analysis
                     spec = build_morning_chart_spec(report, primary.symbol)
                     text = format_morning_report(report)
-                    caption = f"🌅 {primary.symbol} • 08:00 SMXM sabah görünümü"
+                    caption = f"🌅 {primary.symbol} • 09:00 SMXM sabah görünümü"
                 else:
                     from app.modules.evening_report import (
                         build_evening_chart_spec,
@@ -423,14 +423,18 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
             try:
                 await _deliver_smxm_report("morning")
             except Exception as exc:  # noqa: BLE001 - scheduler ve bot yaşamaya devam eder
-                logger.exception("08:00 SMXM sabah raporu üretilemedi")
-                await _notify_report_error("08:00 SMXM sabah raporu", exc)
+                logger.exception("09:00 SMXM sabah raporu üretilemedi")
+                await _notify_report_error("09:00 SMXM sabah raporu", exc)
 
         try:
             morning_hour, morning_minute = settings.morning_report_time.split(":")
             scheduler.add_job(
                 _smxm_morning_job,
-                CronTrigger(hour=int(morning_hour), minute=int(morning_minute)),
+                CronTrigger(
+                    hour=int(morning_hour),
+                    minute=int(morning_minute),
+                    timezone="Europe/Istanbul",
+                ),
                 id="smxm_morning_report",
                 coalesce=True,
                 max_instances=1,
@@ -454,7 +458,11 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
             evening_hour, evening_minute = settings.evening_market_report_time.split(":")
             scheduler.add_job(
                 _smxm_evening_job,
-                CronTrigger(hour=int(evening_hour), minute=int(evening_minute)),
+                CronTrigger(
+                    hour=int(evening_hour),
+                    minute=int(evening_minute),
+                    timezone="Europe/Istanbul",
+                ),
                 id="smxm_evening_report",
                 coalesce=True,
                 max_instances=1,

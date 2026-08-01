@@ -265,17 +265,25 @@ def _draw_smart_money_overlay(
     decimals: int,
     detailed: bool = True,
     compact: bool = False,
+    exclude_zone: tuple[str, float, float] | None = None,
 ) -> None:
     x_end = length - 0.2
     zone_count = 3 if detailed else 2
     zones = [*smart.order_blocks[-zone_count:], *smart.fvg[-zone_count:]]
-    for zone in zones:
+    for slot, zone in enumerate(zones):
+        if (
+            exclude_zone is not None
+            and zone.kind == exclude_zone[0]
+            and abs(float(zone.low) - exclude_zone[1]) < 1e-6
+            and abs(float(zone.high) - exclude_zone[2]) < 1e-6
+        ):
+            continue
         origin = zone.origin_index if zone.origin_index is not None else zone.index
         x_start = max(0.0, min(float(origin), x_end))
         if zone.kind == "OB":
-            color = "#14b8a6" if zone.direction == "bullish" else "#fb7185"
+            color = VIVID.bull if zone.direction == "bullish" else VIVID.bear
         else:
-            color = VIVID.cyan if zone.direction == "bullish" else VIVID.amber
+            color = VIVID.amber
         lower, upper = sorted((float(zone.low), float(zone.high)))
         height = max(upper - lower, max(upper * 0.0003, 1e-8))
         ax.add_patch(
@@ -285,14 +293,18 @@ def _draw_smart_money_overlay(
                 alpha=0.10 if compact else 0.14, zorder=1,
             )
         )
-        ax.text(
-            x_start + 0.35,
-            upper,
+        label_x = max(x_start + 0.5, x_end - 0.8 - (slot % 3) * 5.0)
+        ax.annotate(
             zone.kind if compact else f"{zone.kind}  {lower:.{decimals}f}-{upper:.{decimals}f}",
+            xy=(label_x, upper),
+            xytext=(0, 2 + (slot % 3) * (7 if compact else 11)),
+            textcoords="offset points",
+            ha="right",
             color=color,
             fontsize=5.8 if compact else 7.6,
             fontweight="bold",
             va="bottom",
+            bbox={"boxstyle": "round,pad=.15", "facecolor": VIVID.background, "edgecolor": color, "alpha": .84},
             zorder=8,
         )
 
@@ -532,7 +544,7 @@ def generate_relative_strength_chart(
     ax2.set_ylabel("RS", color=VIVID.muted)
 
     fig.text(
-        0.065, 0.94, f"MONTANA MELİH  •  {symbol.upper()} / {index_symbol.upper()}  •  RELATİF GÜÇ",
+        0.065, 0.94, f"MONTANA FİNANS ROBOTU  •  {symbol.upper()} / {index_symbol.upper()}  •  RELATİF GÜÇ",
         color=VIVID.text, fontsize=18, fontweight="bold",
     )
     add_banner(fig, f"{'▲' if stronger else '▼'}  RELATİF YÖN: {'GÜÇLÜ' if stronger else 'ZAYIF'}", direction_color)
@@ -973,7 +985,7 @@ def generate_multi_timeframe_chart(frames: dict[str, pd.DataFrame], symbol: str)
     add_watermark(fig)
     fig.text(.49, .03, "FVG • Order Block • BOS/MSS • EMA20/50", color=VIVID.muted, fontsize=7.5)
     fig.subplots_adjust(left=.04, right=.94, top=.80, bottom=.10, hspace=.28, wspace=.15)
-    out_path = os.path.join(tempfile.gettempdir(), f"montana_mtf_{symbol}_{uuid.uuid4().hex[:8]}.png")
+    out_path = os.path.join(tempfile.gettempdir(), f"montana_finans_mtf_{symbol}_{uuid.uuid4().hex[:8]}.png")
     fig.savefig(out_path, dpi=max(settings.chart_dpi, 150), facecolor=VIVID.background, bbox_inches="tight")
     plt.close(fig)
     return out_path
@@ -993,61 +1005,94 @@ def generate_bist_trade_plan_chart(df: pd.DataFrame, plan) -> str:
         if len(data) >= period:
             ax.plot(x, ema(close, period), color=color, linewidth=width, label=f"EMA {period}", alpha=.94)
 
-    preferred = plan.long if plan.long.score >= plan.short.score else plan.short
+    quality_zone = getattr(plan, "quality_zone", None)
+    preferred = (
+        plan.long if quality_zone is not None and quality_zone.direction == "LONG"
+        else plan.short if quality_zone is not None
+        else plan.long if plan.long.score >= plan.short.score
+        else plan.short
+    )
     direction_color = VIVID.bull if preferred.direction == "LONG" else VIVID.bear
     label_items: list[tuple[float, str, str, int]] = []
     zone_start = max(0.0, len(data) - 40.0)
-    for side, label, color, alpha in (
-        (plan.long, "BUY ZONE", VIVID.bull, .17 if preferred.direction == "LONG" else .075),
-        (plan.short, "SELL ZONE", VIVID.bear, .17 if preferred.direction == "SHORT" else .075),
-    ):
-        lower, upper = sorted((float(side.entry_low), float(side.entry_high)))
-        ax.add_patch(
-            Rectangle(
-                (zone_start, lower), len(data) - .2 - zone_start, max(upper - lower, upper * .0003),
-                facecolor=color, edgecolor=color, linewidth=1.0, alpha=alpha, zorder=1,
-            )
+    if quality_zone is not None:
+        lower, upper = sorted((float(quality_zone.zone_low), float(quality_zone.zone_high)))
+        zone_label = f"{quality_zone.zone_kind} • {quality_zone.direction} BÖLGE"
+    else:
+        lower, upper = sorted((float(preferred.entry_low), float(preferred.entry_high)))
+        zone_label = "BUY ZONE" if preferred.direction == "LONG" else "SELL ZONE"
+    ax.add_patch(
+        Rectangle(
+            (zone_start, lower), len(data) - .2 - zone_start, max(upper - lower, upper * .0003),
+            facecolor=direction_color, edgecolor=direction_color, linewidth=1.1, alpha=.18, zorder=1,
         )
-        ax.text(zone_start + .5, upper, f"{label}  {lower:.2f}-{upper:.2f}", color=color, fontsize=8, fontweight="bold", va="bottom")
-
-    buy_price, sell_price = float(plan.long.trigger), float(plan.short.trigger)
-    marker_x = max(len(data) - 24, 1)
-    ax.annotate(
-        f"AL TETİK  {buy_price:.2f} TL", xy=(marker_x, buy_price), xytext=(-8, -34),
-        textcoords="offset points", color="#03120c", fontsize=9, fontweight="bold",
-        bbox=dict(boxstyle="round,pad=.42", facecolor=VIVID.bull, edgecolor="#7dffd1", linewidth=1.2),
-        arrowprops=dict(arrowstyle="-|>", color=VIVID.bull, linewidth=1.7), zorder=18,
     )
-    ax.annotate(
-        f"SAT/SHORT TETİK  {sell_price:.2f} TL", xy=(marker_x + 5, sell_price), xytext=(8, 34),
-        textcoords="offset points", color="#fff4f6", fontsize=9, fontweight="bold",
-        bbox=dict(boxstyle="round,pad=.42", facecolor=VIVID.bear, edgecolor="#ff8aa0", linewidth=1.2),
-        arrowprops=dict(arrowstyle="-|>", color=VIVID.bear, linewidth=1.7), zorder=18,
+    ax.text(
+        zone_start + (len(data) - zone_start) * .35,
+        upper,
+        f"{zone_label}  {lower:.2f}-{upper:.2f}",
+        color=direction_color,
+        fontsize=8,
+        fontweight="bold",
+        va="bottom",
+        bbox={"boxstyle": "round,pad=.2", "facecolor": VIVID.background, "edgecolor": direction_color, "alpha": .88},
+    )
+
+    entry_price = float(quality_zone.entry) if quality_zone is not None else float(preferred.trigger)
+    stop_price = float(quality_zone.invalidation) if quality_zone is not None else float(preferred.stop_standard)
+    selected_targets = (
+        [value for value in (quality_zone.target_1, quality_zone.target_2) if value is not None]
+        if quality_zone is not None
+        else list(preferred.targets)
+    )
+    marker_x = max(len(data) - 24, 1)
+    ax.scatter(
+        marker_x,
+        entry_price,
+        marker="^" if preferred.direction == "LONG" else "v",
+        s=54,
+        color=direction_color,
+        edgecolors=VIVID.text,
+        linewidths=.5,
+        zorder=18,
     )
 
     smart = detect_smart_money(data)
-    _draw_smart_money_overlay(ax, smart, length=len(data), decimals=2, detailed=True)
+    _draw_smart_money_overlay(
+        ax,
+        smart,
+        length=len(data),
+        decimals=2,
+        detailed=True,
+        exclude_zone=(quality_zone.zone_kind, quality_zone.zone_low, quality_zone.zone_high)
+        if quality_zone is not None
+        else None,
+    )
     ax.axhline(plan.current_price, color=direction_color, linewidth=1.0, linestyle=(0, (6, 4)), alpha=.85)
-    ax.axhline(preferred.trigger, color=VIVID.blue, linewidth=1.35)
-    ax.axhline(preferred.stop_standard, color=VIVID.bear, linewidth=1.25, linestyle=(0, (6, 4)))
+    ax.axhline(entry_price, color=VIVID.blue, linewidth=1.35)
+    ax.axhline(stop_price, color=VIVID.bear, linewidth=1.25, linestyle=(0, (6, 4)))
     label_items.extend([
         (float(plan.current_price), "GÜNCEL", direction_color, 115),
-        (float(preferred.trigger), "ENTRY", VIVID.blue, 114),
-        (float(preferred.stop_standard), "SL", VIVID.bear, 113),
+        (entry_price, "ENTRY", VIVID.blue, 114),
+        (stop_price, "SL", VIVID.bear, 113),
     ])
-    for index, target in enumerate(preferred.targets, 1):
+    for index, target in enumerate(selected_targets, 1):
         ax.axhline(target, color="#22c55e", linewidth=.95, linestyle=(0, (5, 4)), alpha=max(.48, .92 - index * .08))
         label_items.append((float(target), f"TP{index}", "#22c55e", 108 - index))
     for index, level in enumerate(plan.support_levels, 1):
+        if any(abs(float(level) - float(target)) < 0.005 for target in selected_targets):
+            continue
         ax.axhline(level, color=VIVID.bull, linewidth=.65, linestyle=(0, (3, 5)), alpha=.48)
         if index <= 2:
             label_items.append((float(level), f"D{index}", VIVID.bull, 76 - index))
     for index, level in enumerate(plan.resistance_levels, 1):
+        if any(abs(float(level) - float(target)) < 0.005 for target in selected_targets):
+            continue
         ax.axhline(level, color=VIVID.bear, linewidth=.65, linestyle=(0, (3, 5)), alpha=.48)
         if index <= 2:
             label_items.append((float(level), f"R{index}", VIVID.bear, 76 - index))
 
-    plotted = [float(data["low"].min()), float(data["high"].max()), float(preferred.stop_standard), *map(float, preferred.targets)]
+    plotted = [float(data["low"].min()), float(data["high"].max()), stop_price, *map(float, selected_targets)]
     y_min, y_max = min(plotted), max(plotted)
     padding = max((y_max - y_min) * .12, float(plan.current_price) * .012)
     ax.set_ylim(max(0, y_min - padding), y_max + padding)
@@ -1066,26 +1111,48 @@ def generate_bist_trade_plan_chart(df: pd.DataFrame, plan) -> str:
     ax.legend(loc="lower left", fontsize=6.5, ncol=3, facecolor=VIVID.panel_alt, edgecolor=VIVID.grid, labelcolor=VIVID.text)
 
     date_label = pd.Timestamp(plan.data_timestamp).strftime("%d.%m.%Y")
-    fig.text(.055, .94, f"{plan.symbol}  •  1D  •  {date_label}  •  LONG / SHORT PLANI", color=VIVID.text, fontsize=18, fontweight="bold")
-    decision = plan.preferred_direction or "RANGE"
+    fig.text(.055, .94, f"{plan.symbol}  •  1D  •  {date_label}  •  SMXM BÖLGE PLANI", color=VIVID.text, fontsize=18, fontweight="bold")
+    decision = quality_zone.direction if quality_zone is not None else plan.preferred_direction or "RANGE"
     arrow = "▲" if decision == "LONG" else "▼" if decision == "SHORT" else "◆"
-    add_banner(fig, f"{arrow}  ÖNCELİKLİ SENARYO: {decision}", direction_color if decision != "RANGE" else VIVID.amber, left=.055, top=.875)
-    add_price_card(fig, plan.current_price, direction_color, decimals=2, x=.95, y=.865)
-    rr_candidates = [float(value) for value in preferred.risk_multiples if value is not None]
+    add_banner(fig, f"{arrow}  ANA İZLEME SENARYOSU: {decision}", direction_color if decision != "RANGE" else VIVID.amber, left=.055, top=.875)
+    add_price_card(fig, plan.current_price, VIVID.bull, decimals=2, x=.95, y=.865)
+    rr_candidates = (
+        [value for value in (quality_zone.rr_1, quality_zone.rr_2) if value is not None]
+        if quality_zone is not None
+        else [float(value) for value in preferred.risk_multiples if value is not None]
+    )
     display_rr = next((value for value in rr_candidates if value >= 2), rr_candidates[-1] if rr_candidates else 0.0)
-    fig.text(.95, .805, f"RR  1:{display_rr:.2f}", color=VIVID.text, fontsize=14.5, fontweight="bold", ha="center")
+    rr_text = f"RR  1:{display_rr:.2f}" if display_rr >= 2 else f"RR YETERSİZ  1:{display_rr:.2f}"
+    fig.text(
+        .95,
+        .805,
+        rr_text,
+        color=VIVID.text if display_rr >= 2 else VIVID.bear,
+        fontsize=14.5,
+        fontweight="bold",
+        ha="center",
+    )
+    setup_score = quality_zone.quality_score if quality_zone is not None else preferred.score
     checklist = [
-        ("İşlem puanı ≥ 68", preferred.score >= 68),
-        ("Trend yönü uyumlu", plan.preferred_direction == preferred.direction),
+        ("İşlem puanı ≥ 68", setup_score >= 68),
+        ("Trend yönü uyumlu", decision == preferred.direction),
         ("FVG / Order Block", bool(smart.fvg or smart.order_blocks)),
         ("BOS / MSS teyidi", any(event.direction == preferred.direction.casefold().replace("long", "bullish").replace("short", "bearish") for event in smart.structure)),
         ("Minimum 1:2 RR", display_rr >= 2),
         ("Hacim teyidi", plan.relative_volume >= 1.1),
     ]
     add_checklist(fig, checklist, title="İŞLEM CHECKLIST", x=.83, y=.22)
-    add_score_bar(fig, preferred.score, label="İŞLEM KALİTESİ", left=.07, bottom=.035, width=.49)
+    add_score_bar(fig, setup_score, label="İŞLEM KALİTESİ", left=.07, bottom=.035, width=.49)
     add_watermark(fig)
-    fig.text(.055, .105, "AL/SAT tetikleri • Katmanlı SL • TP1-TP5 • FVG/OB • BOS/MSS", color=VIVID.muted, fontsize=7.5)
+    last_mss = next((event for event in reversed(smart.structure) if event.kind == "MSS"), None)
+    fig.text(
+        .055,
+        .105,
+        f"Trend {plan.trend} • {len(smart.order_blocks)} OB • {len(smart.fvg)} FVG aktif • "
+        f"Son MSS: {last_mss.direction.title() if last_mss else 'Yok'}",
+        color=VIVID.muted,
+        fontsize=7.5,
+    )
     out_path = os.path.join(tempfile.gettempdir(), f"bist_tv_{plan.symbol}_{uuid.uuid4().hex[:8]}.png")
     fig.savefig(out_path, dpi=max(settings.chart_dpi, 150), facecolor=VIVID.background, bbox_inches="tight")
     plt.close(fig)

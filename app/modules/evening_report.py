@@ -331,7 +331,7 @@ def format_evening_report(report: EveningReport) -> str:
     )
     item = report.index_analysis
     lines = [
-        "🌙 MONTANA MELİH • 21:00 XU100 KAPANIŞ RAPORU",
+        "🌙 MONTANA FİNANS ROBOTU • 21:00 XU100 KAPANIŞ RAPORU",
         f"📅 {report.report_date:%d.%m.%Y}",
         f"🎯 Sabah tahmini tutarlılığı: {consistency}",
         "",

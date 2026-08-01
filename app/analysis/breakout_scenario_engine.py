@@ -9,7 +9,7 @@ veya baska bir LLM burada fiyat/hedef/karar URETMEZ.
 """
 
 from dataclasses import dataclass
-from typing import Optional, Protocol
+from typing import Optional, Protocol, Sequence
 
 MIN_VOLUME_MULTIPLIER = 1.3  # ortalamanin en az bu kati hacim -> "hacimli kirilim"
 FALSE_BREAKOUT_LOW_RISK = "dusuk"
@@ -37,6 +37,9 @@ class BreakoutCase:
     false_breakout_risk: str
     false_breakout_note: str
     volume_currently_confirmed: bool
+    target_1_reason: str = "ATR ölçülü hareket"
+    target_2_reason: str = "ATR ölçülü hareket"
+    level_already_broken: bool = False
 
 
 @dataclass
@@ -56,6 +59,30 @@ def _measured_move_targets(level_low: float, level_high: float, zone_height_sour
     target_1 = round(level_high + height, 2)
     target_2 = round(level_high + height * 2, 2)
     return target_1, target_2
+
+
+def _next_structural_targets(
+    levels: Sequence[tuple[float, str]],
+    *,
+    boundary: float,
+    direction: str,
+) -> list[tuple[float, str]]:
+    """Kırılan seviyeden sonraki gerçek PD Array/swing seviyelerini sıralar."""
+    clean: list[tuple[float, str]] = []
+    seen: set[float] = set()
+    for raw_price, raw_reason in levels:
+        price = float(raw_price)
+        key = round(price, 8)
+        if price <= 0 or key in seen:
+            continue
+        if direction == "up" and price <= boundary:
+            continue
+        if direction == "down" and price >= boundary:
+            continue
+        seen.add(key)
+        clean.append((price, str(raw_reason).strip() or "yapısal seviye"))
+    clean.sort(key=lambda item: item[0], reverse=direction == "down")
+    return clean
 
 
 def _false_breakout_risk(adx: Optional[float], relative_volume: Optional[float], liquidity_score: Optional[float]) -> tuple[str, str]:
@@ -92,6 +119,7 @@ def compute_breakout_scenarios(
     relative_volume: Optional[float] = None,
     adx: Optional[float] = None,
     liquidity_score: Optional[float] = None,
+    pd_array_levels: Sequence[tuple[float, str]] = (),
 ) -> BreakoutScenarioResult:
     """En onemli direnc (resistance_zone) ve destek (support_zone) icin
     kirilim senaryolarini hesaplar. Her ikisi de None ise (guvenilir seviye
@@ -102,7 +130,18 @@ def compute_breakout_scenarios(
 
     resistance_case = None
     if resistance_zone is not None:
-        target_1, target_2 = _measured_move_targets(resistance_zone.low, resistance_zone.high, atr_value)
+        dynamic = _next_structural_targets(
+            pd_array_levels,
+            boundary=float(resistance_zone.high),
+            direction="up",
+        )
+        measured_1, measured_2 = _measured_move_targets(resistance_zone.low, resistance_zone.high, atr_value)
+        target_1, reason_1 = dynamic[0] if dynamic else (measured_1, "ATR ölçülü hareket (yedek)")
+        target_2, reason_2 = (
+            dynamic[1]
+            if len(dynamic) > 1
+            else (max(measured_2, target_1 + max(resistance_zone.high - resistance_zone.low, atr_value * 0.5)), "ATR ölçülü hareket (yedek)")
+        )
         risk_level, risk_note = _false_breakout_risk(adx, relative_volume, liquidity_score)
         volume_confirmed_now = relative_volume is not None and relative_volume >= MIN_VOLUME_MULTIPLIER
         resistance_case = BreakoutCase(
@@ -117,13 +156,27 @@ def compute_breakout_scenarios(
             false_breakout_risk=risk_level,
             false_breakout_note=risk_note,
             volume_currently_confirmed=volume_confirmed_now,
+            target_1_reason=reason_1,
+            target_2_reason=reason_2,
+            level_already_broken=current_price > float(resistance_zone.high),
         )
 
     support_case = None
     if support_zone is not None:
         height = max(support_zone.high - support_zone.low, atr_value * 0.5)
-        first_decline_low = round(support_zone.low - height, 2)
-        main_dip_low = round(support_zone.low - height * 2, 2)
+        measured_1 = round(support_zone.low - height, 2)
+        measured_2 = round(support_zone.low - height * 2, 2)
+        dynamic = _next_structural_targets(
+            pd_array_levels,
+            boundary=float(support_zone.low),
+            direction="down",
+        )
+        first_decline_low, reason_1 = dynamic[0] if dynamic else (measured_1, "ATR ölçülü hareket (yedek)")
+        main_dip_low, reason_2 = (
+            dynamic[1]
+            if len(dynamic) > 1
+            else (min(measured_2, first_decline_low - height), "ATR ölçülü hareket (yedek)")
+        )
         risk_level, risk_note = _false_breakout_risk(adx, relative_volume, liquidity_score)
         volume_confirmed_now = relative_volume is not None and relative_volume >= MIN_VOLUME_MULTIPLIER
         support_case = BreakoutCase(
@@ -138,6 +191,9 @@ def compute_breakout_scenarios(
             false_breakout_risk=risk_level,
             false_breakout_note=risk_note,
             volume_currently_confirmed=volume_confirmed_now,
+            target_1_reason=reason_1,
+            target_2_reason=reason_2,
+            level_already_broken=current_price < float(support_zone.low),
         )
 
     return BreakoutScenarioResult(

@@ -16,6 +16,8 @@ logging.basicConfig(
 )
 install_sensitive_data_filter()
 logger = logging.getLogger("mergen_quant.main")
+application_settings = get_settings()
+application_name_upper = application_settings.bot_name.replace("i", "İ").replace("ı", "I").upper()
 
 
 def on_startup() -> None:
@@ -34,8 +36,8 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(
-    title="MONTANA MELİH HİSSE BOT API",
-    description="Akıllı BIST Analiz ve Risk Sistemi - MONTANA MELİH HİSSE BOT (analiz, tarama, sinyal takip, portföy risk ve backtest)",
+    title=f"{application_settings.bot_name} API",
+    description=f"Akıllı BIST Analiz ve Risk Sistemi - {application_settings.bot_name} (analiz, tarama, sinyal takip, portföy risk ve backtest)",
     version="3.0.0",
     lifespan=lifespan,
 )
@@ -49,7 +51,7 @@ app.include_router(routes_dashboard.router)
 @app.get("/")
 def root():
     return {
-        "name": "MONTANA MELİH HİSSE BOT",
+        "name": application_name_upper,
         "tagline": "Akilli BIST Analiz ve Risk Sistemi",
         "version": "V3",
         "status": "running",
