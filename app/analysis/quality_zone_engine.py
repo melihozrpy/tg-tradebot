@@ -10,7 +10,7 @@ yerine bir ana bölge, bir koşullu senaryo ve en fazla bir alternatif gösteril
 
 from dataclasses import dataclass
 from math import isfinite
-from typing import Iterable, Sequence
+from typing import Sequence
 
 from app.analysis.smart_money_engine import PriceZone, SmartMoneyResult, StructureEvent
 
@@ -34,7 +34,9 @@ class QualityZoneScenario:
     location: str
     distance_points: float
     distance_percent: float
+    current_price: float
     entry: float
+    entry_reason: str
     invalidation: float
     target_1: float | None
     target_1_label: str | None
@@ -64,15 +66,31 @@ def _zone_distance(zone: PriceZone, current_price: float) -> tuple[float, str]:
     return zone.low - current_price, "üstünde"
 
 
-def _entry_for_zone(zone: PriceZone, current_price: float) -> float:
+def _entry_for_zone(
+    zone: PriceZone,
+    *,
+    direction: str,
+    structure: StructureEvent | None,
+) -> tuple[float, str]:
+    """Yalnız yapısal veriden entry üretir; son kapanışı asla kopyalamaz."""
+
+    expected_structure = "bullish" if direction == "LONG" else "bearish"
+    if (
+        structure is not None
+        and structure.direction == expected_structure
+        and zone.low <= structure.price <= zone.high
+    ):
+        return float(structure.price), (
+            f"sweep sonrası {structure.kind} onay seviyesi {structure.price:.2f} "
+            f"ile {zone.kind} bölgesi çakışıyor"
+        )
     if zone.kind == "OB":
-        return (float(zone.low) + float(zone.high)) / 2.0
-    # FVG ilk dokunuşu: fiyat yukarıdaysa üst sınır, aşağıdaysa alt sınır.
-    if current_price >= zone.high:
-        return float(zone.high)
-    if current_price <= zone.low:
-        return float(zone.low)
-    return current_price
+        if direction == "LONG":
+            return float(zone.high), "bullish Order Block'un üst sınırı ilk retest seviyesidir"
+        return float(zone.low), "bearish Order Block'un alt sınırı ilk retest seviyesidir"
+    return (float(zone.low) + float(zone.high)) / 2.0, (
+        "Fair Value Gap'in CE (consequent encroachment / %50) seviyesidir"
+    )
 
 
 def _target_candidates(
@@ -196,7 +214,7 @@ def select_closest_quality_zone(
     raw_score, distance, zone = ranked[0]
     direction = "LONG" if zone.direction == "bullish" else "SHORT"
     _distance, location = _zone_distance(zone, current_price)
-    entry = _entry_for_zone(zone, current_price)
+    entry, entry_reason = _entry_for_zone(zone, direction=direction, structure=structure)
     buffer = max((zone.high - zone.low) * 0.08, atr_value * 0.08)
     invalidation = zone.low - buffer if direction == "LONG" else zone.high + buffer
 
@@ -243,7 +261,9 @@ def select_closest_quality_zone(
         location=location,
         distance_points=distance,
         distance_percent=distance / current_price * 100.0,
+        current_price=float(current_price),
         entry=entry,
+        entry_reason=entry_reason,
         invalidation=invalidation,
         target_1=target_1,
         target_1_label=label_1,
@@ -273,8 +293,8 @@ def format_quality_zone_scenario(scenario: QualityZoneScenario, *, decimals: int
         f"%{scenario.distance_percent:.2f} {scenario.location}",
         f"Senaryo: {scenario.direction} — \"Bölge retest edilirse {direction_word} teyidi aranır\"",
         "",
-        f"✅ Giriş: {scenario.entry:.{decimals}f} "
-        f"({'OB orta noktası (%50)' if scenario.zone_kind == 'OB' else 'FVG ilk dokunuşu'})",
+        f"✅ Giriş: {scenario.entry:.{decimals}f}",
+        f"💬 Ben olsam {scenario.entry:.{decimals}f} seviyesinden girerim, çünkü {scenario.entry_reason}.",
         f"🛑 Invalidation (Stop): {scenario.invalidation:.{decimals}f} — bölge dışı kapanış",
         f"🎯 TP1: {_price(scenario.target_1, decimals)}"
         + (f" ({scenario.target_1_label})" if scenario.target_1_label else ""),
@@ -297,11 +317,39 @@ def format_quality_zone_scenario(scenario: QualityZoneScenario, *, decimals: int
         )
     else:
         lines.append("🧭 MSS/BOS teyidi yok; yapı teyidi oluşmadan senaryo aktif değildir.")
+
+    price_inside_zone = scenario.zone_low <= scenario.current_price <= scenario.zone_high
+    if price_inside_zone and scenario.structure_confirmed and scenario.rr_is_sufficient:
+        lines.append(
+            f"✅ Fiyat zaten entry bölgemin "
+            f"({scenario.zone_low:.{decimals}f}-{scenario.zone_high:.{decimals}f} aralığı) içinde, "
+            "buradan pozisyon açılabilir."
+        )
+    elif price_inside_zone:
+        missing = []
+        if not scenario.structure_confirmed:
+            missing.append("MSS/CHoCH yön teyidi")
+        if not scenario.rr_is_sufficient:
+            missing.append("minimum 1:2 RR")
+        lines.append(
+            f"⏳ Fiyat entry bölgesinin "
+            f"({scenario.zone_low:.{decimals}f}-{scenario.zone_high:.{decimals}f}) içinde; "
+            f"ancak {' ve '.join(missing)} tamamlanmadan pozisyon açılmaz."
+        )
+    else:
+        lines.append(
+            f"⏳ Fiyat şu an {scenario.current_price:.{decimals}f} seviyesinde, entry seviyem olan "
+            f"{scenario.entry:.{decimals}f}'e henüz gelmedi. {scenario.entry:.{decimals}f} seviyesine "
+            "geri çekilme (retest) bekliyorum."
+        )
     if scenario.alternative is not None:
         alt = scenario.alternative
         lines.append(
             f"↪️ Alternatif bölge: {alt.kind} {alt.low:.{decimals}f}-{alt.high:.{decimals}f} "
             f"• {alt.direction} • %{alt.distance_percent:.2f} uzakta"
         )
-    lines.append("ℹ️ Güncel fiyattan doğrudan giriş önerilmez; yalnız retest + yapı/hacim teyidi izlenir.")
+    lines.append(
+        "ℹ️ Güncel fiyattan doğrudan giriş önerilmez. Son kapanış entry değildir. "
+        "Yalnız yapısal seviye + retest + yapı/hacim teyidi izlenir."
+    )
     return "\n".join(lines)

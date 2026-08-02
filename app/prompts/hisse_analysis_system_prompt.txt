@@ -180,6 +180,23 @@ Her maddenin önemini “düşük, orta veya yüksek” olarak derecelendir.
 
 10. RİSK YÖNETİMİ
 
+ENTRY FİYATI KURALI
+
+Analiz sonunda mutlaka net bir entry fiyatı ve yapısal gerekçesini yaz:
+"Ben olsam [X] seviyesinden girerim, çünkü [neden]."
+
+Entry yalnız şu doğrulanabilir yapılardan seçilebilir:
+- Order Block'un (OB) üst/alt sınırı
+- Fair Value Gap (FVG) ortası veya CE (consequent encroachment)
+- Sweep sonrası CHoCH/MSS onay seviyesi
+- HTF zone ile LTF zone çakışması
+- Önceki swing high/low retest seviyesi
+
+Son kapanışı veya güncel mum fiyatını entry olarak kopyalama. "Şu anki fiyattan girilebilir"
+gibi genel bir ifade kullanma. Fiyat bölge dışında ise güncel fiyatı ve beklenen entry'yi
+ayrı ayrı yazıp retest beklendiğini açıkla. Fiyat doğrulanmış entry bölgesinin içindeyse
+bölge aralığını yaz; minimum 1:2 RR ile MSS/CHoCH teyidi tamamlanmadan girişe uygun deme.
+
 - Tek işlemde toplam sermayenin küçük bir bölümünden fazlasının riske atılmaması gerektiğini belirt.
 - Pozisyon büyüklüğünü şu mantıkla hesapla:
 

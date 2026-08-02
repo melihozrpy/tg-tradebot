@@ -52,13 +52,40 @@ def test_closest_quality_zone_uses_mss_and_exact_zone_prices():
     assert scenario.zone_kind == "OB"
     assert scenario.zone_low == 96.40
     assert scenario.zone_high == 97.20
-    assert scenario.entry == pytest.approx(96.80)
+    assert scenario.entry == pytest.approx(97.20)
+    assert scenario.current_price == pytest.approx(99.00)
+    assert "Order Block'un üst sınırı" in scenario.entry_reason
     assert scenario.structure_kind == "MSS"
     assert scenario.structure_confirmed is True
     text = format_quality_zone_scenario(scenario)
     assert "EN YAKIN KALİTELİ BÖLGE" in text
     assert "96.40-97.20" in text
-    assert "Güncel fiyattan doğrudan giriş önerilmez" in text
+    assert "Ben olsam 97.20 seviyesinden girerim" in text
+    assert "Fiyat şu an 99.00 seviyesinde" in text
+    assert "97.20'e henüz gelmedi" in text
+    assert "Son kapanış entry değildir" in text
+
+
+def test_fvg_entry_is_ce_and_never_copied_from_current_price():
+    smart = SmartMoneyResult(
+        fvg=(PriceZone("FVG", 98.00, 100.00, 75, "bullish", 75, 73),),
+        order_blocks=(),
+        structure=(StructureEvent("MSS", 97.00, 80, "bullish", 80, 77),),
+    )
+    first = select_closest_quality_zone(
+        98.60, 1.0, smart, resistance_levels=(104.00, 106.00)
+    )
+    second = select_closest_quality_zone(
+        99.40, 1.0, smart, resistance_levels=(104.00, 106.00)
+    )
+    assert first is not None and second is not None
+    assert first.entry == pytest.approx(99.00)
+    assert second.entry == pytest.approx(99.00)
+    assert first.entry != pytest.approx(first.current_price)
+    assert second.entry != pytest.approx(second.current_price)
+    assert "CE (consequent encroachment / %50)" in first.entry_reason
+    text = format_quality_zone_scenario(first)
+    assert "Fiyat zaten entry bölgemin (98.00-100.00 aralığı) içinde" in text
 
 
 def test_dynamic_breakout_targets_use_next_pd_array_not_atr_projection():
