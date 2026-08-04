@@ -61,6 +61,10 @@ def test_ultra_bist_settings_defaults_and_optional_blank_value():
     assert settings.allow_delayed_data_for_live_trigger is False
     assert settings.max_market_data_staleness_seconds is None
     assert (
+        Settings(_env_file=None, technical_screener_chat_id="").technical_screener_chat_id
+        is None
+    )
+    assert (
         settings.default_tp1_allocation
         + settings.default_tp2_allocation
         + settings.default_tp3_allocation

@@ -390,6 +390,7 @@ class Settings(BaseSettings):
         return normalized
 
     @field_validator(
+        "technical_screener_chat_id",
         "max_market_data_staleness_seconds",
         "backtest_commission_rate",
         "backtest_commission_minimum",
