@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional, cast
+from typing import Literal, Optional, cast
 
 import numpy as np
 import pandas as pd
@@ -111,6 +111,322 @@ def relative_volume(df: pd.DataFrame, period: int = 20) -> pd.Series:
     return df["volume"] / avg_vol.replace(0, np.nan)
 
 
+def session_vwap(
+    df: pd.DataFrame,
+    *,
+    timezone_name: str = "Europe/Istanbul",
+) -> pd.Series:
+    """Return session VWAP without carrying volume between trading days.
+
+    Intraday timestamps are grouped by their Istanbul trading date.  With daily
+    candles the result is necessarily the candle typical price because a daily
+    bar does not contain the intraday distribution; callers can expose that
+    limitation instead of fabricating a more precise value.
+    """
+
+    required = {"timestamp", "high", "low", "close", "volume"}
+    missing = required - set(df.columns)
+    if missing:
+        raise InsufficientDataError(f"VWAP icin eksik kolonlar: {missing}")
+    timestamps = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
+    try:
+        session_key = timestamps.dt.tz_convert(timezone_name).dt.date
+    except (TypeError, ValueError):
+        session_key = timestamps.dt.date
+    typical = (
+        pd.to_numeric(df["high"], errors="coerce")
+        + pd.to_numeric(df["low"], errors="coerce")
+        + pd.to_numeric(df["close"], errors="coerce")
+    ) / 3.0
+    volume = pd.to_numeric(df["volume"], errors="coerce").clip(lower=0).fillna(0.0)
+    cumulative_value = (typical * volume).groupby(session_key).cumsum()
+    cumulative_volume = volume.groupby(session_key).cumsum().replace(0, np.nan)
+    return cast(pd.Series, (cumulative_value / cumulative_volume).fillna(typical))
+
+
+def _latest_swing_anchor(df: pd.DataFrame, lookback: int = 80, pivot_window: int = 3) -> int:
+    """Choose the latest confirmed swing high/low, never the unfinished last bar."""
+
+    data = df.tail(max(lookback, pivot_window * 2 + 3))
+    high = pd.to_numeric(data["high"], errors="coerce")
+    low = pd.to_numeric(data["low"], errors="coerce")
+    window = pivot_window * 2 + 1
+    swing_high = high.eq(high.rolling(window, center=True, min_periods=window).max())
+    swing_low = low.eq(low.rolling(window, center=True, min_periods=window).min())
+    candidates = data.index[(swing_high | swing_low).fillna(False)].tolist()
+    return int(candidates[-1]) if candidates else int(data.index[0])
+
+
+def anchored_vwap(
+    df: pd.DataFrame,
+    *,
+    anchor_index: int | None = None,
+    anchor_date: str | pd.Timestamp | None = None,
+) -> tuple[pd.Series, int]:
+    """Return anchored VWAP and the resolved anchor row index.
+
+    The caller may provide a row index or date.  When neither is supplied the
+    most recent confirmed swing high/low is selected deterministically.
+    Values before the anchor stay ``NaN`` so they cannot be mistaken for data.
+    """
+
+    required = {"timestamp", "high", "low", "close", "volume"}
+    missing = required - set(df.columns)
+    if missing:
+        raise InsufficientDataError(f"Anchored VWAP icin eksik kolonlar: {missing}")
+    if df.empty:
+        raise InsufficientDataError("Anchored VWAP icin mum verisi yok.")
+    data = df.reset_index(drop=True)
+    if anchor_date is not None:
+        timestamps = pd.to_datetime(data["timestamp"], utc=True, errors="coerce")
+        wanted = pd.to_datetime(anchor_date, utc=True, errors="coerce")
+        matches = data.index[timestamps >= wanted].tolist()
+        if not matches:
+            raise InsufficientDataError("Anchored VWAP tarihi veri araliginin disinda.")
+        resolved = int(matches[0])
+    elif anchor_index is not None:
+        resolved = max(0, min(int(anchor_index), len(data) - 1))
+    else:
+        resolved = _latest_swing_anchor(data)
+
+    typical = (data["high"] + data["low"] + data["close"]) / 3.0
+    volume = pd.to_numeric(data["volume"], errors="coerce").clip(lower=0).fillna(0.0)
+    result = pd.Series(np.nan, index=data.index, dtype=float)
+    anchored_value = (typical.iloc[resolved:] * volume.iloc[resolved:]).cumsum()
+    anchored_volume = volume.iloc[resolved:].cumsum().replace(0, np.nan)
+    result.iloc[resolved:] = (anchored_value / anchored_volume).fillna(typical.iloc[resolved:])
+    return result, resolved
+
+
+def supertrend(
+    df: pd.DataFrame,
+    period: int = 10,
+    multiplier: float = 3.0,
+) -> tuple[pd.Series, pd.Series]:
+    """Compute a standard ATR Supertrend line and direction (1 / -1)."""
+
+    if len(df) < period + 2:
+        raise InsufficientDataError(f"Supertrend icin en az {period + 2} mum gerekir.")
+    data = df.reset_index(drop=True)
+    midpoint = (data["high"] + data["low"]) / 2.0
+    atr_values = atr(data, period).bfill()
+    basic_upper = midpoint + multiplier * atr_values
+    basic_lower = midpoint - multiplier * atr_values
+    final_upper = basic_upper.copy()
+    final_lower = basic_lower.copy()
+    direction = pd.Series(1, index=data.index, dtype=int)
+    line = pd.Series(np.nan, index=data.index, dtype=float)
+
+    for idx in range(1, len(data)):
+        if basic_upper.iloc[idx] < final_upper.iloc[idx - 1] or data["close"].iloc[idx - 1] > final_upper.iloc[idx - 1]:
+            final_upper.iloc[idx] = basic_upper.iloc[idx]
+        else:
+            final_upper.iloc[idx] = final_upper.iloc[idx - 1]
+        if basic_lower.iloc[idx] > final_lower.iloc[idx - 1] or data["close"].iloc[idx - 1] < final_lower.iloc[idx - 1]:
+            final_lower.iloc[idx] = basic_lower.iloc[idx]
+        else:
+            final_lower.iloc[idx] = final_lower.iloc[idx - 1]
+
+        previous_direction = int(direction.iloc[idx - 1])
+        if previous_direction < 0 and data["close"].iloc[idx] > final_upper.iloc[idx]:
+            direction.iloc[idx] = 1
+        elif previous_direction > 0 and data["close"].iloc[idx] < final_lower.iloc[idx]:
+            direction.iloc[idx] = -1
+        else:
+            direction.iloc[idx] = previous_direction
+        line.iloc[idx] = final_lower.iloc[idx] if direction.iloc[idx] > 0 else final_upper.iloc[idx]
+
+    line.iloc[0] = final_lower.iloc[0]
+    return line, direction
+
+
+@dataclass(frozen=True)
+class VolumeProfileResult:
+    poc: float | None
+    vah: float | None
+    val: float | None
+    value_area_percent: float
+    mode: Literal["ohlcv_approximation", "volume_average_fallback"]
+    average_volume_20: float
+
+
+def volume_profile(
+    df: pd.DataFrame,
+    *,
+    lookback: int = 120,
+    bins: int = 32,
+    value_area_percent: float = 0.70,
+) -> VolumeProfileResult:
+    """Approximate price-by-volume POC/VAH/VAL from OHLCV candles.
+
+    This is explicitly marked as an OHLCV approximation.  If usable volume is
+    absent, POC/VAH/VAL remain ``None`` and only the 20-bar volume average is
+    returned as the documented fallback.
+    """
+
+    data = df.tail(max(20, lookback)).copy()
+    volume = pd.to_numeric(data.get("volume"), errors="coerce").clip(lower=0).fillna(0.0)
+    average_volume = float(volume.tail(20).mean()) if len(volume) else 0.0
+    if data.empty or float(volume.sum()) <= 0:
+        return VolumeProfileResult(None, None, None, value_area_percent, "volume_average_fallback", average_volume)
+    typical = (
+        pd.to_numeric(data["high"], errors="coerce")
+        + pd.to_numeric(data["low"], errors="coerce")
+        + pd.to_numeric(data["close"], errors="coerce")
+    ) / 3.0
+    valid = typical.notna() & volume.gt(0)
+    typical, volume = typical[valid], volume[valid]
+    if typical.empty or float(typical.max()) <= float(typical.min()):
+        price = float(typical.iloc[-1]) if not typical.empty else None
+        return VolumeProfileResult(price, price, price, value_area_percent, "ohlcv_approximation", average_volume)
+
+    edges = np.linspace(float(typical.min()), float(typical.max()), max(8, int(bins)) + 1)
+    bucket = np.clip(np.digitize(typical.to_numpy(), edges) - 1, 0, len(edges) - 2)
+    profile = np.bincount(bucket, weights=volume.to_numpy(), minlength=len(edges) - 1)
+    centres = (edges[:-1] + edges[1:]) / 2.0
+    poc_index = int(np.argmax(profile))
+    selected = {poc_index}
+    accumulated = float(profile[poc_index])
+    target = float(profile.sum()) * max(0.5, min(0.95, value_area_percent))
+    left, right = poc_index - 1, poc_index + 1
+    while accumulated < target and (left >= 0 or right < len(profile)):
+        left_volume = float(profile[left]) if left >= 0 else -1.0
+        right_volume = float(profile[right]) if right < len(profile) else -1.0
+        chosen = left if left_volume >= right_volume else right
+        selected.add(chosen)
+        accumulated += float(profile[chosen])
+        if chosen == left:
+            left -= 1
+        else:
+            right += 1
+    return VolumeProfileResult(
+        poc=float(centres[poc_index]),
+        vah=float(edges[max(selected) + 1]),
+        val=float(edges[min(selected)]),
+        value_area_percent=value_area_percent,
+        mode="ohlcv_approximation",
+        average_volume_20=average_volume,
+    )
+
+
+@dataclass(frozen=True)
+class IndicatorBundle:
+    symbol: str
+    timeframe: str
+    frame: pd.DataFrame
+    volume_profile: VolumeProfileResult
+    anchor_index: int
+    session_vwap_mode: Literal["intraday_session", "daily_typical_price_fallback"]
+
+    @property
+    def latest(self) -> pd.Series:
+        return self.frame.iloc[-1]
+
+
+@dataclass(frozen=True)
+class ConfluenceResult:
+    direction: Literal["bullish", "bearish", "neutral"]
+    confirmations: tuple[str, ...]
+    conflicts: tuple[str, ...]
+    score: int
+    minimum_required: int
+
+    @property
+    def qualified(self) -> bool:
+        return len(self.confirmations) >= self.minimum_required
+
+
+def compute_indicator_bundle(
+    df: pd.DataFrame,
+    *,
+    symbol: str = "",
+    timeframe: str = "1d",
+    anchor_index: int | None = None,
+    anchor_date: str | pd.Timestamp | None = None,
+) -> IndicatorBundle:
+    """Calculate the shared ten-indicator set once for every consumer."""
+
+    required = {"timestamp", "open", "high", "low", "close", "volume"}
+    missing = required - set(df.columns)
+    if missing:
+        raise InsufficientDataError(f"Ortak indikator motoru icin eksik kolonlar: {missing}")
+    if len(df) < MIN_BARS_FOR_FULL_ANALYSIS:
+        raise InsufficientDataError(
+            f"{symbol or 'sembol'}/{timeframe} icin yeterli mum yok: {len(df)} < {MIN_BARS_FOR_FULL_ANALYSIS}"
+        )
+    data = df.sort_values("timestamp").reset_index(drop=True).copy()
+    close = pd.to_numeric(data["close"], errors="coerce")
+    for period in (20, 50, 100, 200):
+        data[f"ema{period}"] = ema(close, period) if len(data) >= period else np.nan
+    data["vwap"] = session_vwap(data)
+    data["anchored_vwap"], resolved_anchor = anchored_vwap(
+        data, anchor_index=anchor_index, anchor_date=anchor_date
+    )
+    data["supertrend"], data["supertrend_direction"] = supertrend(data, 10, 3.0)
+    data["rsi14"] = rsi(close, 14)
+    data["macd"], data["macd_signal"], data["macd_histogram"] = macd(close, 12, 26, 9)
+    data["adx14"] = adx(data, 14)
+    data["bb_upper"], data["bb_mid"], data["bb_lower"], data["bb_width"] = bollinger_bands(close, 20, 2.0)
+    data["obv"] = obv(data)
+    data["relative_volume"] = relative_volume(data, 20)
+    return IndicatorBundle(
+        symbol=symbol.upper().removesuffix(".IS"),
+        timeframe=timeframe,
+        frame=data,
+        volume_profile=volume_profile(data),
+        anchor_index=resolved_anchor,
+        session_vwap_mode=(
+            "intraday_session"
+            if timeframe.casefold() in {"1m", "5m", "15m", "30m", "1h", "4h"}
+            else "daily_typical_price_fallback"
+        ),
+    )
+
+
+def evaluate_indicator_confluence(
+    bundle: IndicatorBundle,
+    direction: Literal["bullish", "bearish"],
+    *,
+    minimum_required: int = 3,
+) -> ConfluenceResult:
+    """Require independent confirmations; a single indicator never qualifies."""
+
+    last = bundle.latest
+    previous = bundle.frame.iloc[-2]
+    bullish = direction == "bullish"
+    confirmations: list[str] = []
+    conflicts: list[str] = []
+
+    def add(condition: bool, positive: str, negative: str) -> None:
+        (confirmations if condition else conflicts).append(positive if condition else negative)
+
+    ema_condition = bool(last["ema50"] > last["ema100"]) if pd.notna(last["ema100"]) else bool(last["ema20"] > last["ema50"])
+    add(ema_condition == bullish, "EMA trend siralamasi uyumlu", "EMA trend siralamasi ters")
+    add((int(last["supertrend_direction"]) > 0) == bullish, "Supertrend yonu uyumlu", "Supertrend yonu ters")
+    if bundle.session_vwap_mode == "intraday_session":
+        add((float(last["close"]) > float(last["vwap"])) == bullish, "Fiyat session VWAP ile uyumlu", "Fiyat session VWAP ile uyumsuz")
+    else:
+        conflicts.append("Gunluk mumdan gercek session VWAP dogrulanamaz; teyit sayilmadi")
+    add((float(last["macd_histogram"]) > 0) == bullish, "MACD momentumu uyumlu", "MACD momentumu ters")
+    rsi_value = float(last["rsi14"])
+    rsi_condition = 50 <= rsi_value < 75 if bullish else 25 < rsi_value <= 50
+    add(rsi_condition, f"RSI yonu destekliyor ({rsi_value:.1f})", f"RSI yonu desteklemiyor ({rsi_value:.1f})")
+    obv_condition = float(last["obv"]) > float(previous["obv"])
+    add(obv_condition == bullish, "OBV fiyat yonunu teyit ediyor", "OBV teyidi yok")
+    if float(last["adx14"]) < 20:
+        conflicts.append(f"ADX {float(last['adx14']):.1f}: yatay/zayif trend")
+    else:
+        confirmations.append(f"ADX {float(last['adx14']):.1f}: trend gucu yeterli")
+    score = round(len(confirmations) / max(1, len(confirmations) + len(conflicts)) * 100)
+    return ConfluenceResult(
+        direction=direction if len(confirmations) >= minimum_required else "neutral",
+        confirmations=tuple(confirmations),
+        conflicts=tuple(conflicts),
+        score=score,
+        minimum_required=max(3, int(minimum_required)),
+    )
+
+
 def pivot_support_resistance(df: pd.DataFrame, lookback: int = 20) -> tuple[Optional[float], Optional[float]]:
     if len(df) < lookback:
         return None, None
@@ -164,23 +480,24 @@ def compute_technical_snapshot(df: pd.DataFrame, symbol: str, timeframe: str) ->
             f"{symbol}/{timeframe} icin yeterli mum yok: {len(df)} < {MIN_BARS_FOR_FULL_ANALYSIS}"
         )
 
-    df = df.sort_values("timestamp").reset_index(drop=True)
+    bundle = compute_indicator_bundle(df, symbol=symbol, timeframe=timeframe)
+    df = bundle.frame
     close = df["close"]
 
-    ema20_s = ema(close, 20)
-    ema50_s = ema(close, 50)
-    ema100_s = ema(close, 100) if len(df) >= 100 else pd.Series([np.nan] * len(df))
-    ema200_s = ema(close, 200) if len(df) >= 200 else pd.Series([np.nan] * len(df))
+    ema20_s = df["ema20"]
+    ema50_s = df["ema50"]
+    ema100_s = df["ema100"]
+    ema200_s = df["ema200"]
     sma20_s = sma(close, 20)
     sma50_s = sma(close, 50)
-    adx_s = adx(df, 14)
-    rsi_s = rsi(close, 14)
-    macd_line_s, macd_signal_s, macd_hist_s = macd(close)
+    adx_s = df["adx14"]
+    rsi_s = df["rsi14"]
+    macd_line_s, macd_signal_s, macd_hist_s = df["macd"], df["macd_signal"], df["macd_histogram"]
     atr_s = atr(df, 14)
-    rel_vol_s = relative_volume(df, 20)
-    obv_s = obv(df)
+    rel_vol_s = df["relative_volume"]
+    obv_s = df["obv"]
     mfi_s = money_flow_index(df, 14)
-    _, _, _, bb_width_s = bollinger_bands(close, 20, 2.0)
+    bb_width_s = df["bb_width"]
     support, resistance = pivot_support_resistance(df, lookback=20)
 
     last = -1
@@ -224,4 +541,20 @@ def compute_technical_snapshot(df: pd.DataFrame, symbol: str, timeframe: str) ->
         trend_direction=trend_direction,
         volume_confirmed=volume_confirmed,
         bars_used=len(df),
+        extras={
+            "vwap": float(df["vwap"].iloc[last]),
+            "anchored_vwap": float(df["anchored_vwap"].iloc[last]),
+            "anchored_vwap_index": bundle.anchor_index,
+            "supertrend": float(df["supertrend"].iloc[last]),
+            "supertrend_direction": int(df["supertrend_direction"].iloc[last]),
+            "bollinger_upper": float(df["bb_upper"].iloc[last]),
+            "bollinger_mid": float(df["bb_mid"].iloc[last]),
+            "bollinger_lower": float(df["bb_lower"].iloc[last]),
+            "volume_profile_mode": bundle.volume_profile.mode,
+            "volume_profile_poc": bundle.volume_profile.poc,
+            "volume_profile_vah": bundle.volume_profile.vah,
+            "volume_profile_val": bundle.volume_profile.val,
+            "average_volume_20": bundle.volume_profile.average_volume_20,
+            "session_vwap_mode": bundle.session_vwap_mode,
+        },
     )

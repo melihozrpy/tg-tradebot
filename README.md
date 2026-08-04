@@ -219,6 +219,15 @@ python run_bot.py
 
 | Değişken | Açıklama | Varsayılan |
 |---|---|---|
+| `STAGED_ENTRY_ALLOCATIONS` | OB/FVG kademeli giriş dağılımı | `40,35,25` |
+| `TECHNICAL_SCREENER_ENABLED` | Yapılandırılmış tam BIST evreninde EMA50/100 + RSI taraması | `true` |
+| `TECHNICAL_SCREENER_INTERVAL_MINUTES` | EMA/RSI tarama aralığı | `30` |
+| `TECHNICAL_SCREENER_MIN_CONFLUENCE` | Alarm için gereken bağımsız teyit | `3` |
+| `TECHNICAL_SCREENER_CHAT_ID` | Teknik alarmların gideceği kanal/grup ID; boşsa adminler | boş |
+| `RSI_OVERBOUGHT` / `RSI_OVERSOLD` | RSI ekstrem eşikleri | `75` / `25` |
+| `INTRADAY_VWAP_SCAN_ENABLED` | Piyasa saatlerinde VWAP/POC toplu raporu | `true` |
+| `NEWS_DIGEST_CACHE_MINUTES` | `/haber` sembol önbelleği | `15` |
+| `NEWS_DIGEST_LOOKBACK_HOURS` | `/haber` arama penceresi | `48` |
 | `TELEGRAM_BOT_TOKEN` | BotFather'dan alınan token | (zorunlu) |
 | `ADMIN_TELEGRAM_USER_IDS` | Virgülle ayrılmış whitelist ID'leri | boş = herkese açık |
 | `MARKET_DATA_PROVIDER` | `licensed_rest` (sözleşmeli üretim), `yfinance` (yalnız gecikmeli fallback), `csv`, `mock` (yalnız test) | `mock` |
@@ -1116,3 +1125,23 @@ python scripts/build_release.py `
   --source C:\path\to\clean-source `
   --output mergen-quant-stage5g-backtest-paper-validation.zip
 ```
+
+---
+
+## Zone, haber ve tam-evren teknik tarama eklentileri
+
+- `/kademe THYAO`: en yakın aktif OB/FVG'yi `%40/%35/%25` olarak böler.
+  Fiyat bölgeye gelmediyse `PENDING — şu an entry YOK` yazar; son kapanışı
+  entry olarak kullanmaz. Ortak invalidation/SL ve kesik varsayımsal mumlu
+  sade senaryo grafiği döner.
+- `/haber THYAO`: son 24–48 saat GDELT/KAP başlıklarını kaynak ve tarihle
+  verir. Aynı sembol 15 dakika içinde yeniden istenirse `news_cache` tablosundan
+  döner. Opsiyonel web sayfalarında robots.txt izni yoksa scraping yapılmaz.
+- EMA50/EMA100 ve RSI tarayıcısı aynı kesimi/eşik durumunu tekrar göndermez;
+  `ema_cross_state` ve `rsi_alert_state` tabloları deploy sonrasında da durumu
+  korur. Tek indikatör alarm için yeterli değildir; en az üç teyit gerekir.
+- Ayrı 30 dakikalık iş, İstanbul piyasa saatlerinde session VWAP ile
+  OHLCV-tabanlı POC/VAH/VAL yakınlığını tek Telegram özetinde raporlar.
+- `/kademe` ile kaydedilen sanal planlar `staged_entry_plans` tablosunda izlenir;
+  teyit, dolum, yeni ortalama maliyet ve invalidation bildirimleri
+  `staged_entry_events` outbox tablosundan gönderilir. Bu katman gerçek emir açmaz.

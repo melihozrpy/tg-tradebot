@@ -5,11 +5,12 @@ import dataclasses
 import logging
 import math
 import re
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
+import pandas as pd
 from telegram import Update
 from telegram.ext import ContextTypes, MessageHandler, filters
 
@@ -216,6 +217,70 @@ def build_verified_stock_context(settings: Settings, symbol: str) -> dict[str, A
                     for reason in getattr(signal, "reasons", [])[:6]
                 ],
             }
+            try:
+                from app.analysis.bist_trade_plan import build_bist_trade_plan
+                from app.analysis.indicator_engine import (
+                    compute_indicator_bundle,
+                    evaluate_indicator_confluence,
+                )
+                from app.analysis.staged_entry import build_staged_entry_plan
+
+                frame = market_provider.get_ohlcv(
+                    normalized,
+                    "1d",
+                    now_utc - timedelta(days=520),
+                    now_utc,
+                )
+                bundle = compute_indicator_bundle(
+                    frame, symbol=normalized, timeframe="1d"
+                )
+                latest = bundle.latest
+                trade_plan = build_bist_trade_plan(frame, normalized)
+                quality_zone = trade_plan.quality_zone
+                staged = None
+                confluence = None
+                if quality_zone is not None:
+                    confluence = evaluate_indicator_confluence(
+                        bundle,
+                        "bullish" if quality_zone.direction == "LONG" else "bearish",
+                        minimum_required=settings.technical_screener_min_confluence,
+                    )
+                    allocations = tuple(
+                        float(value.strip())
+                        for value in settings.staged_entry_allocations.split(",")
+                        if value.strip()
+                    )
+                    staged = build_staged_entry_plan(
+                        quality_zone,
+                        symbol=normalized,
+                        allocations=allocations,
+                        confluence=confluence,
+                    )
+                context["compact_analysis"] = {
+                    "price": float(latest["close"]),
+                    "ema50": float(latest["ema50"]),
+                    "ema200": float(latest["ema200"]) if pd.notna(latest["ema200"]) else None,
+                    "supertrend_direction": int(latest["supertrend_direction"]),
+                    "rsi": float(latest["rsi14"]),
+                    "macd_histogram": float(latest["macd_histogram"]),
+                    "adx": float(latest["adx14"]),
+                    "obv_rising": bool(float(latest["obv"]) > float(bundle.frame["obv"].iloc[-5])),
+                    "relative_volume": float(latest["relative_volume"])
+                    if pd.notna(latest["relative_volume"])
+                    else 0.0,
+                    "volume_profile": _jsonable(bundle.volume_profile),
+                    "zone": _jsonable(quality_zone),
+                    "staged_entry": _jsonable(staged),
+                    "confluence": _jsonable(confluence),
+                    "data_timestamp": _jsonable(latest["timestamp"]),
+                }
+            except Exception as exc:  # noqa: BLE001 - compact view is additive
+                logger.warning(
+                    "AI kisa teknik baglami olusturulamadi symbol=%s error=%s",
+                    normalized,
+                    type(exc).__name__,
+                )
+                context["compact_analysis"] = {"status": "unavailable"}
         except AnalysisUnavailableErrorV3 as exc:
             context["technical"] = {"status": "unavailable", "reason": str(exc)}
             context["warnings"].append("Teknik analiz için doğrulanmış veri alınamadı.")
@@ -324,6 +389,89 @@ def _deterministic_ai_fallback(context: dict[str, Any], *, visual: bool) -> str:
     return "\n".join(line for line in lines if line is not None)
 
 
+def _compact_ai_request(user_request: str) -> str:
+    return (
+        f"{user_request}\n\n"
+        "YANIT KURALI: Yalniz Turkce yaz. 8-12 satir kullan. Kisa, somut ve madde madde ol; "
+        "gereksiz tekrar ve genel cumle kullanma. Sirayi bozma: Trend, Momentum, Trend Gucu, "
+        "Hacim, Kritik Bolge, Senaryo, Uyari. ENTRY olarak son kapanisi asla kullanma. "
+        "Fiyat zone disindaysa mutlaka 'PENDING - su an entry YOK' yaz. Yalniz verilen "
+        "dogrulanmis JSON degerlerini kullan; eksik degeri uydurma. Tek bir yatirim tavsiyesi "
+        "degildir uyari satiri kullan."
+    )
+
+
+def format_compact_ai_fallback(context: dict[str, Any]) -> str:
+    """Guaranteed 8-12 line output from the shared verified indicator bundle."""
+
+    symbol = str(context.get("symbol") or "SEMBOL")
+    data = context.get("compact_analysis") or {}
+    if data.get("status") == "unavailable" or data.get("price") is None:
+        return _deterministic_ai_fallback(context, visual=False)
+    ema50 = float(data["ema50"])
+    ema200 = data.get("ema200")
+    supertrend_up = int(data.get("supertrend_direction") or 0) > 0
+    trend_up = ema50 > float(ema200) if ema200 is not None else supertrend_up
+    trend = "Yükseliş" if trend_up and supertrend_up else "Düşüş" if not trend_up and not supertrend_up else "Karışık/Yatay"
+    rsi_value = float(data.get("rsi") or 0.0)
+    rsi_label = "Aşırı Alım" if rsi_value >= 75 else "Aşırı Satım" if rsi_value <= 25 else "Nötr"
+    macd_label = "Pozitif" if float(data.get("macd_histogram") or 0.0) > 0 else "Negatif"
+    adx_value = float(data.get("adx") or 0.0)
+    adx_label = "Güçlü" if adx_value >= 25 else "Zayıf/Yatay" if adx_value < 20 else "Orta"
+    volume_label = "ortalama üstü" if float(data.get("relative_volume") or 0.0) >= 1.2 else "normal/zayıf"
+    zone = data.get("zone") or {}
+    staged = data.get("staged_entry") or {}
+    confluence = data.get("confluence") or {}
+    if zone:
+        zone_text = f"{float(zone['zone_low']):.2f}-{float(zone['zone_high']):.2f} ({zone['zone_kind']} / {zone['direction']})"
+        staged_levels = staged.get("levels") or []
+        entries = "/".join(f"{float(item['price']):.2f}" for item in staged_levels)
+        scenario = f"Bölge test edilirse kademeler {entries}; ortak SL {float(staged['invalidation']):.2f}."
+        pending = staged.get("status") != "CONFIRMED"
+        warning = (
+            f"PENDING — şu an entry YOK; fiyat {float(staged['zone_low']):.2f}-{float(staged['zone_high']):.2f} bölgesine gelmeli."
+            if pending
+            else "CONFIRMED — fiyat zone içinde; yapı, RR ve confluence teyidi mevcut."
+        )
+    else:
+        zone_text = "Doğrulanmış aktif OB/FVG yok; seviye uydurulmadı"
+        scenario = "Zone oluşmadan giriş planı üretilemez."
+        warning = "PENDING — şu an entry YOK."
+    confirmations = confluence.get("confirmations") or []
+    required = int(confluence.get("minimum_required") or 3)
+    return "\n".join(
+        [
+            f"📈 {symbol} — AI Analiz",
+            f"🎯 Trend: {trend} (EMA50 {ema50:.2f} | Supertrend {'Yukarı' if supertrend_up else 'Aşağı'})",
+            f"📊 Momentum: RSI {rsi_value:.1f} ({rsi_label}) | MACD {macd_label}",
+            f"💪 Trend Gücü: ADX {adx_value:.1f} ({adx_label})",
+            f"📦 Hacim: OBV {'yükseliyor' if data.get('obv_rising') else 'teyit vermiyor'} | {volume_label}",
+            f"🔷 Kritik Bölge: {zone_text}",
+            f"🎯 Senaryo: {scenario}",
+            f"🧩 Confluence: {len(confirmations)}/{required} minimum teyit",
+            f"⚠️ Not: {warning}",
+            "ℹ️ Bu çıktı kişiye özel yatırım tavsiyesi değildir.",
+        ]
+    )
+
+
+def _enforce_compact_ai_output(analysis: str, context: dict[str, Any]) -> str:
+    """Accept the model only when it obeys the safe fixed contract."""
+
+    lines = [line.strip() for line in str(analysis or "").splitlines() if line.strip()]
+    required_markers = ("🎯", "📊", "💪", "📦", "🔷", "⚠️")
+    staged = (context.get("compact_analysis") or {}).get("staged_entry") or {}
+    pending_ok = staged.get("status") == "CONFIRMED" or any("PENDING" in line.upper() for line in lines)
+    if (
+        8 <= len(lines) <= 12
+        and all(any(marker in line for line in lines) for marker in required_markers)
+        and pending_ok
+        and not any("guaranteed" in line.casefold() or "garanti" in line.casefold() for line in lines)
+    ):
+        return "\n".join(lines)
+    return format_compact_ai_fallback(context)
+
+
 async def _run_text_analysis(update: Update, user_request: str, symbol: str) -> None:
     settings = get_settings()
     status = await update.effective_message.reply_text(
@@ -335,9 +483,10 @@ async def _run_text_analysis(update: Update, user_request: str, symbol: str) -> 
         verified_context = await asyncio.to_thread(build_verified_stock_context, settings, symbol)
         analysis = await asyncio.to_thread(
             analyst.analyze_text,
-            user_request,
+            _compact_ai_request(user_request),
             verified_context=verified_context,
         )
+        analysis = _enforce_compact_ai_output(analysis, verified_context)
         await _deliver_analysis(update, status, analysis)
     except OpenRouterDisabledError:
         await status.edit_text("⚙️ OpenRouter henüz etkin değil. API anahtarı eklenip OPENROUTER_ENABLED=true yapılmalı.")

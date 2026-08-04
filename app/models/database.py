@@ -1350,6 +1350,101 @@ class NewsImpactSnapshot(Base):
     created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False, index=True)
 
 
+class NewsDigestCache(Base):
+    """15-minute /haber cache; only summaries and source links are stored."""
+
+    __tablename__ = "news_cache"
+    __table_args__ = (UniqueConstraint("symbol", name="uq_news_cache_symbol"),)
+
+    id = Column(Integer, primary_key=True)
+    symbol = Column(String(16), nullable=False, index=True)
+    payload_json = Column(Text, nullable=False)
+    sentiment = Column(String(16), nullable=False, default="neutral")
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False, index=True)
+
+
+class EmaCrossState(Base):
+    """Last processed EMA50/EMA100 relation for full-universe deduplication."""
+
+    __tablename__ = "ema_cross_state"
+    __table_args__ = (UniqueConstraint("symbol", "timeframe", name="uq_ema_cross_symbol_tf"),)
+
+    id = Column(Integer, primary_key=True)
+    symbol = Column(String(16), nullable=False, index=True)
+    timeframe = Column(String(8), nullable=False, default="1d")
+    last_relation = Column(String(16), nullable=False)  # above | below | equal
+    last_cross = Column(String(16), nullable=True)  # golden | death
+    last_price = Column(Float, nullable=True)
+    last_alerted_at = Column(DateTime(timezone=True), nullable=True)
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+
+class RsiAlertState(Base):
+    """RSI threshold latch; re-arms only after returning to the neutral band."""
+
+    __tablename__ = "rsi_alert_state"
+    __table_args__ = (UniqueConstraint("symbol", "timeframe", name="uq_rsi_alert_symbol_tf"),)
+
+    id = Column(Integer, primary_key=True)
+    symbol = Column(String(16), nullable=False, index=True)
+    timeframe = Column(String(8), nullable=False, default="1d")
+    state = Column(String(16), nullable=False, default="normal")
+    last_rsi = Column(Float, nullable=True)
+    last_price = Column(Float, nullable=True)
+    last_alerted_at = Column(DateTime(timezone=True), nullable=True)
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+
+class StagedEntryRecord(Base):
+    """Persistent virtual tracking for a user's latest staged plan per symbol."""
+
+    __tablename__ = "staged_entry_plans"
+    __table_args__ = (UniqueConstraint("user_id", "symbol", name="uq_staged_entry_user_symbol"),)
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    telegram_chat_id = Column(BigInteger, nullable=False, index=True)
+    symbol = Column(String(16), nullable=False, index=True)
+    direction = Column(String(8), nullable=False)
+    zone_kind = Column(String(8), nullable=False)
+    zone_low = Column(Float, nullable=False)
+    zone_high = Column(Float, nullable=False)
+    current_price = Column(Float, nullable=False)
+    status = Column(String(16), nullable=False, default="PENDING", index=True)
+    levels_json = Column(Text, nullable=False)
+    invalidation = Column(Float, nullable=False)
+    target_1 = Column(Float, nullable=True)
+    target_2 = Column(Float, nullable=True)
+    structural_entry = Column(Float, nullable=False)
+    entry_reason = Column(Text, nullable=False)
+    structure_confirmed = Column(Boolean, nullable=False, default=False)
+    rr_is_sufficient = Column(Boolean, nullable=False, default=False)
+    confluence_required = Column(Integer, nullable=False, default=3)
+    plan_version = Column(Integer, nullable=False, default=1)
+    last_bar_timestamp = Column(DateTime(timezone=True), nullable=True)
+    cancelled_reason = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+
+class StagedEntryEvent(Base):
+    """Small Telegram outbox for fills, confirmation and invalidation events."""
+
+    __tablename__ = "staged_entry_events"
+    __table_args__ = (UniqueConstraint("event_key", name="uq_staged_entry_event_key"),)
+
+    id = Column(Integer, primary_key=True)
+    plan_id = Column(Integer, ForeignKey("staged_entry_plans.id"), nullable=False, index=True)
+    telegram_chat_id = Column(BigInteger, nullable=False, index=True)
+    event_key = Column(String(160), nullable=False, index=True)
+    event_type = Column(String(24), nullable=False)
+    message_text = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+    sent_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    attempts = Column(Integer, nullable=False, default=0)
+
+
 class GroqExplanation(Base):
     """Groq'tan alinan (opsiyonel) sade Turkce aciklamalarin onbellegi.
 

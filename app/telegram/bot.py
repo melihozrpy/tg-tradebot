@@ -52,6 +52,7 @@ def build_telegram_application() -> Application:
     application.add_handler(CommandHandler("analiz", handlers_v3.cmd_analiz_v3))
     application.add_handler(CommandHandler("analiz_detay", handlers_v3.cmd_analiz_detay))
     application.add_handler(CommandHandler("islemplani", handlers_v3.cmd_islemplani))
+    application.add_handler(CommandHandler("kademe", handlers_v3.cmd_kademe))
     application.add_handler(CommandHandler("gunici", handlers_v3.cmd_gunici))
     application.add_handler(CommandHandler("anomali", handlers_v3.cmd_anomali))
     application.add_handler(CommandHandler("anomaliler", handlers_v3.cmd_anomaliler))
@@ -72,6 +73,7 @@ def build_telegram_application() -> Application:
     application.add_handler(CommandHandler("hedefbasari", handlers_v3.cmd_hedefbasari))
     # V3.2 (Asama 4): haber radari + haber etkisi + Groq AI aciklama
     application.add_handler(CommandHandler("haberler", handlers_v3.cmd_haberler))
+    application.add_handler(CommandHandler("haber", handlers_v3.cmd_haber))
     application.add_handler(CommandHandler("haber_detay", handlers_v3.cmd_haber_detay))
     application.add_handler(CommandHandler("haber_radari", handlers_v3.cmd_haber_radari))
     application.add_handler(CommandHandler("ai_aciklama", handlers_v3.cmd_ai_aciklama))
@@ -505,6 +507,207 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
             _intraday_job, CronTrigger(day_of_week="mon-fri", hour="10-18", minute="*/30")
         )
         logger.info("Gun ici otomatik anomali taramasi hazirlandi (Pzt-Cuma 10:00-18:00, 30dk).")
+
+    # Additive full-universe EMA50/100 + RSI scanner.  It uses the configured
+    # BIST JSON universe (currently 571 active codes), never a hard-coded list.
+    if getattr(settings, "technical_screener_enabled", False):
+        async def _technical_screener_job() -> None:
+            def _scan():
+                from app.analysis.screener_engine import run_technical_screener
+                from app.config.instruments import universe_symbols
+                from app.data.provider_factory import build_market_data_provider
+                from app.models.database import get_session_factory
+
+                db = get_session_factory()()
+                try:
+                    return run_technical_screener(
+                        db,
+                        symbols=universe_symbols(settings.bist_universe_json_path),
+                        provider_factory=lambda: build_market_data_provider(settings),
+                        settings=settings,
+                    )
+                except Exception:
+                    db.rollback()
+                    raise
+                finally:
+                    db.close()
+
+            try:
+                result = await asyncio.to_thread(_scan)
+                logger.info(
+                    "EMA/RSI evren taramasi tamamlandi scanned=%s failed=%s alerts=%s",
+                    result.scanned,
+                    result.failed,
+                    len(result.alerts),
+                )
+                if application is None or not result.alerts:
+                    return
+                from app.analysis.screener_engine import format_screener_alert
+                from app.models.database import User, get_session_factory
+
+                db = get_session_factory()()
+                try:
+                    configured = getattr(settings, "technical_screener_chat_id", None)
+                    recipients = {int(configured)} if configured else {
+                        int(user.telegram_user_id)
+                        for user in db.query(User).filter(User.is_admin.is_(True)).all()
+                    }
+                    recipients.update(int(value) for value in getattr(settings, "admin_ids", ()))
+                finally:
+                    db.close()
+                for alert in result.alerts:
+                    text = format_screener_alert(alert)
+                    for chat_id in recipients:
+                        try:
+                            await application.bot.send_message(chat_id=chat_id, text=text)
+                        except Exception as exc:  # noqa: BLE001
+                            logger.warning("Teknik alarm gonderilemedi chat=%s: %s", chat_id, exc)
+            except Exception as exc:  # noqa: BLE001 - scheduled jobs must survive
+                logger.exception("EMA/RSI evren taramasi hata verdi: %s", exc)
+                await _notify_report_error("EMA/RSI evren taraması", exc)
+
+        scan_step = max(15, min(60, int(settings.technical_screener_interval_minutes)))
+        scheduler.add_job(
+            _technical_screener_job,
+            CronTrigger(
+                day_of_week="mon-fri",
+                hour="10-18",
+                minute=f"*/{scan_step}",
+                timezone="Europe/Istanbul",
+            ),
+            id="full_universe_ema_rsi_scan",
+            coalesce=True,
+            max_instances=1,
+            replace_existing=True,
+        )
+        logger.info("Tam evren EMA/RSI taramasi %s dakikada bir hazirlandi.", scan_step)
+
+    if getattr(settings, "intraday_vwap_scan_enabled", False):
+        async def _intraday_vwap_scan_job() -> None:
+            def _scan():
+                from app.analysis.screener_engine import run_intraday_vwap_scan
+                from app.config.instruments import universe_symbols
+                from app.data.provider_factory import build_market_data_provider
+
+                return run_intraday_vwap_scan(
+                    symbols=universe_symbols(settings.bist_universe_json_path),
+                    provider_factory=lambda: build_market_data_provider(settings),
+                    settings=settings,
+                )
+
+            try:
+                report = await asyncio.to_thread(_scan)
+                if application is None:
+                    return
+                from app.analysis.screener_engine import format_intraday_scan_report
+                from app.models.database import User, get_session_factory
+
+                db = get_session_factory()()
+                try:
+                    configured = getattr(settings, "technical_screener_chat_id", None)
+                    recipients = {int(configured)} if configured else {
+                        int(user.telegram_user_id)
+                        for user in db.query(User).filter(User.is_admin.is_(True)).all()
+                    }
+                    recipients.update(int(value) for value in getattr(settings, "admin_ids", ()))
+                finally:
+                    db.close()
+                text = format_intraday_scan_report(report, timezone_name=settings.timezone_name)
+                for chat_id in recipients:
+                    try:
+                        await application.bot.send_message(chat_id=chat_id, text=text)
+                    except Exception as exc:  # noqa: BLE001
+                        logger.warning("VWAP/VP tarama raporu gonderilemedi chat=%s: %s", chat_id, exc)
+            except Exception as exc:  # noqa: BLE001
+                logger.exception("VWAP/VP evren taramasi hata verdi: %s", exc)
+                await _notify_report_error("30dk VWAP/Volume Profile taraması", exc)
+
+        vwap_step = max(15, min(60, int(settings.intraday_vwap_scan_minute_step)))
+        scheduler.add_job(
+            _intraday_vwap_scan_job,
+            CronTrigger(
+                day_of_week="mon-fri",
+                hour="10-17",
+                minute=f"*/{vwap_step}",
+                timezone="Europe/Istanbul",
+            ),
+            id="full_universe_vwap_volume_profile_scan",
+            coalesce=True,
+            max_instances=1,
+            replace_existing=True,
+        )
+        logger.info("VWAP/Volume Profile evren taramasi %s dakikada bir hazirlandi.", vwap_step)
+
+    if getattr(settings, "staged_entry_enabled", False):
+        async def _staged_entry_monitor_job() -> None:
+            def _monitor():
+                from app.data.provider_factory import build_market_data_provider
+                from app.models.database import get_session_factory
+                from app.services.staged_entry_tracking_service import monitor_staged_entry_plans
+
+                db = get_session_factory()()
+                try:
+                    provider = build_market_data_provider(settings)
+                    return monitor_staged_entry_plans(db, provider, settings)
+                except Exception:
+                    db.rollback()
+                    raise
+                finally:
+                    db.close()
+
+            try:
+                result = await asyncio.to_thread(_monitor)
+                if any(result.get(key) for key in ("confirmed", "filled", "invalidated", "errors")):
+                    logger.info("Kademeli entry monitor sonucu: %s", result)
+            except Exception as exc:  # noqa: BLE001
+                logger.exception("Kademeli entry monitor hata verdi: %s", exc)
+
+        async def _staged_entry_delivery_job() -> None:
+            if application is None:
+                return
+            from app.models.database import get_session_factory
+            from app.services.staged_entry_tracking_service import (
+                mark_staged_event_failed,
+                mark_staged_event_sent,
+                pending_staged_entry_events,
+            )
+
+            db = get_session_factory()()
+            try:
+                for event in pending_staged_entry_events(db):
+                    try:
+                        await application.bot.send_message(
+                            chat_id=event.telegram_chat_id,
+                            text=event.message_text,
+                        )
+                        mark_staged_event_sent(db, event)
+                    except Exception as exc:  # noqa: BLE001 - outbox retries next cycle
+                        db.rollback()
+                        event = db.get(type(event), event.id)
+                        if event is not None:
+                            mark_staged_event_failed(db, event)
+                        logger.warning("Kademe bildirimi gonderilemedi event=%s: %s", getattr(event, "id", None), exc)
+            finally:
+                db.close()
+
+        staged_poll = max(15, int(getattr(settings, "user_price_alert_poll_seconds", 30)))
+        scheduler.add_job(
+            _staged_entry_monitor_job,
+            IntervalTrigger(seconds=staged_poll),
+            id="staged_entry_monitor",
+            coalesce=True,
+            max_instances=1,
+            replace_existing=True,
+        )
+        scheduler.add_job(
+            _staged_entry_delivery_job,
+            IntervalTrigger(seconds=5),
+            id="staged_entry_delivery",
+            coalesce=True,
+            max_instances=1,
+            replace_existing=True,
+        )
+        logger.info("Kademeli entry monitor/outbox isleri scheduler'a eklendi.")
 
     # Kullanici fiyat alarmlari kapanis taramasindan bagimsizdir. Monitor ag
     # erisimini worker thread'de yapar; teslimat ayri bir outbox isi oldugu icin

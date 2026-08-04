@@ -173,6 +173,27 @@ class Settings(BaseSettings):
     chart_cache_ttl_minutes: int = Field(default=30)
     chart_cache_dir: str = Field(default="./data/cache/charts")
 
+    # ---- Zone-based staged entry / clean scenario chart (additive) ----
+    staged_entry_enabled: bool = Field(default=True)
+    staged_entry_allocations: str = Field(default="40,35,25")
+
+    # ---- Full-universe technical screener (additive) ----
+    technical_screener_enabled: bool = Field(default=True)
+    technical_screener_interval_minutes: int = Field(default=30, ge=15, le=120)
+    technical_screener_min_confluence: int = Field(default=3, ge=3, le=7)
+    technical_screener_workers: int = Field(default=3, ge=1, le=12)
+    technical_screener_chat_id: int | None = Field(default=None)
+    technical_screener_max_symbols_per_run: int = Field(default=1000, ge=1, le=5000)
+    rsi_overbought: float = Field(default=75.0, ge=50, le=100)
+    rsi_oversold: float = Field(default=25.0, ge=0, le=50)
+    intraday_vwap_scan_enabled: bool = Field(default=True)
+    intraday_vwap_scan_minute_step: int = Field(default=30, ge=15, le=60)
+
+    # ---- 24-48 hour symbol news digest ----
+    news_digest_cache_minutes: int = Field(default=15, ge=1, le=1440)
+    news_digest_lookback_hours: int = Field(default=48, ge=1, le=168)
+    news_scrape_urls: str = Field(default="")
+
     # ---- Asama 5d: gelismis alarm taramasi ----
     enhanced_alarm_scan_enabled: bool = Field(default=True)
     enhanced_alarm_scan_minutes: int = Field(default=15)

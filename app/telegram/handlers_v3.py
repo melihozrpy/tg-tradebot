@@ -25,7 +25,7 @@ from app.analysis.timeframe_levels_engine import compute_timeframe_levels
 from app.config.settings import get_settings, get_strategy_config
 from app.data.base_provider import DataUnavailableError
 from app.data.gdelt_provider import build_gdelt_provider
-from app.data.provider_factory import build_fundamental_provider, build_market_data_provider
+from app.data.provider_factory import build_fundamental_provider, build_kap_provider, build_market_data_provider
 from app.models.database import (
     BreakoutScenario,
     ConfluenceZoneRecord,
@@ -475,6 +475,97 @@ async def cmd_islemplani(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             delete_chart_file(chart_path)
 
 
+async def cmd_kademe(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show the shared 40/35/25 OB/FVG staged-entry plan and scenario chart."""
+    if await _reject_unauthorized(update):
+        return
+    if not context.args:
+        await update.message.reply_text("Kullanım: /kademe THYAO")
+        return
+
+    from app.analysis.bist_trade_plan import build_bist_trade_plan
+    from app.analysis.indicator_engine import compute_indicator_bundle, evaluate_indicator_confluence
+    from app.analysis.staged_entry import build_staged_entry_plan, format_staged_entry_plan
+    from app.modules.scenario_chart import generate_scenario_chart
+    from app.services.chart_service import delete_chart_file
+
+    symbol = context.args[0].strip().upper().removesuffix(".IS")
+    settings = get_settings()
+    provider = build_market_data_provider(settings)
+    db = _get_db()
+    chart_path = None
+    try:
+        user = _current_user(db, update)
+        end = datetime.now(timezone.utc)
+        frame = await asyncio.to_thread(
+            provider.get_ohlcv, symbol, "1d", end - timedelta(days=520), end
+        )
+        trade_plan = await asyncio.to_thread(build_bist_trade_plan, frame, symbol)
+        scenario = trade_plan.quality_zone
+        if scenario is None:
+            await update.message.reply_text(
+                f"⚠️ {symbol} için doğrulanmış aktif OB/FVG bölgesi bulunamadı; kademe fiyatı uydurulmadı."
+            )
+            return
+        bundle = await asyncio.to_thread(
+            compute_indicator_bundle, frame, symbol=symbol, timeframe="1d"
+        )
+        confluence = evaluate_indicator_confluence(
+            bundle,
+            "bullish" if scenario.direction == "LONG" else "bearish",
+            minimum_required=settings.technical_screener_min_confluence,
+        )
+        allocations = tuple(
+            float(value.strip())
+            for value in settings.staged_entry_allocations.split(",")
+            if value.strip()
+        )
+        staged = build_staged_entry_plan(
+            scenario,
+            symbol=symbol,
+            allocations=allocations,
+            confluence=confluence,
+        )
+        from app.services.staged_entry_tracking_service import save_staged_entry_plan
+
+        await asyncio.to_thread(
+            save_staged_entry_plan,
+            db,
+            user=user,
+            telegram_chat_id=update.effective_chat.id,
+            plan=staged,
+        )
+        chart_path = await asyncio.to_thread(
+            generate_scenario_chart,
+            frame,
+            symbol=symbol,
+            plan=staged,
+            direction=scenario.direction,
+            output_dir=settings.report_chart_output_dir,
+            dpi=settings.chart_dpi,
+        )
+        with open(chart_path, "rb") as image:
+            await update.message.reply_photo(
+                photo=image,
+                caption=f"🪜 {symbol} • Kademeli {scenario.direction} • {staged.status}",
+            )
+        await update.message.reply_text(format_staged_entry_plan(staged))
+        await update.message.reply_text(
+            "🔔 Sanal kademe izlemesi aktif. Her dolan kademede yeni ortalama maliyet, "
+            "invalidation kapanışında ise kalan kademelerin iptal bildirimi gelir. "
+            "Bot gerçek emir göndermez."
+        )
+    except (DataUnavailableError, ValueError, InsufficientDataError) as exc:
+        await update.message.reply_text(f"⚠️ Kademeli plan üretilemedi: {exc}")
+    except Exception as exc:  # noqa: BLE001 - command must never crash polling
+        logger.exception("Kademeli plan hatasi symbol=%s", symbol)
+        await update.message.reply_text(f"⚠️ Kademeli plan geçici olarak üretilemedi: {exc}")
+    finally:
+        if chart_path:
+            delete_chart_file(chart_path)
+        db.close()
+
+
 def _current_user(db, update: Update):
     settings = get_settings()
     return get_or_create_user(
@@ -881,6 +972,41 @@ async def cmd_haberler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         scan_symbol_news(db, symbol, build_gdelt_provider(settings), settings)
         articles = get_recent_articles(db, symbol, limit=10)
         await update.message.reply_text(format_news_list(symbol, articles))
+    finally:
+        db.close()
+
+
+async def cmd_haber(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """24-48 hour source-linked symbol digest with 15-minute DB cache."""
+    if await _reject_unauthorized(update):
+        return
+    if not context.args:
+        await update.message.reply_text("Kullanım: /haber THYAO")
+        return
+
+    from app.services.news_digest_service import build_news_digest, format_news_digest
+
+    symbol = context.args[0].strip().upper().removesuffix(".IS")
+    settings = get_settings()
+    db = _get_db()
+    try:
+        digest = await asyncio.to_thread(
+            build_news_digest,
+            db,
+            symbol=symbol,
+            settings=settings,
+            gdelt_provider=build_gdelt_provider(settings),
+            kap_provider=build_kap_provider(settings),
+        )
+        await update.message.reply_text(
+            format_news_digest(digest),
+            disable_web_page_preview=True,
+        )
+    except Exception as exc:  # noqa: BLE001 - news cannot crash polling
+        logger.exception("Haber ozet komutu hata verdi symbol=%s", symbol)
+        await update.message.reply_text(
+            f"⚠️ {symbol} haber taraması geçici olarak tamamlanamadı ({type(exc).__name__})."
+        )
     finally:
         db.close()
 
@@ -1343,10 +1469,11 @@ async def cmd_kirilsanaryo(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             symbol, current_price, breakout_result,
             price_context=price_context, quality=quality,
         )
+        from app.services.chart_service import delete_chart_file
+
         chart_path = None
         try:
             from app.modules.scenario_chart import render_breakout_scenario_chart
-            from app.services.chart_service import delete_chart_file
 
             chart_path = await asyncio.to_thread(
                 render_breakout_scenario_chart,
@@ -3105,6 +3232,9 @@ async def cmd_komutlar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "MSS/CHoCH teyidi, stop, TP1–TP2 ve RR verir\n"
         "  Örnek çıktı: ‘Ben olsam X seviyesinden girerim, çünkü OB/FVG retestidir.’\n"
         "  Not: Son kapanışı entry yapmaz; fiyat uzaktaysa beklenen retest seviyesini yazar.\n"
+        "/kademe THYAO — aktif OB/FVG'yi %40/%35/%25 böler; PENDING/CONFIRMED durumunu, "
+        "ortak SL'yi ve sade varsayımsal senaryo grafiğini gösterir; dolan kademeleri sanal izleyip "
+        "yeni ortalama maliyeti bildirir\n"
         "/kirilsanaryo THYAO — destek/direnç kırılırsa gidilebilecek sonraki dinamik hedefi "
         "ve bullish/bearish mini mum grafiğini gösterir\n\n"
         "📊 ANALİZ\n"
@@ -3112,6 +3242,7 @@ async def cmd_komutlar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "/islemplani THYAO — tek ana LONG/SHORT senaryosu ve yapısal entry planı\n"
         "/sirket THYAO — şirketi ve finansal durumunu anlatır\n"
         "/kap THYAO — lisanslı akış varsa son KAP bildirimlerini, yoksa resmî aramayı gösterir\n"
+        "/haber THYAO — son 24–48 saat haber/KAP başlıklarını kaynak, tarih ve piyasa algısıyla özetler\n"
         "/seviyeler THYAO — destek ve dirençleri gösterir\n"
         "/cokluzaman THYAO — farklı zaman dilimlerini karşılaştırır\n\n"
         "📚 TÜM HİSSELER VE RAPORLAR\n"
