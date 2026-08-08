@@ -427,6 +427,138 @@ def evaluate_indicator_confluence(
     )
 
 
+def evaluate_ten_indicator_confluence(
+    bundle: IndicatorBundle,
+    direction: Literal["bullish", "bearish"],
+    *,
+    minimum_required: int = 5,
+) -> ConfluenceResult:
+    """Evaluate every component of the shared ten-indicator engine.
+
+    This stricter evaluator is intentionally separate from
+    :func:`evaluate_indicator_confluence`: legacy alarms and the 15-minute
+    radar retain their established 3+ confirmation behaviour, while commands
+    that explicitly promise a ten-indicator filter can require 5--10 distinct
+    confirmations.  Each of the following contributes exactly one result:
+    EMA stack, session VWAP, anchored VWAP, Supertrend, RSI, MACD, ADX,
+    Bollinger position, OBV trend and volume-profile POC position.
+    """
+
+    last = bundle.latest
+    frame = bundle.frame
+    bullish = direction == "bullish"
+    confirmations: list[str] = []
+    conflicts: list[str] = []
+
+    def add(condition: bool, positive: str, negative: str) -> None:
+        (confirmations if condition else conflicts).append(positive if condition else negative)
+
+    close = float(last["close"])
+    ema_values = (last["ema20"], last["ema50"], last["ema100"])
+    if all(pd.notna(value) for value in ema_values):
+        ema_bullish = bool(last["ema20"] > last["ema50"] > last["ema100"])
+        ema_bearish = bool(last["ema20"] < last["ema50"] < last["ema100"])
+        add(
+            ema_bullish if bullish else ema_bearish,
+            "EMA20/50/100 siralamasi uyumlu",
+            "EMA20/50/100 siralamasi ters veya karisik",
+        )
+    else:
+        conflicts.append("EMA20/50/100 icin yeterli gecmis yok")
+
+    vwap_value = last.get("vwap")
+    if pd.notna(vwap_value):
+        add(
+            (close > float(vwap_value)) == bullish,
+            "Fiyat session VWAP ile uyumlu",
+            "Fiyat session VWAP ile uyumsuz",
+        )
+    else:
+        conflicts.append("Session VWAP hesaplanamadi")
+
+    anchored_vwap_value = last.get("anchored_vwap")
+    if pd.notna(anchored_vwap_value):
+        add(
+            (close > float(anchored_vwap_value)) == bullish,
+            "Fiyat anchored VWAP ile uyumlu",
+            "Fiyat anchored VWAP ile uyumsuz",
+        )
+    else:
+        conflicts.append("Anchored VWAP hesaplanamadi")
+
+    add(
+        (int(last["supertrend_direction"]) > 0) == bullish,
+        "Supertrend yonu uyumlu",
+        "Supertrend yonu ters",
+    )
+
+    rsi_value = float(last["rsi14"])
+    rsi_condition = 50 <= rsi_value < 75 if bullish else 25 < rsi_value <= 50
+    add(
+        rsi_condition,
+        f"RSI yonu destekliyor ({rsi_value:.1f})",
+        f"RSI yonu desteklemiyor ({rsi_value:.1f})",
+    )
+
+    macd_value = last.get("macd_histogram")
+    if pd.notna(macd_value):
+        add(
+            (float(macd_value) > 0) == bullish,
+            "MACD momentumu uyumlu",
+            "MACD momentumu ters",
+        )
+    else:
+        conflicts.append("MACD hesaplanamadi")
+
+    adx_value = last.get("adx14")
+    if pd.notna(adx_value) and float(adx_value) >= 20:
+        confirmations.append(f"ADX {float(adx_value):.1f}: trend gucu yeterli")
+    else:
+        displayed = float(adx_value) if pd.notna(adx_value) else 0.0
+        conflicts.append(f"ADX {displayed:.1f}: yatay/zayif trend")
+
+    bb_mid, bb_upper, bb_lower = last.get("bb_mid"), last.get("bb_upper"), last.get("bb_lower")
+    if all(pd.notna(value) for value in (bb_mid, bb_upper, bb_lower)):
+        # A bandin cok disina tasan fiyat momentum gosterebilir, ancak yeni
+        # giris icin kovalamaca riski tasir; bu yuzden teyit sayilmaz.
+        bb_bullish = float(bb_mid) <= close <= float(bb_upper) * 1.01
+        bb_bearish = float(bb_lower) * 0.99 <= close <= float(bb_mid)
+        add(
+            bb_bullish if bullish else bb_bearish,
+            "Bollinger konumu yonu destekliyor",
+            "Bollinger konumu yonu desteklemiyor/kovalama riski var",
+        )
+    else:
+        conflicts.append("Bollinger bantlari hesaplanamadi")
+
+    obv_lookback = frame["obv"].iloc[max(0, len(frame) - 6)]
+    obv_bullish = bool(float(last["obv"]) > float(obv_lookback))
+    add(
+        obv_bullish == bullish,
+        "OBV hacim akisi yonu teyit ediyor",
+        "OBV hacim akisi yonu teyit etmiyor",
+    )
+
+    poc = bundle.volume_profile.poc
+    if poc is not None:
+        add(
+            (close >= float(poc)) == bullish,
+            "Fiyat volume profile POC tarafinda uyumlu",
+            "Fiyat volume profile POC tarafinda ters",
+        )
+    else:
+        conflicts.append("Volume profile POC verisi yok")
+
+    score = round(len(confirmations) / 10 * 100)
+    return ConfluenceResult(
+        direction=direction if len(confirmations) >= max(3, min(10, int(minimum_required))) else "neutral",
+        confirmations=tuple(confirmations),
+        conflicts=tuple(conflicts),
+        score=score,
+        minimum_required=max(3, min(10, int(minimum_required))),
+    )
+
+
 def pivot_support_resistance(df: pd.DataFrame, lookback: int = 20) -> tuple[Optional[float], Optional[float]]:
     if len(df) < lookback:
         return None, None

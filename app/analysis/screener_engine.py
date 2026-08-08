@@ -16,6 +16,7 @@ from app.analysis.indicator_engine import (
     atr,
     compute_indicator_bundle,
     evaluate_indicator_confluence,
+    evaluate_ten_indicator_confluence,
     pivot_support_resistance,
 )
 from app.data.base_provider import BaseMarketDataProvider
@@ -42,6 +43,10 @@ class SymbolTechnicalState:
     bearish_confluence: int
     bullish_qualified: bool
     bearish_qualified: bool
+    bullish_ten_confluence: int
+    bearish_ten_confluence: int
+    bullish_ten_qualified: bool
+    bearish_ten_qualified: bool
     vwap: float
     macd_histogram: float
     obv_rising: bool
@@ -121,6 +126,8 @@ class TradeScenarioRunResult:
 class MarketOpportunityReport:
     scanned: int
     failed: int
+    timeframe: Literal["5m", "1h", "4h"]
+    minimum_confluence: int
     al_sat_uygun: tuple[SymbolTechnicalState, ...]
     kisa_vade: tuple[SymbolTechnicalState, ...]
     uzun_vade_teknik: tuple[SymbolTechnicalState, ...]
@@ -135,6 +142,7 @@ def analyze_symbol_frame(
     rsi_overbought: float = 75.0,
     rsi_oversold: float = 25.0,
     minimum_confluence: int = 3,
+    ten_indicator_minimum: int = 5,
     timeframe: str = "1d",
 ) -> SymbolTechnicalState:
     bundle = compute_indicator_bundle(frame, symbol=symbol, timeframe=timeframe)
@@ -158,6 +166,12 @@ def analyze_symbol_frame(
         rsi_state = "normal"
     bullish = evaluate_indicator_confluence(bundle, "bullish", minimum_required=minimum_confluence)
     bearish = evaluate_indicator_confluence(bundle, "bearish", minimum_required=minimum_confluence)
+    bullish_ten = evaluate_ten_indicator_confluence(
+        bundle, "bullish", minimum_required=ten_indicator_minimum
+    )
+    bearish_ten = evaluate_ten_indicator_confluence(
+        bundle, "bearish", minimum_required=ten_indicator_minimum
+    )
     atr_values = atr(data, 14)
     support, resistance = pivot_support_resistance(data, lookback=20)
     return SymbolTechnicalState(
@@ -177,6 +191,10 @@ def analyze_symbol_frame(
         bearish_confluence=len(bearish.confirmations),
         bullish_qualified=bullish.qualified,
         bearish_qualified=bearish.qualified,
+        bullish_ten_confluence=len(bullish_ten.confirmations),
+        bearish_ten_confluence=len(bearish_ten.confirmations),
+        bullish_ten_qualified=bullish_ten.qualified,
+        bearish_ten_qualified=bearish_ten.qualified,
         vwap=float(last["vwap"]),
         macd_histogram=float(last["macd_histogram"]),
         obv_rising=bool(last["obv"] > previous["obv"]),
@@ -190,6 +208,51 @@ def analyze_symbol_frame(
     )
 
 
+def _four_hour_bars_from_hourly(frame: pd.DataFrame) -> pd.DataFrame:
+    """Aggregate completed consecutive one-hour candles into honest 4H bars.
+
+    Yahoo's free endpoint does not publish a native ``4h`` interval.  We use
+    source 1H OHLCV bars and only keep groups with four completed candles,
+    rather than pretending an unfinished session is a full four-hour candle.
+    This preserves real OHLCV values and also works with licensed providers.
+    """
+
+    required = {"timestamp", "open", "high", "low", "close", "volume"}
+    if frame.empty or not required.issubset(frame.columns):
+        return frame.copy()
+    data = frame.loc[:, ["timestamp", "open", "high", "low", "close", "volume"]].copy()
+    data["timestamp"] = pd.to_datetime(data["timestamp"], utc=True, errors="coerce")
+    data = data.dropna(subset=["timestamp", "open", "high", "low", "close", "volume"])
+    data = data.sort_values("timestamp").drop_duplicates(subset="timestamp", keep="last").reset_index(drop=True)
+    if data.empty:
+        return data
+    session = data["timestamp"].dt.tz_convert("Europe/Istanbul").dt.date
+    data["_session"] = session
+    data["_four_hour_bucket"] = data.groupby("_session").cumcount() // 4
+    group_keys = ["_session", "_four_hour_bucket"]
+    complete = data.groupby(group_keys, sort=False).size()
+    complete_keys = complete[complete >= 4].index
+    if len(complete_keys) == 0:
+        return data.iloc[0:0].loc[:, ["timestamp", "open", "high", "low", "close", "volume"]]
+    grouped = data.groupby(group_keys, sort=False).agg(
+        timestamp=("timestamp", "last"),
+        open=("open", "first"),
+        high=("high", "max"),
+        low=("low", "min"),
+        close=("close", "last"),
+        volume=("volume", "sum"),
+    )
+    result = grouped.loc[complete_keys].reset_index(drop=True)
+    return result.sort_values("timestamp").reset_index(drop=True)
+
+
+def _scan_start_for_timeframe(timeframe: str, end: datetime) -> datetime:
+    """Request enough true source candles for EMA200 without exceeding 5m limits."""
+
+    days = {"5m": 58, "1h": 120, "4h": 430, "1d": 540, "15m": 58}.get(timeframe, 58)
+    return end - timedelta(days=days)
+
+
 def _fetch_states(
     symbols: Iterable[str],
     *,
@@ -199,7 +262,7 @@ def _fetch_states(
     settings,
 ) -> tuple[list[SymbolTechnicalState], int]:
     end = datetime.now(timezone.utc)
-    start = end - timedelta(days=540 if timeframe == "1d" else 58)
+    start = _scan_start_for_timeframe(timeframe, end)
     local = threading.local()
 
     def fetch(symbol: str) -> SymbolTechnicalState:
@@ -207,13 +270,17 @@ def _fetch_states(
         if provider is None:
             provider = provider_factory()
             local.provider = provider
-        frame = provider.get_ohlcv(symbol, timeframe, start, end)
+        source_timeframe = "1h" if timeframe == "4h" else timeframe
+        frame = provider.get_ohlcv(symbol, source_timeframe, start, end)
+        if timeframe == "4h":
+            frame = _four_hour_bars_from_hourly(frame)
         return analyze_symbol_frame(
             symbol,
             frame,
             rsi_overbought=settings.rsi_overbought,
             rsi_oversold=settings.rsi_oversold,
             minimum_confluence=settings.technical_screener_min_confluence,
+            ten_indicator_minimum=int(getattr(settings, "market_opportunity_minimum_confluence", 5)),
             timeframe=timeframe,
         )
 
@@ -489,12 +556,33 @@ def run_intraday_trade_scenario_scan(
     )
 
 
-def _state_rank(state: SymbolTechnicalState) -> float:
+def _state_rank(state: SymbolTechnicalState, *, use_ten_indicator_score: bool = False) -> float:
+    confirmations = (
+        max(state.bullish_ten_confluence, state.bearish_ten_confluence)
+        if use_ten_indicator_score
+        else max(state.bullish_confluence, state.bearish_confluence)
+    )
     return (
-        max(state.bullish_confluence, state.bearish_confluence) * 20
+        confirmations * 20
         + min(state.adx, 40)
         + min(state.relative_volume * 5, 15)
     )
+
+
+def _market_direction_for_state(state: SymbolTechnicalState) -> Literal["bullish", "bearish"] | None:
+    """Choose a direction only when the strict ten-indicator rule qualifies."""
+
+    if not state.bullish_ten_qualified and not state.bearish_ten_qualified:
+        return None
+    if state.bullish_ten_qualified and not state.bearish_ten_qualified:
+        return "bullish"
+    if state.bearish_ten_qualified and not state.bullish_ten_qualified:
+        return "bearish"
+    if state.bullish_ten_confluence > state.bearish_ten_confluence:
+        return "bullish"
+    if state.bearish_ten_confluence > state.bullish_ten_confluence:
+        return "bearish"
+    return "bullish" if state.supertrend_direction == "up" else "bearish"
 
 
 def run_market_opportunity_scan(
@@ -502,21 +590,28 @@ def run_market_opportunity_scan(
     symbols: Iterable[str],
     provider_factory: Callable[[], BaseMarketDataProvider],
     settings,
+    timeframe: Literal["5m", "1h", "4h"] = "1h",
 ) -> MarketOpportunityReport:
-    """Classify the complete BIST universe without claiming company quality.
+    """Classify the complete BIST universe with a strict ten-indicator filter.
 
-    Long-term labels are explicitly technical watch candidates.  Fundamental
-    analysis and a company's real liquidity still require separate validation.
+    ``timeframe`` is deliberately one period per command.  Scanning all three
+    periods together would make over 1,700 data requests for a 571-share
+    universe, which is slow and can hit free-data rate limits.  Users can run
+    `/firsatlar 5dk`, `/firsatlar 1s` and `/firsatlar 4s` independently.
     """
+
+    if timeframe not in {"5m", "1h", "4h"}:
+        raise ValueError("Firsatlar taramasi yalnizca 5m, 1h veya 4h destekler.")
 
     limited = list(symbols)[: settings.technical_screener_max_symbols_per_run]
     states, failed = _fetch_states(
         limited,
         provider_factory=provider_factory,
         workers=settings.technical_screener_workers,
-        timeframe="1d",
+        timeframe=timeframe,
         settings=settings,
     )
+    minimum = max(3, min(10, int(getattr(settings, "market_opportunity_minimum_confluence", 5))))
 
     def atr_percent(item: SymbolTechnicalState) -> float:
         return item.atr / item.price * 100 if item.price else 0.0
@@ -524,13 +619,16 @@ def run_market_opportunity_scan(
     eligible = [
         state
         for state in states
-        if _direction_for_state(state) is not None and state.adx >= 20 and atr_percent(state) <= 8
+        if _market_direction_for_state(state) is not None
+        and max(state.bullish_ten_confluence, state.bearish_ten_confluence) >= minimum
+        and state.adx >= 20
+        and atr_percent(state) <= 8
     ]
     al_sat = [state for state in eligible if state.relative_volume >= 0.70]
     short_term = [
         state
         for state in eligible
-        if max(state.bullish_confluence, state.bearish_confluence) >= 4
+        if max(state.bullish_ten_confluence, state.bearish_ten_confluence) >= min(10, minimum + 1)
     ]
     long_term = [
         state
@@ -539,6 +637,7 @@ def run_market_opportunity_scan(
         and state.ema20 > state.ema50 > state.ema100
         and state.adx >= 20
         and 48 <= state.rsi <= 70
+        and state.bullish_ten_confluence >= minimum
     ]
     speculative = [
         state
@@ -546,10 +645,14 @@ def run_market_opportunity_scan(
         if atr_percent(state) >= 6.5 or (state.relative_volume >= 3.0 and atr_percent(state) >= 3.0)
     ]
     limit = max(3, min(12, int(getattr(settings, "market_opportunity_max_results", 8))))
-    order = lambda items: tuple(sorted(items, key=_state_rank, reverse=True)[:limit])
+    order = lambda items: tuple(
+        sorted(items, key=lambda state: _state_rank(state, use_ten_indicator_score=True), reverse=True)[:limit]
+    )
     return MarketOpportunityReport(
         scanned=len(states),
         failed=failed,
+        timeframe=timeframe,
+        minimum_confluence=minimum,
         al_sat_uygun=order(al_sat),
         kisa_vade=order(short_term),
         uzun_vade_teknik=order(long_term),
@@ -680,14 +783,15 @@ def format_market_opportunity_report(
     from zoneinfo import ZoneInfo
 
     local = report.created_at.astimezone(ZoneInfo(timezone_name))
+    timeframe_label = {"5m": "5 DK", "1h": "1 SAAT", "4h": "4 SAAT"}[report.timeframe]
 
     def item(state: SymbolTechnicalState, *, with_signal: bool = False) -> str:
-        direction = _direction_for_state(state)
+        direction = _market_direction_for_state(state)
         label = "AL" if direction == "bullish" else "SAT/KORUMA" if direction == "bearish" else "İZLE"
         atr_percent = state.atr / state.price * 100 if state.price else 0.0
         prefix = f"{label} · " if with_signal else ""
         return (
-            f"• {prefix}{state.symbol} — {max(state.bullish_confluence, state.bearish_confluence)} teyit"
+            f"• {prefix}{state.symbol} — {max(state.bullish_ten_confluence, state.bearish_ten_confluence)}/10 teyit"
             f", ADX {state.adx:.0f}, ATR %{atr_percent:.1f}"
         )
 
@@ -706,11 +810,13 @@ def format_market_opportunity_report(
         "",
         *section("⚡ Kısa vade momentumu güçlü", report.kisa_vade, with_signal=True),
         "",
-        *section("🌱 Uzun vade teknik takip adayları", report.uzun_vade_teknik),
+        *section("🌱 Trend takip adayları", report.uzun_vade_teknik),
         "",
         *section("⚠️ Spekülatif / yüksek oynaklık uyarısı", report.spekulatif_uyari),
         "",
         "ℹ️ Son bölüm manipülasyon iddiası değildir; yüksek ATR ve olağandışı hacim kaynaklı teknik risk uyarısıdır.",
-        "🧾 Uzun vade başlığı yalnız teknik filtredir; bilanço, borçluluk ve değerleme ayrıca doğrulanmalıdır.",
+        "🧾 Trend takip bölümü yalnız tekniktir; bilanço, borçluluk ve değerleme ayrıca doğrulanmalıdır.",
     ]
+    lines.insert(2, f"⏱ Zaman dilimi: {timeframe_label}  •  10 gösterge  •  Eşik: {report.minimum_confluence}/10 teyit")
+    lines.append("📌 Giriş için retest ve mum/yapı teyidi gerekir; bu kart güncel fiyattan otomatik giriş önermez.")
     return "\n".join(lines)[:4096]

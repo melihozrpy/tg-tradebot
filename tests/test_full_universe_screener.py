@@ -8,13 +8,17 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.analysis.screener_engine import (
+    _four_hour_bars_from_hourly,
     analyze_symbol_frame,
+    format_market_opportunity_report,
     format_trade_scenario_report,
     run_intraday_trade_scenario_scan,
+    run_market_opportunity_scan,
     run_technical_screener,
 )
 from app.models.database import Base
 from app.telegram.bot import _build_evening_scan_scheduler
+from app.telegram.market_opportunity_handlers import parse_firsatlar_timeframe
 
 
 def _last_bar_cross(*, upward: bool) -> pd.DataFrame:
@@ -49,6 +53,8 @@ def _settings() -> SimpleNamespace:
         technical_screener_workers=2,
         technical_screener_max_symbols_per_run=1000,
         trade_scenario_max_results=6,
+        market_opportunity_max_results=8,
+        market_opportunity_minimum_confluence=5,
     )
 
 
@@ -100,6 +106,50 @@ def test_intraday_scenario_requires_confluence_and_uses_retest_entry() -> None:
     assert scenario.entry_low <= scenario.entry_high
     assert scenario.stop < scenario.entry_low
     assert "15 DK FIRSAT RADARI" in format_trade_scenario_report(result)
+
+
+def test_opportunity_scan_accepts_hourly_ten_indicator_mode() -> None:
+    report = run_market_opportunity_scan(
+        symbols=["THYAO"],
+        provider_factory=lambda: _Provider(_last_bar_cross(upward=True)),
+        settings=_settings(),
+        timeframe="1h",
+    )
+
+    card = format_market_opportunity_report(report)
+    assert report.scanned == 1
+    assert report.timeframe == "1h"
+    assert report.minimum_confluence == 5
+    assert "10 gösterge" in card
+    assert "1 SAAT" in card
+
+
+def test_firsatlar_timeframe_aliases_accept_short_and_plain_turkish_inputs() -> None:
+    assert parse_firsatlar_timeframe([]) == "1h"
+    assert parse_firsatlar_timeframe(["5dk"]) == "5m"
+    assert parse_firsatlar_timeframe(["1", "saatlik"]) == "1h"
+    assert parse_firsatlar_timeframe(["4s"]) == "4h"
+    assert parse_firsatlar_timeframe(["gunluk"]) is None
+
+
+def test_four_hour_mode_aggregates_only_completed_hourly_ohlcv_groups() -> None:
+    source = pd.DataFrame(
+        {
+            "timestamp": pd.date_range("2025-01-01", periods=10, freq="h", tz="UTC"),
+            "open": np.arange(10, dtype=float),
+            "high": np.arange(10, dtype=float) + 1.0,
+            "low": np.arange(10, dtype=float) - 1.0,
+            "close": np.arange(10, dtype=float) + 0.5,
+            "volume": np.full(10, 100.0),
+        }
+    )
+
+    bars = _four_hour_bars_from_hourly(source)
+
+    assert len(bars) == 2
+    assert bars.iloc[0]["open"] == 0.0
+    assert bars.iloc[0]["close"] == 3.5
+    assert bars.iloc[0]["volume"] == 400.0
 
 
 def test_new_scanner_jobs_use_istanbul_market_hours() -> None:

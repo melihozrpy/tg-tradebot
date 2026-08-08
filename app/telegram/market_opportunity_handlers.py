@@ -17,15 +17,50 @@ from app.telegram.handlers import _reject_unauthorized
 logger = logging.getLogger("mergen_quant.telegram.market_opportunities")
 
 
+_TIMEFRAME_ALIASES = {
+    "5": "5m",
+    "5m": "5m",
+    "5dk": "5m",
+    "5dakika": "5m",
+    "5dakikalik": "5m",
+    "1h": "1h",
+    "1s": "1h",
+    "1saat": "1h",
+    "1saatlik": "1h",
+    "saatlik": "1h",
+    "4h": "4h",
+    "4s": "4h",
+    "4saat": "4h",
+    "4saatlik": "4h",
+}
+_TIMEFRAME_LABELS = {"5m": "5 dakika", "1h": "1 saat", "4h": "4 saat"}
+
+
+def parse_firsatlar_timeframe(args: list[str]) -> str | None:
+    """Parse user-friendly `/firsatlar 5dk|1s|4s` timeframe arguments."""
+
+    if not args:
+        return "1h"
+    raw = "".join(args).strip().casefold().replace(" ", "")
+    return _TIMEFRAME_ALIASES.get(raw)
+
+
 async def cmd_firsatlar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """List technical trade, momentum, long-watch and volatility-risk groups."""
+    """List strict ten-indicator opportunities for one selected timeframe."""
 
     if await _reject_unauthorized(update) or update.message is None:
         return
+    timeframe = parse_firsatlar_timeframe(list(context.args or []))
+    if timeframe is None:
+        await update.message.reply_text(
+            "Kullanım: /firsatlar 5dk  |  /firsatlar 1s  |  /firsatlar 4s\n"
+            "Varsayılan zaman dilimi: 1 saat. Her tarama 10 göstergenin tamamını kontrol eder."
+        )
+        return
     settings = get_settings()
     await update.message.reply_text(
-        "🔎 Tam BIST evreni teknik filtreleniyor...\n"
-        "Bu işlem yalnız 3+ teyitli adayları ve yüksek oynaklık riskini ayırır."
+        f"🔎 Tam BIST evreni { _TIMEFRAME_LABELS[timeframe] } için 10 göstergeden geçiriliyor...\n"
+        f"Yalnız en az {getattr(settings, 'market_opportunity_minimum_confluence', 5)}/10 bağımsız teyitli adaylar listelenecek."
     )
 
     def scan():
@@ -33,6 +68,7 @@ async def cmd_firsatlar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             symbols=universe_symbols(settings.bist_universe_json_path),
             provider_factory=lambda: build_market_data_provider(settings),
             settings=settings,
+            timeframe=timeframe,
         )
 
     try:

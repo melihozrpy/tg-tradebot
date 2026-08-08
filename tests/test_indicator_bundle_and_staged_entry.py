@@ -6,6 +6,7 @@ import pandas as pd
 from app.analysis.indicator_engine import (
     compute_indicator_bundle,
     evaluate_indicator_confluence,
+    evaluate_ten_indicator_confluence,
 )
 from app.analysis.quality_zone_engine import QualityZoneScenario
 from app.analysis.staged_entry import build_staged_entry_plan, evaluate_staged_entry
@@ -86,6 +87,14 @@ def test_confluence_never_qualifies_with_less_than_three_confirmations() -> None
     result = evaluate_indicator_confluence(bundle, "bullish", minimum_required=3)
     assert result.minimum_required == 3
     assert result.qualified is (len(result.confirmations) >= 3)
+
+
+def test_strict_confluence_accounts_for_each_of_the_ten_indicators() -> None:
+    bundle = compute_indicator_bundle(_frame(), symbol="THYAO", timeframe="1h")
+    result = evaluate_ten_indicator_confluence(bundle, "bullish", minimum_required=5)
+
+    assert result.minimum_required == 5
+    assert len(result.confirmations) + len(result.conflicts) == 10
 
 
 def test_staged_entry_uses_zone_levels_and_never_current_close() -> None:
