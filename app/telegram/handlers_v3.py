@@ -3287,6 +3287,7 @@ async def cmd_komutlar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "/tara — listedeki hisseleri tarar\n"
         "/piyasa — 571 hisse piyasa genişliği ve yarın yön çerçevesi\n"
         "/piyasa long|short|tum — puan eşiğini geçen tüm adayları sayfalar\n"
+        "/firsatlar — 3+ teyitli al-sat ve kısa vade adaylarını; uzun vade teknik takip listesini ve yüksek oynaklık uyarılarını sade kartta gösterir\n"
         "/aksam_raporu — kapanış raporunu hemen üretir\n\n"
         "💼 PORTFÖY\n"
         "/portfoy — portföy özetini gösterir\n"

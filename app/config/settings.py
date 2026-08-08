@@ -189,6 +189,13 @@ class Settings(BaseSettings):
     intraday_vwap_scan_enabled: bool = Field(default=True)
     intraday_vwap_scan_minute_step: int = Field(default=30, ge=15, le=60)
 
+    # ---- 15 minute confluence scenario radar ----
+    # RSI remains an input only; it never generates a stand-alone notification.
+    trade_scenario_scan_enabled: bool = Field(default=True)
+    trade_scenario_scan_minutes: int = Field(default=15, ge=15, le=60)
+    trade_scenario_max_results: int = Field(default=6, ge=3, le=12)
+    market_opportunity_max_results: int = Field(default=8, ge=3, le=12)
+
     # ---- 24-48 hour symbol news digest ----
     news_digest_cache_minutes: int = Field(default=15, ge=1, le=1440)
     news_digest_lookback_hours: int = Field(default=48, ge=1, le=168)

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-"""Batch-friendly full-universe EMA/RSI and intraday VWAP/VP scanner."""
+"""Batch-friendly full-universe confluence, scenario and VWAP scanners."""
 
 import logging
 import threading
@@ -16,6 +16,7 @@ from app.analysis.indicator_engine import (
     atr,
     compute_indicator_bundle,
     evaluate_indicator_confluence,
+    pivot_support_resistance,
 )
 from app.data.base_provider import BaseMarketDataProvider
 from app.models.database import EmaCrossState, RsiAlertState
@@ -27,6 +28,7 @@ logger = logging.getLogger("mergen_quant.screener")
 class SymbolTechnicalState:
     symbol: str
     price: float
+    ema20: float
     ema50: float
     ema100: float
     relation: Literal["above", "below", "equal"]
@@ -41,10 +43,14 @@ class SymbolTechnicalState:
     bullish_qualified: bool
     bearish_qualified: bool
     vwap: float
+    macd_histogram: float
+    obv_rising: bool
     poc: float | None
     vah: float | None
     val: float | None
     atr: float
+    support: float | None
+    resistance: float | None
     timestamp: datetime | pd.Timestamp
 
 
@@ -75,6 +81,50 @@ class IntradayScanReport:
     strong_above_vwap: tuple[str, ...]
     weak_below_vwap: tuple[str, ...]
     poc_reactions: tuple[str, ...]
+    created_at: datetime
+
+
+@dataclass(frozen=True)
+class TradeScenario:
+    """A compact, confirmation-first 15-minute setup.
+
+    ``entry_low`` / ``entry_high`` is always a retest zone derived from VWAP
+    and EMA20.  It is deliberately not copied from the current last price.
+    """
+
+    symbol: str
+    action: Literal["AL", "SAT", "BEKLE"]
+    direction: Literal["bullish", "bearish"]
+    score: int
+    confirmation_count: int
+    price: float
+    entry_low: float
+    entry_high: float
+    stop: float
+    tp1: float
+    tp2: float
+    rr: float
+    atr_percent: float
+    reasons: tuple[str, ...]
+    confirmation_instruction: str
+
+
+@dataclass(frozen=True)
+class TradeScenarioRunResult:
+    scanned: int
+    failed: int
+    scenarios: tuple[TradeScenario, ...]
+    created_at: datetime
+
+
+@dataclass(frozen=True)
+class MarketOpportunityReport:
+    scanned: int
+    failed: int
+    al_sat_uygun: tuple[SymbolTechnicalState, ...]
+    kisa_vade: tuple[SymbolTechnicalState, ...]
+    uzun_vade_teknik: tuple[SymbolTechnicalState, ...]
+    spekulatif_uyari: tuple[SymbolTechnicalState, ...]
     created_at: datetime
 
 
@@ -109,9 +159,11 @@ def analyze_symbol_frame(
     bullish = evaluate_indicator_confluence(bundle, "bullish", minimum_required=minimum_confluence)
     bearish = evaluate_indicator_confluence(bundle, "bearish", minimum_required=minimum_confluence)
     atr_values = atr(data, 14)
+    support, resistance = pivot_support_resistance(data, lookback=20)
     return SymbolTechnicalState(
         symbol=symbol.upper().removesuffix(".IS"),
         price=float(last["close"]),
+        ema20=float(last["ema20"]),
         ema50=float(last["ema50"]),
         ema100=float(last["ema100"]),
         relation=relation,
@@ -126,10 +178,14 @@ def analyze_symbol_frame(
         bullish_qualified=bullish.qualified,
         bearish_qualified=bearish.qualified,
         vwap=float(last["vwap"]),
+        macd_histogram=float(last["macd_histogram"]),
+        obv_rising=bool(last["obv"] > previous["obv"]),
         poc=bundle.volume_profile.poc,
         vah=bundle.volume_profile.vah,
         val=bundle.volume_profile.val,
         atr=float(atr_values.iloc[-1]),
+        support=support,
+        resistance=resistance,
         timestamp=last["timestamp"],
     )
 
@@ -305,6 +361,203 @@ def run_intraday_vwap_scan(
     )
 
 
+def _direction_for_state(state: SymbolTechnicalState) -> Literal["bullish", "bearish"] | None:
+    """Select one unambiguous direction; ties follow the active Supertrend."""
+
+    if not state.bullish_qualified and not state.bearish_qualified:
+        return None
+    if state.bullish_qualified and not state.bearish_qualified:
+        return "bullish"
+    if state.bearish_qualified and not state.bullish_qualified:
+        return "bearish"
+    if state.bullish_confluence > state.bearish_confluence:
+        return "bullish"
+    if state.bearish_confluence > state.bullish_confluence:
+        return "bearish"
+    return "bullish" if state.supertrend_direction == "up" else "bearish"
+
+
+def _scenario_reasons(state: SymbolTechnicalState, direction: Literal["bullish", "bearish"]) -> tuple[str, ...]:
+    bullish = direction == "bullish"
+    reasons: list[str] = []
+    ema_aligned = state.ema20 > state.ema50 > state.ema100 if bullish else state.ema20 < state.ema50 < state.ema100
+    if ema_aligned:
+        reasons.append("EMA20/50/100 yönü uyumlu")
+    if (state.supertrend_direction == "up") == bullish:
+        reasons.append(f"Supertrend {'yukarı' if bullish else 'aşağı'}")
+    if (state.macd_histogram > 0) == bullish:
+        reasons.append(f"MACD momentumu {'pozitif' if bullish else 'negatif'}")
+    rsi_ok = 50 <= state.rsi < 75 if bullish else 25 < state.rsi <= 50
+    if rsi_ok:
+        reasons.append(f"RSI {state.rsi:.0f} yönü destekliyor")
+    if state.adx >= 20:
+        reasons.append(f"ADX {state.adx:.0f} trend gücü")
+    if state.relative_volume >= 1.0 and state.obv_rising == bullish:
+        reasons.append("Hacim/OBV teyidi")
+    if (state.price > state.vwap) == bullish:
+        reasons.append("VWAP konumu uyumlu")
+    return tuple(reasons)
+
+
+def build_trade_scenario(state: SymbolTechnicalState) -> TradeScenario | None:
+    """Build a retest-first plan from a technically qualified state.
+
+    The current price is used only to decide whether the retest zone is close.
+    It is never returned as the entry price, preventing last-close entries.
+    """
+
+    direction = _direction_for_state(state)
+    if direction is None or not state.atr or state.atr <= 0:
+        return None
+    bullish = direction == "bullish"
+    confirmation_count = state.bullish_confluence if bullish else state.bearish_confluence
+    zone_basis = (state.ema20, state.vwap)
+    zone_padding = max(state.atr * 0.08, state.price * 0.0005)
+    entry_low = min(zone_basis) - zone_padding
+    entry_high = max(zone_basis) + zone_padding
+    entry = (entry_low + entry_high) / 2
+    stop_buffer = max(state.atr * 0.60, state.price * 0.003)
+
+    if bullish:
+        stop = entry_low - stop_buffer
+        risk = entry - stop
+        raw_resistance = state.resistance or (entry + risk * 2)
+        tp1 = raw_resistance if (raw_resistance - entry) / risk >= 2 else entry + risk * 2
+        tp2 = max(tp1 + risk, entry + risk * 3)
+        near_zone = entry_low - state.atr * 0.20 <= state.price <= entry_high + state.atr * 0.30
+        action: Literal["AL", "SAT", "BEKLE"] = "AL" if near_zone else "BEKLE"
+        confirmation_instruction = "Bölgede 15dk yeşil kapanış ve hacim teyidi beklenmeli."
+    else:
+        stop = entry_high + stop_buffer
+        risk = stop - entry
+        raw_support = state.support or (entry - risk * 2)
+        tp1 = raw_support if (entry - raw_support) / risk >= 2 else entry - risk * 2
+        tp2 = min(tp1 - risk, entry - risk * 3)
+        near_zone = entry_low - state.atr * 0.30 <= state.price <= entry_high + state.atr * 0.20
+        action = "SAT" if near_zone else "BEKLE"
+        confirmation_instruction = "Bölgede 15dk kırmızı kapanış ve hacim teyidi beklenmeli."
+
+    rr = abs(tp1 - entry) / risk if risk > 0 else 0.0
+    score = min(
+        99,
+        round(35 + confirmation_count * 9 + min(state.adx, 35) + min(state.relative_volume * 4, 10)),
+    )
+    return TradeScenario(
+        symbol=state.symbol,
+        action=action,
+        direction=direction,
+        score=score,
+        confirmation_count=confirmation_count,
+        price=state.price,
+        entry_low=entry_low,
+        entry_high=entry_high,
+        stop=stop,
+        tp1=tp1,
+        tp2=tp2,
+        rr=rr,
+        atr_percent=(state.atr / state.price * 100) if state.price else 0.0,
+        reasons=_scenario_reasons(state, direction),
+        confirmation_instruction=confirmation_instruction,
+    )
+
+
+def run_intraday_trade_scenario_scan(
+    *,
+    symbols: Iterable[str],
+    provider_factory: Callable[[], BaseMarketDataProvider],
+    settings,
+) -> TradeScenarioRunResult:
+    """Scan the universe every 15 minutes and keep only 3+ confluence setups."""
+
+    limited = list(symbols)[: settings.technical_screener_max_symbols_per_run]
+    states, failed = _fetch_states(
+        limited,
+        provider_factory=provider_factory,
+        workers=settings.technical_screener_workers,
+        timeframe="15m",
+        settings=settings,
+    )
+    scenarios = [scenario for state in states if (scenario := build_trade_scenario(state)) is not None]
+    action_priority = {"AL": 0, "SAT": 1, "BEKLE": 2}
+    scenarios.sort(key=lambda item: (action_priority[item.action], -item.score, item.symbol))
+    maximum = max(3, min(12, int(getattr(settings, "trade_scenario_max_results", 6))))
+    return TradeScenarioRunResult(
+        scanned=len(states),
+        failed=failed,
+        scenarios=tuple(scenarios[:maximum]),
+        created_at=datetime.now(timezone.utc),
+    )
+
+
+def _state_rank(state: SymbolTechnicalState) -> float:
+    return (
+        max(state.bullish_confluence, state.bearish_confluence) * 20
+        + min(state.adx, 40)
+        + min(state.relative_volume * 5, 15)
+    )
+
+
+def run_market_opportunity_scan(
+    *,
+    symbols: Iterable[str],
+    provider_factory: Callable[[], BaseMarketDataProvider],
+    settings,
+) -> MarketOpportunityReport:
+    """Classify the complete BIST universe without claiming company quality.
+
+    Long-term labels are explicitly technical watch candidates.  Fundamental
+    analysis and a company's real liquidity still require separate validation.
+    """
+
+    limited = list(symbols)[: settings.technical_screener_max_symbols_per_run]
+    states, failed = _fetch_states(
+        limited,
+        provider_factory=provider_factory,
+        workers=settings.technical_screener_workers,
+        timeframe="1d",
+        settings=settings,
+    )
+
+    def atr_percent(item: SymbolTechnicalState) -> float:
+        return item.atr / item.price * 100 if item.price else 0.0
+
+    eligible = [
+        state
+        for state in states
+        if _direction_for_state(state) is not None and state.adx >= 20 and atr_percent(state) <= 8
+    ]
+    al_sat = [state for state in eligible if state.relative_volume >= 0.70]
+    short_term = [
+        state
+        for state in eligible
+        if max(state.bullish_confluence, state.bearish_confluence) >= 4
+    ]
+    long_term = [
+        state
+        for state in states
+        if state.price > state.ema100
+        and state.ema20 > state.ema50 > state.ema100
+        and state.adx >= 20
+        and 48 <= state.rsi <= 70
+    ]
+    speculative = [
+        state
+        for state in states
+        if atr_percent(state) >= 6.5 or (state.relative_volume >= 3.0 and atr_percent(state) >= 3.0)
+    ]
+    limit = max(3, min(12, int(getattr(settings, "market_opportunity_max_results", 8))))
+    order = lambda items: tuple(sorted(items, key=_state_rank, reverse=True)[:limit])
+    return MarketOpportunityReport(
+        scanned=len(states),
+        failed=failed,
+        al_sat_uygun=order(al_sat),
+        kisa_vade=order(short_term),
+        uzun_vade_teknik=order(long_term),
+        spekulatif_uyari=order(speculative),
+        created_at=datetime.now(timezone.utc),
+    )
+
+
 def format_screener_alert(alert: ScreenerAlert) -> str:
     volume = "yüksek" if alert.relative_volume >= 1.2 else "normal"
     if alert.kind in {"golden_cross", "death_cross"}:
@@ -329,16 +582,135 @@ def format_intraday_scan_report(report: IntradayScanReport, *, timezone_name: st
 
     local = report.created_at.astimezone(ZoneInfo(timezone_name))
     next_time = local + timedelta(minutes=30)
+
+    def compact(items: tuple[str, ...], maximum: int = 6) -> str:
+        selected = list(items[:maximum])
+        if not selected:
+            return "yok"
+        remainder = len(items) - len(selected)
+        return " • ".join(selected) + (f" • +{remainder} diğer" if remainder > 0 else "")
+
     return "\n".join(
         [
-            f"📊 30dk Otomatik Tarama — {local:%H:%M}",
-            f"Taranan evren: {report.scanned} | Veri hatası/atlanan: {report.failed}",
+            "┏━━ 📊 VWAP & HACİM ÖZETİ ━━┓",
+            f"🕒 {local:%H:%M}  •  {report.scanned} hisse tarandı  •  {report.failed} atlandı",
             "",
-            "VWAP Üzerinde Güçlü: " + (", ".join(report.strong_above_vwap) or "yok"),
-            "VWAP Altında Zayıf: " + (", ".join(report.weak_below_vwap) or "yok"),
-            "POC Seviyesinde Tepki: " + (", ".join(report.poc_reactions) or "yok"),
+            "🟢 VWAP üstünde güçlenenler",
+            compact(report.strong_above_vwap),
             "",
-            "Not: Listeye girmek için en az 3 bağımsız indikatör teyidi gerekir.",
+            "🔴 VWAP altında zayıflayanlar",
+            compact(report.weak_below_vwap),
+            "",
+            "🟠 POC yakınında tepki",
+            compact(report.poc_reactions),
+            "",
+            "ℹ️ Bu özet tek başına işlem sinyali değildir; giriş için senaryo teyidi gerekir.",
             f"⏱ Sonraki tarama: {next_time:%H:%M}",
         ]
     )[:4096]
+
+
+def _format_price(value: float) -> str:
+    return f"{value:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
+
+
+def format_trade_scenario_report(
+    report: TradeScenarioRunResult,
+    *,
+    timezone_name: str = "Europe/Istanbul",
+) -> str:
+    """Render a deliberately short Telegram card, never a 571-symbol dump."""
+
+    from zoneinfo import ZoneInfo
+
+    local = report.created_at.astimezone(ZoneInfo(timezone_name))
+    lines = [
+        "┏━━ 📡 15 DK FIRSAT RADARI ━━┓",
+        f"🕒 {local:%H:%M}  •  {report.scanned} hisse tarandı  •  {report.failed} atlandı",
+        "🧩 Yalnızca en az 3 bağımsız teyitli, retest-bazlı senaryolar seçildi.",
+    ]
+    if not report.scenarios:
+        lines.extend(
+            [
+                "",
+                "🟡 Şu an 3+ teyitli temiz bir senaryo yok.",
+                "⏳ Zorla işlem yok: sonraki 15dk mum kapanışı bekleniyor.",
+            ]
+        )
+        return "\n".join(lines)
+
+    action_icon = {"AL": "🟢", "SAT": "🔴", "BEKLE": "🟡"}
+    action_title = {"AL": "AL ADAYI", "SAT": "SAT / KORUMA", "BEKLE": "BEKLE"}
+    reason_label = {
+        "AL": "Neden giriş düşünülebilir",
+        "SAT": "Neden azaltma düşünülebilir",
+        "BEKLE": "Neden beklenmeli",
+    }
+    for scenario in report.scenarios:
+        direction_name = "yukarı" if scenario.direction == "bullish" else "aşağı"
+        reasons = " • ".join(scenario.reasons[:4]) or "Teknik teyitler izleniyor"
+        lines.extend(
+            [
+                "",
+                f"{action_icon[scenario.action]} {action_title[scenario.action]} · {scenario.symbol}  |  {scenario.score}/100",
+                f"🎯 Beklenen giriş: {_format_price(scenario.entry_low)}–{_format_price(scenario.entry_high)}",
+                f"🛑 Geçersizlik: {_format_price(scenario.stop)}  |  🎯 Hedef: {_format_price(scenario.tp1)} / {_format_price(scenario.tp2)}",
+                f"⚖️ RR 1:{scenario.rr:.1f}  •  ATR %{scenario.atr_percent:.1f}  •  {scenario.confirmation_count} teyit",
+                f"✅ {reason_label[scenario.action]} ({direction_name}): {reasons}",
+                f"⏳ Teyit: {scenario.confirmation_instruction}",
+            ]
+        )
+    lines.extend(
+        [
+            "",
+            "ℹ️ AL/SAT bir koşullu teknik senaryodur; fiyatın güncel seviyesinden otomatik giriş değildir.",
+            "⚠️ SAT, BIST spotta açığa satış çağrısı değil; eldeki pozisyon için azaltma/koruma çerçevesidir.",
+        ]
+    )
+    return "\n".join(lines)[:4096]
+
+
+def format_market_opportunity_report(
+    report: MarketOpportunityReport,
+    *,
+    timezone_name: str = "Europe/Istanbul",
+) -> str:
+    """Explain categories without portraying volatility as manipulation evidence."""
+
+    from zoneinfo import ZoneInfo
+
+    local = report.created_at.astimezone(ZoneInfo(timezone_name))
+
+    def item(state: SymbolTechnicalState, *, with_signal: bool = False) -> str:
+        direction = _direction_for_state(state)
+        label = "AL" if direction == "bullish" else "SAT/KORUMA" if direction == "bearish" else "İZLE"
+        atr_percent = state.atr / state.price * 100 if state.price else 0.0
+        prefix = f"{label} · " if with_signal else ""
+        return (
+            f"• {prefix}{state.symbol} — {max(state.bullish_confluence, state.bearish_confluence)} teyit"
+            f", ADX {state.adx:.0f}, ATR %{atr_percent:.1f}"
+        )
+
+    def section(title: str, states: tuple[SymbolTechnicalState, ...], *, with_signal: bool = False) -> list[str]:
+        rendered = [title]
+        rendered.extend(item(state, with_signal=with_signal) for state in states)
+        if not states:
+            rendered.append("• Bugünkü taramada öne çıkan aday yok")
+        return rendered
+
+    lines = [
+        "┏━━ 🧭 FIRSAT & RİSK LİSTESİ ━━┓",
+        f"🕒 {local:%d.%m %H:%M}  •  {report.scanned} hisse tarandı  •  {report.failed} atlandı",
+        "",
+        *section("🎯 AL-SAT için teknik adaylar", report.al_sat_uygun, with_signal=True),
+        "",
+        *section("⚡ Kısa vade momentumu güçlü", report.kisa_vade, with_signal=True),
+        "",
+        *section("🌱 Uzun vade teknik takip adayları", report.uzun_vade_teknik),
+        "",
+        *section("⚠️ Spekülatif / yüksek oynaklık uyarısı", report.spekulatif_uyari),
+        "",
+        "ℹ️ Son bölüm manipülasyon iddiası değildir; yüksek ATR ve olağandışı hacim kaynaklı teknik risk uyarısıdır.",
+        "🧾 Uzun vade başlığı yalnız teknik filtredir; bilanço, borçluluk ve değerleme ayrıca doğrulanmalıdır.",
+    ]
+    return "\n".join(lines)[:4096]

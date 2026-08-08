@@ -220,12 +220,16 @@ python run_bot.py
 | Değişken | Açıklama | Varsayılan |
 |---|---|---|
 | `STAGED_ENTRY_ALLOCATIONS` | OB/FVG kademeli giriş dağılımı | `40,35,25` |
-| `TECHNICAL_SCREENER_ENABLED` | Yapılandırılmış tam BIST evreninde EMA50/100 + RSI taraması | `true` |
-| `TECHNICAL_SCREENER_INTERVAL_MINUTES` | EMA/RSI tarama aralığı | `30` |
+| `TECHNICAL_SCREENER_ENABLED` | Eski EMA/RSI olay akışı (yeni senaryo radarı açıkken sessiz kalır) | `true` |
+| `TECHNICAL_SCREENER_INTERVAL_MINUTES` | Eski EMA/RSI uyumluluk tarama aralığı | `30` |
 | `TECHNICAL_SCREENER_MIN_CONFLUENCE` | Alarm için gereken bağımsız teyit | `3` |
 | `TECHNICAL_SCREENER_CHAT_ID` | Teknik alarmların gideceği kanal/grup ID; boşsa adminler | boş |
 | `RSI_OVERBOUGHT` / `RSI_OVERSOLD` | RSI ekstrem eşikleri | `75` / `25` |
 | `INTRADAY_VWAP_SCAN_ENABLED` | Piyasa saatlerinde VWAP/POC toplu raporu | `true` |
+| `TRADE_SCENARIO_SCAN_ENABLED` | 3+ teyitli, retest-bazlı 15dk AL/SAT/BEKLE radarını açar | `true` |
+| `TRADE_SCENARIO_SCAN_MINUTES` | Fırsat radarı aralığı (15-60 dakika) | `15` |
+| `TRADE_SCENARIO_MAX_RESULTS` | Bir kartta gösterilecek seçilmiş senaryo sayısı | `6` |
+| `MARKET_OPPORTUNITY_MAX_RESULTS` | `/firsatlar` bölüm başına en fazla aday sayısı | `8` |
 | `NEWS_DIGEST_CACHE_MINUTES` | `/haber` sembol önbelleği | `15` |
 | `NEWS_DIGEST_LOOKBACK_HOURS` | `/haber` arama penceresi | `48` |
 | `TELEGRAM_BOT_TOKEN` | BotFather'dan alınan token | (zorunlu) |

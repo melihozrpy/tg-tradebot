@@ -7,7 +7,12 @@ import pandas as pd
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.analysis.screener_engine import analyze_symbol_frame, run_technical_screener
+from app.analysis.screener_engine import (
+    analyze_symbol_frame,
+    format_trade_scenario_report,
+    run_intraday_trade_scenario_scan,
+    run_technical_screener,
+)
 from app.models.database import Base
 from app.telegram.bot import _build_evening_scan_scheduler
 
@@ -43,6 +48,7 @@ def _settings() -> SimpleNamespace:
         technical_screener_min_confluence=3,
         technical_screener_workers=2,
         technical_screener_max_symbols_per_run=1000,
+        trade_scenario_max_results=6,
     )
 
 
@@ -78,6 +84,24 @@ def test_same_cross_is_persisted_and_not_alerted_twice() -> None:
         db.close()
 
 
+def test_intraday_scenario_requires_confluence_and_uses_retest_entry() -> None:
+    # The upward cross makes Supertrend, EMA direction, MACD and OBV line up.
+    # The scenario's entry must be an EMA/VWAP zone, never blindly the close.
+    frame = _last_bar_cross(upward=True)
+    frame["timestamp"] = pd.date_range("2025-01-01", periods=len(frame), freq="15min", tz="UTC")
+    result = run_intraday_trade_scenario_scan(
+        symbols=["THYAO"],
+        provider_factory=lambda: _Provider(frame),
+        settings=_settings(),
+    )
+    assert result.scenarios
+    scenario = result.scenarios[0]
+    assert scenario.confirmation_count >= 3
+    assert scenario.entry_low <= scenario.entry_high
+    assert scenario.stop < scenario.entry_low
+    assert "15 DK FIRSAT RADARI" in format_trade_scenario_report(result)
+
+
 def test_new_scanner_jobs_use_istanbul_market_hours() -> None:
     settings = SimpleNamespace(
         close_scan_enabled=False,
@@ -86,14 +110,16 @@ def test_new_scanner_jobs_use_istanbul_market_hours() -> None:
         technical_screener_interval_minutes=30,
         intraday_vwap_scan_enabled=True,
         intraday_vwap_scan_minute_step=30,
+        trade_scenario_scan_enabled=True,
+        trade_scenario_scan_minutes=15,
+        trade_scenario_max_results=6,
         user_price_alerts_enabled=False,
         enhanced_alarm_scan_enabled=False,
         signal_monitor_enabled=False,
     )
     scheduler = _build_evening_scan_scheduler(settings)
-    ema_job = scheduler.get_job("full_universe_ema_rsi_scan")
-    vwap_job = scheduler.get_job("full_universe_vwap_volume_profile_scan")
-    assert ema_job is not None
-    assert vwap_job is not None
-    assert str(ema_job.trigger.timezone) == "Europe/Istanbul"
-    assert str(vwap_job.trigger.timezone) == "Europe/Istanbul"
+    scenario_job = scheduler.get_job("full_universe_trade_scenario_scan")
+    assert scenario_job is not None
+    assert scheduler.get_job("full_universe_ema_rsi_scan") is None
+    assert scheduler.get_job("full_universe_vwap_volume_profile_scan") is None
+    assert str(scenario_job.trigger.timezone) == "Europe/Istanbul"
