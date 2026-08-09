@@ -195,6 +195,13 @@ class Settings(BaseSettings):
     trade_scenario_scan_minutes: int = Field(default=15, ge=15, le=60)
     trade_scenario_max_results: int = Field(default=6, ge=3, le=12)
     trade_scenario_minimum_core_confirmations: int = Field(default=3, ge=3, le=5)
+    # ---- Saatlik günlük ilk 5 teknik + temel doğrulama listesi ----
+    daily_top_picks_enabled: bool = Field(default=True)
+    daily_top_picks_max_results: int = Field(default=5, ge=1, le=10)
+    daily_top_picks_minimum_confirmations: int = Field(default=6, ge=5, le=8)
+    daily_top_picks_fundamental_candidates: int = Field(default=20, ge=5, le=40)
+    # Sağlam firma etiketi ancak temel veri kaynağı gerçekten doğruladığında kullanılır.
+    daily_top_picks_require_fundamental: bool = Field(default=True)
     market_opportunity_max_results: int = Field(default=8, ge=3, le=12)
     market_opportunity_minimum_confluence: int = Field(default=5, ge=3, le=10)
 

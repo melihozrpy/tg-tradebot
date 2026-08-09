@@ -8,6 +8,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.analysis.screener_engine import (
+    DailyTopPicksRunResult,
+    SymbolTechnicalState,
+    _build_daily_top_pick,
     _four_hour_bars_from_hourly,
     analyze_symbol_frame,
     format_market_opportunity_report,
@@ -16,6 +19,7 @@ from app.analysis.screener_engine import (
     run_market_opportunity_scan,
     run_technical_screener,
 )
+from app.analysis.pattern_engine import ChartPattern, detect_chart_patterns
 from app.models.database import Base
 from app.telegram.bot import _build_evening_scan_scheduler
 from app.telegram.market_opportunity_handlers import parse_firsatlar_timeframe
@@ -113,6 +117,98 @@ def test_intraday_scenario_requires_confluence_and_uses_retest_entry() -> None:
     assert "UYUMLU" in format_trade_scenario_report(result)
 
 
+def test_pattern_engine_confirms_double_bottom_only_after_neckline_close() -> None:
+    count = 100
+    close = np.full(count, 100.0)
+    close[-20:] = [100, 98, 95, 92, 90, 92, 95, 98, 102, 105, 102, 98, 94, 91, 90.5, 92, 96, 101, 105, 108]
+    frame = pd.DataFrame(
+        {
+            "timestamp": pd.date_range("2026-01-01", periods=count, freq="D", tz="UTC"),
+            "open": close - 0.5,
+            "high": close + 1.0,
+            "low": close - 1.0,
+            "close": close,
+            "volume": np.full(count, 1_000_000.0),
+        }
+    )
+
+    patterns = detect_chart_patterns(frame)
+
+    assert any(
+        pattern.name == "İkili Dip" and pattern.confirmed and pattern.direction == "bullish"
+        for pattern in patterns
+    )
+
+
+def test_daily_top_pick_requires_real_pattern_target_and_retest_entry() -> None:
+    pattern = ChartPattern(
+        name="Ters Omuz Baş Omuz",
+        kind="reversal",
+        direction="bullish",
+        confirmed=True,
+        confidence=85,
+        breakout_level=104.0,
+        target=116.0,
+        detail="Boyun çizgisi üstü kapanış teyidi var.",
+    )
+    state = SymbolTechnicalState(
+        symbol="THYAO",
+        price=106.0,
+        ema20=101.0,
+        ema50=99.0,
+        ema100=97.0,
+        relation="above",
+        crossover=None,
+        rsi=60.0,
+        rsi_state="normal",
+        adx=28.0,
+        relative_volume=1.25,
+        supertrend_direction="up",
+        bullish_confluence=6,
+        bearish_confluence=0,
+        bullish_qualified=True,
+        bearish_qualified=False,
+        bullish_ten_confluence=7,
+        bearish_ten_confluence=1,
+        bullish_ten_qualified=True,
+        bearish_ten_qualified=False,
+        vwap=103.0,
+        macd_histogram=0.4,
+        obv_rising=True,
+        poc=102.0,
+        vah=107.0,
+        val=99.0,
+        atr=2.0,
+        support=100.0,
+        resistance=110.0,
+        timestamp=pd.Timestamp("2026-08-09", tz="UTC"),
+        patterns=(pattern,),
+    )
+
+    pick = _build_daily_top_pick(state, minimum_confirmations=6)
+
+    assert pick is not None
+    assert pick.pattern.name == "Ters Omuz Baş Omuz"
+    assert pick.target_potential_percent >= 3.0
+    assert pick.rr >= 2.0
+    assert pick.entry_high < state.price  # no "current-price entry"
+
+    report = DailyTopPicksRunResult(
+        scanned=571,
+        failed=3,
+        picks=(pick,),
+        fundamental_checked=1,
+        fundamental_verified=1,
+        created_at=pd.Timestamp("2026-08-09T10:00:00Z").to_pydatetime(),
+    )
+    from app.analysis.screener_engine import format_daily_top_picks_report
+
+    card = format_daily_top_picks_report(report)
+    assert "GÜNLÜK İLK 5" in card
+    assert "Ters Omuz Baş Omuz" in card
+    assert "%3 kâr garantisi değildir" in card
+
+
 def test_opportunity_scan_accepts_hourly_ten_indicator_mode() -> None:
     report = run_market_opportunity_scan(
         symbols=["THYAO"],
@@ -168,6 +264,7 @@ def test_new_scanner_jobs_use_istanbul_market_hours() -> None:
         trade_scenario_scan_enabled=True,
         trade_scenario_scan_minutes=15,
         trade_scenario_max_results=6,
+        daily_top_picks_enabled=True,
         user_price_alerts_enabled=False,
         enhanced_alarm_scan_enabled=False,
         signal_monitor_enabled=False,
@@ -175,6 +272,9 @@ def test_new_scanner_jobs_use_istanbul_market_hours() -> None:
     scheduler = _build_evening_scan_scheduler(settings)
     scenario_job = scheduler.get_job("full_universe_trade_scenario_scan")
     assert scenario_job is not None
+    daily_job = scheduler.get_job("daily_top_five_long_scan")
+    assert daily_job is not None
     assert scheduler.get_job("full_universe_ema_rsi_scan") is None
     assert scheduler.get_job("full_universe_vwap_volume_profile_scan") is None
     assert str(scenario_job.trigger.timezone) == "Europe/Istanbul"
+    assert str(daily_job.trigger.timezone) == "Europe/Istanbul"

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from typing import Callable, Iterable, Literal
 
@@ -19,6 +19,7 @@ from app.analysis.indicator_engine import (
     evaluate_ten_indicator_confluence,
     pivot_support_resistance,
 )
+from app.analysis.pattern_engine import ChartPattern, detect_chart_patterns
 from app.data.base_provider import BaseMarketDataProvider
 from app.models.database import EmaCrossState, RsiAlertState
 
@@ -57,6 +58,7 @@ class SymbolTechnicalState:
     support: float | None
     resistance: float | None
     timestamp: datetime | pd.Timestamp
+    patterns: tuple[ChartPattern, ...]
 
 
 @dataclass(frozen=True)
@@ -114,6 +116,7 @@ class TradeScenario:
     atr_percent: float
     reasons: tuple[str, ...]
     confirmation_instruction: str
+    confirmed_patterns: tuple[ChartPattern, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -121,6 +124,44 @@ class TradeScenarioRunResult:
     scanned: int
     failed: int
     scenarios: tuple[TradeScenario, ...]
+    created_at: datetime
+
+
+@dataclass(frozen=True)
+class DailyTopPick:
+    """A daily-long candidate with a real resistance-based potential target.
+
+    ``target_potential_percent`` is an opportunity filter, never a return
+    promise.  The card explicitly tells the user that no purchase is due until
+    price revisits the calculated zone and gives a closing confirmation.
+    """
+
+    symbol: str
+    score: int
+    technical_confirmations: int
+    price: float
+    entry_low: float
+    entry_high: float
+    stop: float
+    tp1: float
+    tp2: float
+    rr: float
+    target_potential_percent: float
+    pattern: ChartPattern
+    reasons: tuple[str, ...]
+    confirmation_instruction: str
+    fundamental_score: int | None
+    fundamental_status: str
+    fundamental_source: str | None
+
+
+@dataclass(frozen=True)
+class DailyTopPicksRunResult:
+    scanned: int
+    failed: int
+    picks: tuple[DailyTopPick, ...]
+    fundamental_checked: int
+    fundamental_verified: int
     created_at: datetime
 
 
@@ -176,6 +217,7 @@ def analyze_symbol_frame(
     )
     atr_values = atr(data, 14)
     support, resistance = pivot_support_resistance(data, lookback=20)
+    patterns = detect_chart_patterns(frame)
     return SymbolTechnicalState(
         symbol=symbol.upper().removesuffix(".IS"),
         price=float(last["close"]),
@@ -207,6 +249,7 @@ def analyze_symbol_frame(
         support=support,
         resistance=resistance,
         timestamp=last["timestamp"],
+        patterns=patterns,
     )
 
 
@@ -475,6 +518,19 @@ def _core_trade_checks(
     )
 
 
+def _matching_confirmed_patterns(
+    state: SymbolTechnicalState,
+    direction: Literal["bullish", "bearish"],
+) -> tuple[ChartPattern, ...]:
+    """Only a closed-breakout pattern may add weight to a scenario."""
+
+    return tuple(
+        pattern
+        for pattern in state.patterns
+        if pattern.confirmed and pattern.direction == direction
+    )
+
+
 def _scenario_reasons(state: SymbolTechnicalState, direction: Literal["bullish", "bearish"]) -> tuple[str, ...]:
     bullish = direction == "bullish"
     reasons: list[str] = []
@@ -494,6 +550,9 @@ def _scenario_reasons(state: SymbolTechnicalState, direction: Literal["bullish",
         reasons.append("Hacim/OBV teyidi")
     if (state.price > state.vwap) == bullish:
         reasons.append("VWAP konumu uyumlu")
+    matching_patterns = _matching_confirmed_patterns(state, direction)
+    if matching_patterns:
+        reasons.append(f"Formasyon teyidi: {matching_patterns[0].name}")
     return tuple(reasons)
 
 
@@ -514,6 +573,7 @@ def build_trade_scenario(
     bullish = direction == "bullish"
     core_checks = _core_trade_checks(state, direction)
     core_confirmation_count = sum(is_confirmed for _, is_confirmed in core_checks)
+    confirmed_patterns = _matching_confirmed_patterns(state, direction)
     minimum_core_confirmations = max(3, min(5, int(minimum_core_confirmations)))
     if core_confirmation_count < minimum_core_confirmations:
         return None
@@ -551,6 +611,7 @@ def build_trade_scenario(
             22
             + core_confirmation_count * 10
             + confirmation_count * 5
+            + min(8, max((pattern.confidence for pattern in confirmed_patterns), default=0) / 10)
             + min(state.adx, 30)
             + min(state.relative_volume * 3, 8)
         ),
@@ -573,6 +634,7 @@ def build_trade_scenario(
         atr_percent=(state.atr / state.price * 100) if state.price else 0.0,
         reasons=_scenario_reasons(state, direction),
         confirmation_instruction=confirmation_instruction,
+        confirmed_patterns=confirmed_patterns,
     )
 
 
@@ -611,6 +673,186 @@ def run_intraday_trade_scenario_scan(
         scanned=len(states),
         failed=failed,
         scenarios=tuple(scenarios[:maximum]),
+        created_at=datetime.now(timezone.utc),
+    )
+
+
+def _daily_top_pick_checks(state: SymbolTechnicalState) -> tuple[tuple[str, bool], ...]:
+    """Independent daily-long checks; daily VWAP is not counted as session VWAP.
+
+    A one-day candle cannot recreate an intraday session VWAP accurately, so
+    the hourly *daily* list deliberately relies on daily trend, momentum,
+    participation and a confirmed chart pattern instead of pretending that a
+    daily typical-price fallback is a session VWAP confirmation.
+    """
+
+    atr_percent = state.atr / state.price * 100 if state.price else 0.0
+    return (
+        ("EMA20/50/100", state.ema20 > state.ema50 > state.ema100),
+        ("Fiyat > EMA100", state.price > state.ema100),
+        ("Supertrend", state.supertrend_direction == "up"),
+        ("RSI", 50 <= state.rsi <= 68),
+        ("MACD", state.macd_histogram > 0),
+        ("ADX", state.adx >= 20),
+        ("Hacim/OBV", state.relative_volume >= 0.80 and state.obv_rising),
+        ("ATR", 0.8 <= atr_percent <= 8.0),
+    )
+
+
+def _build_daily_top_pick(state: SymbolTechnicalState, *, minimum_confirmations: int) -> DailyTopPick | None:
+    """Build a conservative daily-long plan from confirmed evidence only."""
+
+    if state.price <= 0 or state.atr <= 0:
+        return None
+    patterns = _matching_confirmed_patterns(state, "bullish")
+    if not patterns:
+        return None
+    checks = _daily_top_pick_checks(state)
+    technical_confirmations = sum(passed for _, passed in checks)
+    if technical_confirmations < max(5, min(8, int(minimum_confirmations))):
+        return None
+
+    pattern = max(patterns, key=lambda item: (item.confidence, item.name))
+    support = state.support if state.support is not None and state.support < state.price else None
+    zone_center = state.ema20
+    if support is not None and abs(support - state.ema20) <= state.atr * 2.5:
+        zone_center = (support + state.ema20) / 2.0
+    zone_padding = max(state.atr * 0.15, state.price * 0.001)
+    entry_low = max(0.0001, zone_center - zone_padding)
+    entry_high = zone_center + zone_padding
+    entry = (entry_low + entry_high) / 2.0
+    stop_reference = min(entry_low, support) if support is not None else entry_low
+    stop = max(0.0001, stop_reference - max(state.atr * 0.75, entry * 0.004))
+    risk = entry - stop
+    if risk <= 0:
+        return None
+
+    resistance = state.resistance if state.resistance is not None and state.resistance > entry else None
+    tp1 = resistance or pattern.target
+    if tp1 is None or tp1 <= entry:
+        return None
+    target_potential_percent = (tp1 / entry - 1.0) * 100
+    rr = (tp1 - entry) / risk
+    # A target should be a real next resistance/pattern objective.  We do not
+    # invent a three-percent level simply to fill the hourly report.
+    if target_potential_percent < 3.0 or rr < 2.0:
+        return None
+    tp2 = max(
+        float(pattern.target) if pattern.target is not None else 0.0,
+        tp1 + risk,
+    )
+    score = min(
+        99,
+        round(
+            28
+            + technical_confirmations * 7
+            + min(pattern.confidence, 90) * 0.12
+            + min(state.adx, 35) * 0.25
+            + min(state.relative_volume, 2.0) * 4
+        ),
+    )
+    reasons = tuple(name for name, passed in checks if passed)
+    return DailyTopPick(
+        symbol=state.symbol,
+        score=score,
+        technical_confirmations=technical_confirmations,
+        price=state.price,
+        entry_low=entry_low,
+        entry_high=entry_high,
+        stop=stop,
+        tp1=tp1,
+        tp2=tp2,
+        rr=rr,
+        target_potential_percent=target_potential_percent,
+        pattern=pattern,
+        reasons=reasons,
+        confirmation_instruction="Giriş ancak bölgeye geri çekilme ve günlük/15dk yeşil kapanış teyidiyle düşünülür.",
+        fundamental_score=None,
+        fundamental_status="DOĞRULANMADI",
+        fundamental_source=None,
+    )
+
+
+def _verify_pick_fundamentals(pick: DailyTopPick, provider) -> DailyTopPick | None:
+    """Allow only verified, sufficiently complete fundamentals into the strong list."""
+
+    from app.services.company_analysis_service import analyze_company
+
+    try:
+        analysis = analyze_company(pick.symbol, fundamental_provider=provider)
+    except Exception as exc:  # noqa: BLE001 - a single company must not stop the universe scan
+        logger.info("Gunluk ilk 5 temel dogrulama atlandi symbol=%s error=%s", pick.symbol, type(exc).__name__)
+        return None
+    status = str(analysis.status)
+    if status in {"RİSKLİ", "VERİ YETERSİZ"} or analysis.score < 65 or analysis.data_coverage < 60:
+        return None
+    final_score = min(99, round(pick.score * 0.68 + analysis.score * 0.32))
+    return replace(
+        pick,
+        score=final_score,
+        fundamental_score=int(analysis.score),
+        fundamental_status=status,
+        fundamental_source=str(analysis.source),
+    )
+
+
+def run_daily_top_picks_scan(
+    *,
+    symbols: Iterable[str],
+    provider_factory: Callable[[], BaseMarketDataProvider],
+    settings,
+    fundamental_provider_factory: Callable[[], object] | None = None,
+) -> DailyTopPicksRunResult:
+    """Scan the BIST universe for up to five verified daily-long candidates.
+
+    Technical screening runs on every configured symbol.  The optional
+    fundamental provider is queried only for the best technical short-list,
+    never for 600 symbols at once.  If strict fundamental verification is
+    enabled and a source is unavailable, the report sends an explicit no-pick
+    notice rather than labeling an unverified company as financially strong.
+    """
+
+    limited = list(symbols)[: settings.technical_screener_max_symbols_per_run]
+    states, failed = _fetch_states(
+        limited,
+        provider_factory=provider_factory,
+        workers=settings.technical_screener_workers,
+        timeframe="1d",
+        settings=settings,
+    )
+    minimum = max(5, min(8, int(getattr(settings, "daily_top_picks_minimum_confirmations", 6))))
+    candidates = [
+        candidate
+        for state in states
+        if (candidate := _build_daily_top_pick(state, minimum_confirmations=minimum)) is not None
+    ]
+    candidates.sort(key=lambda item: (-item.score, -item.target_potential_percent, item.symbol))
+    inspect_limit = max(5, min(40, int(getattr(settings, "daily_top_picks_fundamental_candidates", 20))))
+    shortlist = candidates[:inspect_limit]
+    require_fundamental = bool(getattr(settings, "daily_top_picks_require_fundamental", True))
+    verified: list[DailyTopPick] = []
+    checked = 0
+    if fundamental_provider_factory is not None and shortlist:
+        try:
+            fundamental_provider = fundamental_provider_factory()
+        except Exception as exc:  # noqa: BLE001
+            logger.info("Gunluk ilk 5 temel saglayici olusturulamadi: %s", type(exc).__name__)
+            fundamental_provider = None
+        if fundamental_provider is not None:
+            for candidate in shortlist:
+                checked += 1
+                verified_pick = _verify_pick_fundamentals(candidate, fundamental_provider)
+                if verified_pick is not None:
+                    verified.append(verified_pick)
+    selected = verified if require_fundamental else (verified or shortlist)
+    selected.sort(key=lambda item: (-item.score, -item.target_potential_percent, item.symbol))
+    maximum = max(1, min(10, int(getattr(settings, "daily_top_picks_max_results", 5))))
+    return DailyTopPicksRunResult(
+        scanned=len(states),
+        failed=failed,
+        picks=tuple(selected[:maximum]),
+        fundamental_checked=checked,
+        fundamental_verified=len(verified),
         created_at=datetime.now(timezone.utc),
     )
 
@@ -823,6 +1065,14 @@ def format_trade_scenario_report(
                 f"📍 Fiyat: {_format_price(scenario.price)}  →  Giriş bölgesi: {_format_price(scenario.entry_low)}–{_format_price(scenario.entry_high)}",
                 f"🛑 Stop: {_format_price(scenario.stop)}  |  🎯 TP1: {_format_price(scenario.tp1)}  •  TP2: {_format_price(scenario.tp2)}",
                 f"⚖️ RR 1:{scenario.rr:.1f}  •  ATR %{scenario.atr_percent:.1f}  •  Ek teyit: {scenario.confirmation_count}",
+                *(
+                    [
+                        f"📐 Formasyon: {scenario.confirmed_patterns[0].name} ✅ "
+                        f"({scenario.confirmed_patterns[0].detail})"
+                    ]
+                    if scenario.confirmed_patterns
+                    else []
+                ),
                 f"✅ {reason_label[scenario.action]} ({direction_name}): {reasons}",
                 f"⏳ İşlem teyidi: {scenario.confirmation_instruction}",
             ]
@@ -832,6 +1082,67 @@ def format_trade_scenario_report(
             "",
             "ℹ️ AL/SAT bir koşullu teknik senaryodur; fiyatın güncel seviyesinden otomatik giriş değildir.",
             "⚠️ SAT, BIST spotta açığa satış çağrısı değil; eldeki pozisyon için azaltma/koruma çerçevesidir.",
+        ]
+    )
+    return "\n".join(lines)[:4096]
+
+
+def format_daily_top_picks_report(
+    report: DailyTopPicksRunResult,
+    *,
+    timezone_name: str = "Europe/Istanbul",
+) -> str:
+    """Render the hourly daily-long report without claiming a guaranteed return."""
+
+    from zoneinfo import ZoneInfo
+
+    local = report.created_at.astimezone(ZoneInfo(timezone_name))
+    lines = [
+        "┏━━ 🏆 GÜNLÜK İLK 5 KALİTELİ LONG RADARI ━━┓",
+        f"🕒 {local:%H:%M}  •  {report.scanned} hisse tarandı  •  {report.failed} veri yetersiz",
+        (
+            f"🧾 Temel doğrulama: {report.fundamental_verified}/{report.fundamental_checked} teknik aday geçti"
+            if report.fundamental_checked
+            else "🧾 Temel doğrulama: kaynak sonucu bekleniyor"
+        ),
+        "🛡 Şart: günlük çoklu teyit + kapanışla doğrulanmış formasyon + gerçek dirençe kadar ≥%3 potansiyel + RR ≥1:2.",
+        "📌 Giriş yalnız retest bölgesinden; güncel fiyattan otomatik AL yok.",
+    ]
+    if not report.picks:
+        lines.extend(
+            [
+                "",
+                "🟡 Bugün bu standartları birlikte geçen doğrulanmış aday yok.",
+                "Zorla 5 hisse üretmem: teknik/formasyon veya temel doğrulama eksikse sonraki saat beklenir.",
+            ]
+        )
+        return "\n".join(lines)
+
+    for rank, pick in enumerate(report.picks, start=1):
+        reasons = " • ".join(pick.reasons[:5])
+        fundamental = (
+            f"{pick.fundamental_status} {pick.fundamental_score}/100"
+            if pick.fundamental_score is not None
+            else "doğrulanmadı"
+        )
+        lines.extend(
+            [
+                "",
+                f"{rank}. 🟢 {pick.symbol}  •  KALİTE {pick.score}/100  •  {pick.technical_confirmations}/8 teknik teyit",
+                f"📐 Formasyon: {pick.pattern.name} ✅ — {pick.pattern.detail}",
+                f"🏢 Temel görünüm: {fundamental}",
+                f"📍 Fiyat: {_format_price(pick.price)}  →  Giriş bölgesi: {_format_price(pick.entry_low)}–{_format_price(pick.entry_high)}",
+                f"🛑 Geçersizlik/Stop: {_format_price(pick.stop)}",
+                f"🎯 TP1: {_format_price(pick.tp1)}  •  TP2: {_format_price(pick.tp2)}  •  Potansiyel: %{pick.target_potential_percent:.1f}",
+                f"⚖️ RR 1:{pick.rr:.1f}  •  Neden: {reasons}",
+                f"⏳ Teyit: {pick.confirmation_instruction}",
+            ]
+        )
+    lines.extend(
+        [
+            "",
+            "ℹ️ ‘Potansiyel’ geçmiş destek/direnç ve formasyon hedefinden hesaplanır; %3 kâr garantisi değildir.",
+            "⚠️ Bu koşullu teknik izleme listesidir; bilanço/KAP, likidite ve piyasa riski ayrıca kontrol edilmelidir.",
         ]
     )
     return "\n".join(lines)[:4096]
@@ -854,9 +1165,11 @@ def format_market_opportunity_report(
         label = "AL" if direction == "bullish" else "SAT/KORUMA" if direction == "bearish" else "İZLE"
         atr_percent = state.atr / state.price * 100 if state.price else 0.0
         prefix = f"{label} · " if with_signal else ""
+        pattern = next((row for row in state.patterns if row.confirmed), None)
+        pattern_text = f" • 📐 {pattern.name}" if pattern is not None else ""
         return (
             f"• {prefix}{state.symbol} — {max(state.bullish_ten_confluence, state.bearish_ten_confluence)}/10 teyit"
-            f", ADX {state.adx:.0f}, ATR %{atr_percent:.1f}"
+            f", ADX {state.adx:.0f}, ATR %{atr_percent:.1f}{pattern_text}"
         )
 
     def section(title: str, states: tuple[SymbolTechnicalState, ...], *, with_signal: bool = False) -> list[str]:

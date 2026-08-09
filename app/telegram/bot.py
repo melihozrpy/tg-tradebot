@@ -94,9 +94,11 @@ def build_telegram_application() -> Application:
     application.add_handler(CommandHandler("tara", handlers_v3.cmd_tara))
     application.add_handler(CommandHandler("tara_liste", handlers_v3.cmd_tara_liste))
     application.add_handler(CommandHandler("tarama_durumu", handlers_v3.cmd_tarama_durumu))
-    from app.telegram.market_opportunity_handlers import cmd_firsatlar
+    from app.telegram.market_opportunity_handlers import cmd_firsatlar, cmd_gunluk5
     application.add_handler(CommandHandler("firsatlar", cmd_firsatlar))
     application.add_handler(CommandHandler("firsat", cmd_firsatlar))
+    application.add_handler(CommandHandler("gunluk5", cmd_gunluk5))
+    application.add_handler(CommandHandler("gunluk_ilk5", cmd_gunluk5))
     application.add_handler(CommandHandler("aksam_raporu", smxm_report_handlers.cmd_smxm_aksam_raporu))
     application.add_handler(CommandHandler("tarama_ayarlari", handlers_v3.cmd_tarama_ayarlari))
     application.add_handler(CommandHandler("tum_hisseler", smxm_report_handlers.cmd_tum_hisseler))
@@ -575,6 +577,75 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
             replace_existing=True,
         )
         logger.info("15dk 3+ teyitli firsat radari %s dakikada bir hazirlandi.", scenario_step)
+
+    # Saat baslarinda, gunluk grafikte teknik olarak uyumlu ve temel verisi
+    # dogrulanmis en fazla bes LONG adayi gonderilir.  Bir saat icinde ayni
+    # sembolun tekrar gelmesi bilincli bir davranistir: yeni veri o sembolu
+    # yine en ust siraya tasiyorsa yapay cesitlilik ugruna gizlenmez.
+    if getattr(settings, "daily_top_picks_enabled", False):
+        async def _daily_top_picks_job() -> None:
+            def _scan():
+                from app.analysis.screener_engine import run_daily_top_picks_scan
+                from app.config.instruments import universe_symbols
+                from app.data.provider_factory import build_market_data_provider
+                from app.fundamentals.factory import build_fundamental_provider
+
+                return run_daily_top_picks_scan(
+                    symbols=universe_symbols(settings.bist_universe_json_path),
+                    provider_factory=lambda: build_market_data_provider(settings),
+                    fundamental_provider_factory=lambda: build_fundamental_provider(settings),
+                    settings=settings,
+                )
+
+            try:
+                result = await asyncio.to_thread(_scan)
+                logger.info(
+                    "Saatlik gunluk ilk 5 taramasi tamamlandi scanned=%s failed=%s picks=%s fundamentals=%s/%s",
+                    result.scanned,
+                    result.failed,
+                    len(result.picks),
+                    result.fundamental_verified,
+                    result.fundamental_checked,
+                )
+                if application is None:
+                    return
+                from app.analysis.screener_engine import format_daily_top_picks_report
+                from app.models.database import User, get_session_factory
+
+                db = get_session_factory()()
+                try:
+                    configured = getattr(settings, "technical_screener_chat_id", None)
+                    recipients = {int(configured)} if configured else {
+                        int(user.telegram_user_id)
+                        for user in db.query(User).filter(User.is_admin.is_(True)).all()
+                    }
+                    recipients.update(int(value) for value in getattr(settings, "admin_ids", ()))
+                finally:
+                    db.close()
+                text = format_daily_top_picks_report(result, timezone_name=settings.timezone_name)
+                for chat_id in recipients:
+                    try:
+                        await application.bot.send_message(chat_id=chat_id, text=text)
+                    except Exception as exc:  # noqa: BLE001 - one recipient cannot stop the scheduler
+                        logger.warning("Saatlik ilk 5 karti gonderilemedi chat=%s: %s", chat_id, exc)
+            except Exception as exc:  # noqa: BLE001 - scheduled jobs must survive
+                logger.exception("Saatlik gunluk ilk 5 taramasi hata verdi: %s", exc)
+                await _notify_report_error("saatlik günlük ilk 5 radarı", exc)
+
+        scheduler.add_job(
+            _daily_top_picks_job,
+            CronTrigger(
+                day_of_week="mon-fri",
+                hour="10-17",
+                minute=0,
+                timezone="Europe/Istanbul",
+            ),
+            id="daily_top_five_long_scan",
+            coalesce=True,
+            max_instances=1,
+            replace_existing=True,
+        )
+        logger.info("Gunluk ilk 5 kaliteli LONG radari her saat basi (10:00-17:00 Istanbul) hazirlandi.")
 
     # Compatibility mode only.  The previous EMA/RSI event stream remains
     # available when the new scenario radar is explicitly disabled, but it is

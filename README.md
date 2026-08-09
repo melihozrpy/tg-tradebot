@@ -230,6 +230,11 @@ python run_bot.py
 | `TRADE_SCENARIO_SCAN_MINUTES` | Fırsat radarı aralığı (15-60 dakika) | `15` |
 | `TRADE_SCENARIO_MAX_RESULTS` | Bir kartta gösterilecek seçilmiş senaryo sayısı | `6` |
 | `TRADE_SCENARIO_MINIMUM_CORE_CONFIRMATIONS` | VWAP/EMA/RSI/ATR/MACD içinden gereken aynı yön teyidi | `3` |
+| `DAILY_TOP_PICKS_ENABLED` | Her saat başı günlük İlk 5 LONG radarını açar (10:00–17:00 İstanbul) | `true` |
+| `DAILY_TOP_PICKS_MAX_RESULTS` | Saatlik karttaki en fazla aday sayısı | `5` |
+| `DAILY_TOP_PICKS_MINIMUM_CONFIRMATIONS` | Günlük teknik filtreden gereken teyit sayısı (8 üzerinden) | `6` |
+| `DAILY_TOP_PICKS_FUNDAMENTAL_CANDIDATES` | Teknik kısa listeden temel verisi doğrulanacak en fazla şirket | `20` |
+| `DAILY_TOP_PICKS_REQUIRE_FUNDAMENTAL` | Sağlam firma etiketi için temel doğrulama zorunluluğu | `true` |
 | `MARKET_OPPORTUNITY_MAX_RESULTS` | `/firsatlar` bölüm başına en fazla aday sayısı | `8` |
 | `MARKET_OPPORTUNITY_MINIMUM_CONFLUENCE` | `/firsatlar 5dk\|1s\|4s` için 10 göstergeden gereken minimum teyit | `5` |
 | `NEWS_DIGEST_CACHE_MINUTES` | `/haber` sembol önbelleği | `15` |

@@ -8,10 +8,16 @@ import logging
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from app.analysis.screener_engine import format_market_opportunity_report, run_market_opportunity_scan
+from app.analysis.screener_engine import (
+    format_daily_top_picks_report,
+    format_market_opportunity_report,
+    run_daily_top_picks_scan,
+    run_market_opportunity_scan,
+)
 from app.config.instruments import universe_symbols
 from app.config.settings import get_settings
 from app.data.provider_factory import build_market_data_provider
+from app.fundamentals.factory import build_fundamental_provider
 from app.telegram.handlers import _reject_unauthorized
 
 logger = logging.getLogger("mergen_quant.telegram.market_opportunities")
@@ -81,4 +87,36 @@ async def cmd_firsatlar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         logger.exception("Firsatlar komutu taramasi hata verdi: %s", exc)
         await update.message.reply_text(
             "⚠️ Fırsat taraması şu an tamamlanamadı. Veri kaynağı veya piyasa verisi tekrar denenecek."
+        )
+
+
+async def cmd_gunluk5(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Run the same hourly daily top-five screen on demand."""
+
+    if await _reject_unauthorized(update) or update.message is None:
+        return
+    settings = get_settings()
+    await update.message.reply_text(
+        "🏆 Günlük İlk 5 radarı tüm BIST evrenini tarıyor.\n"
+        "Sadece doğrulanmış formasyon, teknik teyit, ≥%3 hedef potansiyeli ve temel kalite koşullarını birlikte geçenler dönecek; zorla 5 hisse yazılmaz."
+    )
+
+    def scan():
+        return run_daily_top_picks_scan(
+            symbols=universe_symbols(settings.bist_universe_json_path),
+            provider_factory=lambda: build_market_data_provider(settings),
+            fundamental_provider_factory=lambda: build_fundamental_provider(settings),
+            settings=settings,
+        )
+
+    try:
+        report = await asyncio.to_thread(scan)
+        await update.message.reply_text(
+            format_daily_top_picks_report(report, timezone_name=settings.timezone_name),
+            disable_web_page_preview=True,
+        )
+    except Exception as exc:  # noqa: BLE001 - a command failure cannot crash the bot
+        logger.exception("Gunluk5 komutu taramasi hata verdi: %s", exc)
+        await update.message.reply_text(
+            "⚠️ Günlük İlk 5 taraması tamamlanamadı. Veri kaynağı tekrar denenecek; boş veya tahmini liste gönderilmedi."
         )
