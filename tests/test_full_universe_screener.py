@@ -53,6 +53,7 @@ def _settings() -> SimpleNamespace:
         technical_screener_workers=2,
         technical_screener_max_symbols_per_run=1000,
         trade_scenario_max_results=6,
+        trade_scenario_minimum_core_confirmations=3,
         market_opportunity_max_results=8,
         market_opportunity_minimum_confluence=5,
     )
@@ -103,9 +104,13 @@ def test_intraday_scenario_requires_confluence_and_uses_retest_entry() -> None:
     assert result.scenarios
     scenario = result.scenarios[0]
     assert scenario.confirmation_count >= 3
+    assert scenario.core_confirmation_count >= 3
+    assert len(scenario.core_checks) == 5
+    assert {name for name, _ in scenario.core_checks} == {"VWAP", "EMA", "RSI", "ATR", "MACD"}
     assert scenario.entry_low <= scenario.entry_high
     assert scenario.stop < scenario.entry_low
-    assert "15 DK FIRSAT RADARI" in format_trade_scenario_report(result)
+    assert "15 DK AKILLI FIRSAT RADARI" in format_trade_scenario_report(result)
+    assert "UYUMLU" in format_trade_scenario_report(result)
 
 
 def test_opportunity_scan_accepts_hourly_ten_indicator_mode() -> None:

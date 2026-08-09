@@ -194,6 +194,7 @@ class Settings(BaseSettings):
     trade_scenario_scan_enabled: bool = Field(default=True)
     trade_scenario_scan_minutes: int = Field(default=15, ge=15, le=60)
     trade_scenario_max_results: int = Field(default=6, ge=3, le=12)
+    trade_scenario_minimum_core_confirmations: int = Field(default=3, ge=3, le=5)
     market_opportunity_max_results: int = Field(default=8, ge=3, le=12)
     market_opportunity_minimum_confluence: int = Field(default=5, ge=3, le=10)
 

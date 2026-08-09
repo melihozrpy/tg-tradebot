@@ -102,6 +102,8 @@ class TradeScenario:
     direction: Literal["bullish", "bearish"]
     score: int
     confirmation_count: int
+    core_confirmation_count: int
+    core_checks: tuple[tuple[str, bool], ...]
     price: float
     entry_low: float
     entry_high: float
@@ -444,6 +446,35 @@ def _direction_for_state(state: SymbolTechnicalState) -> Literal["bullish", "bea
     return "bullish" if state.supertrend_direction == "up" else "bearish"
 
 
+def _core_trade_checks(
+    state: SymbolTechnicalState,
+    direction: Literal["bullish", "bearish"],
+) -> tuple[tuple[str, bool], ...]:
+    """Return the five indicators explicitly promised by the 15m radar.
+
+    ATR has no directional sign by itself, so it acts as a tradeability filter:
+    it must be large enough to make targets meaningful but not so large that a
+    normal intraday stop becomes disproportionately risky.
+    """
+
+    bullish = direction == "bullish"
+    ema_aligned = (
+        state.ema20 > state.ema50 > state.ema100
+        if bullish
+        else state.ema20 < state.ema50 < state.ema100
+    )
+    rsi_aligned = 50 <= state.rsi < 75 if bullish else 25 < state.rsi <= 50
+    atr_percent = state.atr / state.price * 100 if state.price else 0.0
+    atr_tradeable = 0.10 <= atr_percent <= 6.0
+    return (
+        ("VWAP", (state.price > state.vwap) == bullish),
+        ("EMA", ema_aligned),
+        ("RSI", rsi_aligned),
+        ("ATR", atr_tradeable),
+        ("MACD", (state.macd_histogram > 0) == bullish),
+    )
+
+
 def _scenario_reasons(state: SymbolTechnicalState, direction: Literal["bullish", "bearish"]) -> tuple[str, ...]:
     bullish = direction == "bullish"
     reasons: list[str] = []
@@ -466,7 +497,11 @@ def _scenario_reasons(state: SymbolTechnicalState, direction: Literal["bullish",
     return tuple(reasons)
 
 
-def build_trade_scenario(state: SymbolTechnicalState) -> TradeScenario | None:
+def build_trade_scenario(
+    state: SymbolTechnicalState,
+    *,
+    minimum_core_confirmations: int = 3,
+) -> TradeScenario | None:
     """Build a retest-first plan from a technically qualified state.
 
     The current price is used only to decide whether the retest zone is close.
@@ -477,6 +512,11 @@ def build_trade_scenario(state: SymbolTechnicalState) -> TradeScenario | None:
     if direction is None or not state.atr or state.atr <= 0:
         return None
     bullish = direction == "bullish"
+    core_checks = _core_trade_checks(state, direction)
+    core_confirmation_count = sum(is_confirmed for _, is_confirmed in core_checks)
+    minimum_core_confirmations = max(3, min(5, int(minimum_core_confirmations)))
+    if core_confirmation_count < minimum_core_confirmations:
+        return None
     confirmation_count = state.bullish_confluence if bullish else state.bearish_confluence
     zone_basis = (state.ema20, state.vwap)
     zone_padding = max(state.atr * 0.08, state.price * 0.0005)
@@ -507,7 +547,13 @@ def build_trade_scenario(state: SymbolTechnicalState) -> TradeScenario | None:
     rr = abs(tp1 - entry) / risk if risk > 0 else 0.0
     score = min(
         99,
-        round(35 + confirmation_count * 9 + min(state.adx, 35) + min(state.relative_volume * 4, 10)),
+        round(
+            22
+            + core_confirmation_count * 10
+            + confirmation_count * 5
+            + min(state.adx, 30)
+            + min(state.relative_volume * 3, 8)
+        ),
     )
     return TradeScenario(
         symbol=state.symbol,
@@ -515,6 +561,8 @@ def build_trade_scenario(state: SymbolTechnicalState) -> TradeScenario | None:
         direction=direction,
         score=score,
         confirmation_count=confirmation_count,
+        core_confirmation_count=core_confirmation_count,
+        core_checks=core_checks,
         price=state.price,
         entry_low=entry_low,
         entry_high=entry_high,
@@ -534,7 +582,7 @@ def run_intraday_trade_scenario_scan(
     provider_factory: Callable[[], BaseMarketDataProvider],
     settings,
 ) -> TradeScenarioRunResult:
-    """Scan the universe every 15 minutes and keep only 3+ confluence setups."""
+    """Scan the configured BIST universe and keep 3-of-5 core matches only."""
 
     limited = list(symbols)[: settings.technical_screener_max_symbols_per_run]
     states, failed = _fetch_states(
@@ -544,7 +592,18 @@ def run_intraday_trade_scenario_scan(
         timeframe="15m",
         settings=settings,
     )
-    scenarios = [scenario for state in states if (scenario := build_trade_scenario(state)) is not None]
+    minimum_core = max(3, min(5, int(getattr(settings, "trade_scenario_minimum_core_confirmations", 3))))
+    scenarios = [
+        scenario
+        for state in states
+        if (
+            scenario := build_trade_scenario(
+                state,
+                minimum_core_confirmations=minimum_core,
+            )
+        )
+        is not None
+    ]
     action_priority = {"AL": 0, "SAT": 1, "BEKLE": 2}
     scenarios.sort(key=lambda item: (action_priority[item.action], -item.score, item.symbol))
     maximum = max(3, min(12, int(getattr(settings, "trade_scenario_max_results", 6))))
@@ -728,15 +787,16 @@ def format_trade_scenario_report(
 
     local = report.created_at.astimezone(ZoneInfo(timezone_name))
     lines = [
-        "┏━━ 📡 15 DK FIRSAT RADARI ━━┓",
+        "┏━━ ✨ 15 DK AKILLI FIRSAT RADARI ━━┓",
         f"🕒 {local:%H:%M}  •  {report.scanned} hisse tarandı  •  {report.failed} atlandı",
-        "🧩 Yalnızca en az 3 bağımsız teyitli, retest-bazlı senaryolar seçildi.",
+        "🧩 VWAP • EMA • RSI • ATR • MACD içinde en az 3/5 aynı yön teyidi gerekir.",
+        "📌 Giriş yalnız retest bölgesinden; güncel fiyattan otomatik giriş yoktur.",
     ]
     if not report.scenarios:
         lines.extend(
             [
                 "",
-                "🟡 Şu an 3+ teyitli temiz bir senaryo yok.",
+                "🟡 Şu an çekirdek 5 göstergede 3/5 uyumlu temiz bir senaryo yok.",
                 "⏳ Zorla işlem yok: sonraki 15dk mum kapanışı bekleniyor.",
             ]
         )
@@ -752,15 +812,19 @@ def format_trade_scenario_report(
     for scenario in report.scenarios:
         direction_name = "yukarı" if scenario.direction == "bullish" else "aşağı"
         reasons = " • ".join(scenario.reasons[:4]) or "Teknik teyitler izleniyor"
+        core = " • ".join(
+            f"{name} {'✅' if is_confirmed else '▫️'}" for name, is_confirmed in scenario.core_checks
+        )
         lines.extend(
             [
                 "",
-                f"{action_icon[scenario.action]} {action_title[scenario.action]} · {scenario.symbol}  |  {scenario.score}/100",
-                f"🎯 Beklenen giriş: {_format_price(scenario.entry_low)}–{_format_price(scenario.entry_high)}",
-                f"🛑 Geçersizlik: {_format_price(scenario.stop)}  |  🎯 Hedef: {_format_price(scenario.tp1)} / {_format_price(scenario.tp2)}",
-                f"⚖️ RR 1:{scenario.rr:.1f}  •  ATR %{scenario.atr_percent:.1f}  •  {scenario.confirmation_count} teyit",
+                f"{action_icon[scenario.action]} {action_title[scenario.action]} · {scenario.symbol}  |  GÜVEN {scenario.score}/100",
+                f"🧩 {scenario.core_confirmation_count}/5 UYUMLU: {core}",
+                f"📍 Fiyat: {_format_price(scenario.price)}  →  Giriş bölgesi: {_format_price(scenario.entry_low)}–{_format_price(scenario.entry_high)}",
+                f"🛑 Stop: {_format_price(scenario.stop)}  |  🎯 TP1: {_format_price(scenario.tp1)}  •  TP2: {_format_price(scenario.tp2)}",
+                f"⚖️ RR 1:{scenario.rr:.1f}  •  ATR %{scenario.atr_percent:.1f}  •  Ek teyit: {scenario.confirmation_count}",
                 f"✅ {reason_label[scenario.action]} ({direction_name}): {reasons}",
-                f"⏳ Teyit: {scenario.confirmation_instruction}",
+                f"⏳ İşlem teyidi: {scenario.confirmation_instruction}",
             ]
         )
     lines.extend(

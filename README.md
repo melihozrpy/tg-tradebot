@@ -229,6 +229,7 @@ python run_bot.py
 | `TRADE_SCENARIO_SCAN_ENABLED` | 3+ teyitli, retest-bazlı 15dk AL/SAT/BEKLE radarını açar | `true` |
 | `TRADE_SCENARIO_SCAN_MINUTES` | Fırsat radarı aralığı (15-60 dakika) | `15` |
 | `TRADE_SCENARIO_MAX_RESULTS` | Bir kartta gösterilecek seçilmiş senaryo sayısı | `6` |
+| `TRADE_SCENARIO_MINIMUM_CORE_CONFIRMATIONS` | VWAP/EMA/RSI/ATR/MACD içinden gereken aynı yön teyidi | `3` |
 | `MARKET_OPPORTUNITY_MAX_RESULTS` | `/firsatlar` bölüm başına en fazla aday sayısı | `8` |
 | `MARKET_OPPORTUNITY_MINIMUM_CONFLUENCE` | `/firsatlar 5dk\|1s\|4s` için 10 göstergeden gereken minimum teyit | `5` |
 | `NEWS_DIGEST_CACHE_MINUTES` | `/haber` sembol önbelleği | `15` |
