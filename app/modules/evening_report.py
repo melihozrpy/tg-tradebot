@@ -13,6 +13,8 @@ from sqlalchemy.orm import Session
 from app.analysis.smart_money_engine import SmartMoneyResult, detect_smart_money
 from app.models.database import MarketDailyReportLog
 from app.modules.chart_engine import NewsTimelineItem, ReportChartSpec
+from app.modules.report_news_impact import ReportNewsImpact, format_report_news_impact
+from app.modules.report_presentation import format_breadth_panel
 from app.modules.morning_report import EconomicCalendarEvent, fetch_economic_calendar
 from app.services.market_breadth_service import MarketBreadthResult
 
@@ -50,6 +52,7 @@ class EveningReport:
     consistency_percent: float | None
     failures: tuple[tuple[str, str], ...] = ()
     breadth: MarketBreadthResult | None = None
+    news_impact: ReportNewsImpact | None = None
     index_symbol: str = "XU100"
 
     @property
@@ -226,6 +229,7 @@ def build_evening_report(
     now: datetime | None = None,
     calendar_events: Sequence[EconomicCalendarEvent] | None = None,
     breadth: MarketBreadthResult | None = None,
+    news_impact: ReportNewsImpact | None = None,
 ) -> EveningReport:
     generated_at = now or datetime.now(timezone.utc)
     events = list(calendar_events) if calendar_events is not None else fetch_economic_calendar(
@@ -292,6 +296,7 @@ def build_evening_report(
         consistency_percent=consistency,
         failures=tuple(failures),
         breadth=breadth,
+        news_impact=news_impact,
         index_symbol=index_symbol,
     )
     if db is not None:
@@ -339,32 +344,13 @@ def format_evening_report(report: EveningReport) -> str:
         f"• Açılış/Yüksek/Düşük/Kapanış: {item.open:.2f} / {item.high:.2f} / {item.low:.2f} / {item.close:.2f}",
         f"• Gerçekleşen yön: {item.comparison.realised.upper()}",
         f"• Sabah karşılaştırması: {item.comparison.note}",
-        f"🧠 Olası etki: {item.probable_effect_analysis}",
     ]
     breadth = report.breadth
     if breadth and breadth.available:
-        lines.extend(
-            [
-                "",
-                "🌐 571 HİSSE • KAPANIŞIN İÇ YAPISI",
-                f"• Kapsam: {breadth.scanned}/{breadth.universe_size} (%{breadth.coverage_ratio:.1f}) • Eksik {breadth.failed}",
-                f"• Piyasa puanı: {breadth.breadth_score}/100 • {breadth.regime}",
-                f"• Yükselen/Düşen/Yatay: {breadth.advancers}/{breadth.decliners}/{breadth.unchanged}",
-                f"• Net genişlik {breadth.net_breadth:+d} • Y/D oranı {breadth.advance_decline_ratio:.2f}",
-                f"• Ortalama/medyan değişim: %{breadth.average_change_percent:+.2f} / %{breadth.median_change_percent:+.2f}",
-                f"• EMA20/50/200 üstü: %{breadth.above_ema20_ratio:.1f} / %{breadth.above_ema50_ratio:.1f} / "
-                + (f"%{breadth.above_ema200_ratio:.1f}" if breadth.above_ema200_ratio is not None else "veri yetersiz"),
-                f"• Yeni 20g zirve/dip: {breadth.new_20d_highs}/{breadth.new_20d_lows} • Hacim artışı %{breadth.rising_volume_ratio:.1f}",
-                f"• LONG {breadth.long_count} • SHORT/RİSK {breadth.short_count} • NÖTR {breadth.neutral_count}",
-                f"🔮 Yarın için koşullu çerçeve: {breadth.tomorrow_bias}",
-            ]
-        )
-        if breadth.long_candidates:
-            lines.append("🟢 Long izleme: " + ", ".join(f"{x.symbol}({x.score}, %{x.change_percent:+.1f})" for x in breadth.long_candidates[:8]))
-        if breadth.short_candidates:
-            lines.append("🔴 Short/risk: " + ", ".join(f"{x.symbol}({x.score}, %{x.change_percent:+.1f})" for x in breadth.short_candidates[:8]))
+        lines.extend(format_breadth_panel(breadth, report_kind="evening"))
     elif breadth is not None:
-        lines.extend(["", f"⚠️ 571 hisse taraması doğrulanamadı: {breadth.note}"])
+        lines.extend(["", "🌐 BIST genişlik paneli bu raporda üretilemedi."])
+    lines.extend(format_report_news_impact(report.news_impact, timezone_name="Europe/Istanbul"))
     important = [event for event in report.calendar_events if event.impact in {"high", "medium"}]
     lines.extend(["", "📰 GÜN İÇİ HABER / VERİ ZAMAN ÇİZELGESİ"])
     if not important:
@@ -375,10 +361,4 @@ def format_evening_report(report: EveningReport) -> str:
         lines.append(
             f"• {stamp} {event.country} {event.title} • Açıklanan {actual} / Beklenti {event.forecast or '-'} / Önceki {event.previous or '-'}"
         )
-    if report.failures:
-        lines.append(f"\n⚠️ Veri alınamayan: {len(report.failures)} sembol")
-    lines.append(
-        "\nℹ️ Yarın yönü kesin tahmin değildir: XU100 + 571 hisse genişliği kapanmış barlara dayanır. "
-        "Açılış boşluğu, ilk 15–30 dakika yapısı ve haber akışı yönü değiştirebilir; SHORT etiketi spot emir değildir."
-    )
     return "\n".join(lines)[:4096]

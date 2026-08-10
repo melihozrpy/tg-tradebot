@@ -334,6 +334,7 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
             from app.data.provider_factory import build_market_data_provider
             from app.models.database import get_session_factory
             from app.modules.chart_engine import render_report_chart
+            from app.modules.report_news_impact import build_report_news_impact
             from app.services.market_breadth_service import compute_market_breadth
 
             db = get_session_factory()()
@@ -350,6 +351,7 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
                     top_n=12,
                     cache_minutes=settings.universe_scan_cache_minutes,
                 )
+                news_impact = build_report_news_impact(settings, breadth)
                 if kind == "morning":
                     from app.modules.morning_report import (
                         build_morning_chart_spec,
@@ -358,7 +360,7 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
                     )
 
                     report = build_morning_report(
-                        provider, settings, instruments, db=db, breadth=breadth
+                        provider, settings, instruments, db=db, breadth=breadth, news_impact=news_impact
                     )
                     primary = report.index_analysis
                     spec = build_morning_chart_spec(report, primary.symbol)
@@ -372,7 +374,7 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
                     )
 
                     report = build_evening_report(
-                        provider, settings, instruments, db=db, breadth=breadth
+                        provider, settings, instruments, db=db, breadth=breadth, news_impact=news_impact
                     )
                     primary = report.index_analysis
                     spec = build_evening_chart_spec(report, primary.symbol)
@@ -513,9 +515,8 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
         )
         logger.info("Gun ici otomatik anomali taramasi hazirlandi (Pzt-Cuma 10:00-18:00, 30dk).")
 
-    # Every 15 minutes, a compact card contains only setups with at least
-    # three independent confirmations.  RSI is a component of this score,
-    # never a stand-alone notification trigger.
+    # The compact card is sent only for setups that pass a full ten-indicator
+    # confluence gate. RSI remains an input, never a stand-alone alert.
     if getattr(settings, "trade_scenario_scan_enabled", True):
         async def _trade_scenario_scan_job() -> None:
             def _scan():
@@ -532,7 +533,7 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
             try:
                 result = await asyncio.to_thread(_scan)
                 logger.info(
-                    "15dk firsat radari tamamlandi scanned=%s failed=%s selected=%s",
+                    "Coklu-gosterge firsat radari tamamlandi scanned=%s failed=%s selected=%s",
                     result.scanned,
                     result.failed,
                     len(result.scenarios),
@@ -557,26 +558,35 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
                     try:
                         await application.bot.send_message(chat_id=chat_id, text=text)
                     except Exception as exc:  # noqa: BLE001 - one recipient cannot stop the scheduler
-                        logger.warning("15dk firsat karti gonderilemedi chat=%s: %s", chat_id, exc)
+                        logger.warning("Firsat radari karti gonderilemedi chat=%s: %s", chat_id, exc)
             except Exception as exc:  # noqa: BLE001 - scheduled jobs must survive
-                logger.exception("15dk firsat radari hata verdi: %s", exc)
-                await _notify_report_error("15dk fırsat radarı", exc)
+                logger.exception("Firsat radari hata verdi: %s", exc)
+                await _notify_report_error("10 göstergeli fırsat radarı", exc)
 
-        scenario_step = max(15, min(60, int(getattr(settings, "trade_scenario_scan_minutes", 15))))
-        scheduler.add_job(
-            _trade_scenario_scan_job,
-            CronTrigger(
+        scenario_step = max(15, min(240, int(getattr(settings, "trade_scenario_scan_minutes", 180))))
+        if scenario_step >= 60 and scenario_step % 60 == 0:
+            scenario_trigger = CronTrigger(
+                day_of_week="mon-fri",
+                hour=f"10-18/{scenario_step // 60}",
+                minute=0,
+                timezone="Europe/Istanbul",
+            )
+        else:
+            scenario_trigger = CronTrigger(
                 day_of_week="mon-fri",
                 hour="10-18",
                 minute=f"*/{scenario_step}",
                 timezone="Europe/Istanbul",
-            ),
+            )
+        scheduler.add_job(
+            _trade_scenario_scan_job,
+            scenario_trigger,
             id="full_universe_trade_scenario_scan",
             coalesce=True,
             max_instances=1,
             replace_existing=True,
         )
-        logger.info("15dk 3+ teyitli firsat radari %s dakikada bir hazirlandi.", scenario_step)
+        logger.info("10 gostergeli firsat radari %s dakikada bir hazirlandi.", scenario_step)
 
     # Saat baslarinda, gunluk grafikte teknik olarak uyumlu ve temel verisi
     # dogrulanmis en fazla bes LONG adayi gonderilir.  Bir saat icinde ayni

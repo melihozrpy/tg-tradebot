@@ -29,6 +29,7 @@ from app.modules.morning_report import (
     build_morning_report,
     format_morning_report,
 )
+from app.modules.report_news_impact import build_report_news_impact
 from app.services.instrument_universe_service import (
     load_scan_cache,
     save_scan_cache,
@@ -197,7 +198,14 @@ def _run_morning(settings):
             top_n=12,
             cache_minutes=settings.universe_scan_cache_minutes,
         )
-        return build_morning_report(provider, settings, instruments, db=db, breadth=breadth)
+        return build_morning_report(
+            provider,
+            settings,
+            instruments,
+            db=db,
+            breadth=breadth,
+            news_impact=build_report_news_impact(settings, breadth),
+        )
     finally:
         db.close()
 
@@ -217,7 +225,14 @@ def _run_evening(settings):
             top_n=12,
             cache_minutes=settings.universe_scan_cache_minutes,
         )
-        return build_evening_report(provider, settings, instruments, db=db, breadth=breadth)
+        return build_evening_report(
+            provider,
+            settings,
+            instruments,
+            db=db,
+            breadth=breadth,
+            news_impact=build_report_news_impact(settings, breadth),
+        )
     finally:
         db.close()
 

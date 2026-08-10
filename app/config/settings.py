@@ -189,12 +189,13 @@ class Settings(BaseSettings):
     intraday_vwap_scan_enabled: bool = Field(default=True)
     intraday_vwap_scan_minute_step: int = Field(default=30, ge=15, le=60)
 
-    # ---- 15 minute confluence scenario radar ----
+    # ---- Çoklu gösterge fırsat radarı ----
     # RSI remains an input only; it never generates a stand-alone notification.
     trade_scenario_scan_enabled: bool = Field(default=True)
-    trade_scenario_scan_minutes: int = Field(default=15, ge=15, le=60)
-    trade_scenario_max_results: int = Field(default=6, ge=3, le=12)
+    trade_scenario_scan_minutes: int = Field(default=180, ge=15, le=240)
+    trade_scenario_max_results: int = Field(default=5, ge=3, le=12)
     trade_scenario_minimum_core_confirmations: int = Field(default=3, ge=3, le=5)
+    trade_scenario_minimum_ten_confirmations: int = Field(default=7, ge=3, le=10)
     # ---- Saatlik günlük ilk 5 teknik + temel doğrulama listesi ----
     daily_top_picks_enabled: bool = Field(default=True)
     daily_top_picks_max_results: int = Field(default=5, ge=1, le=10)
@@ -231,6 +232,9 @@ class Settings(BaseSettings):
     evening_market_report_time: str = Field(default="21:00")
     report_chart_output_dir: str = Field(default="/tmp/mergen_quant_reports")
     report_max_news_events: int = Field(default=8, ge=0, le=50)
+    # KAP sağlayıcısı sembol bazlıysa, raporu rate-limit'e sokmamak için yalnız
+    # teknik olarak önceliklendirilmiş kısa liste kontrol edilir.
+    report_kap_symbol_limit: int = Field(default=20, ge=4, le=40)
     economic_calendar_enabled: bool = Field(default=True)
     economic_calendar_url: str = Field(default="https://tr.investing.com/economic-calendar/")
     economic_calendar_timeout_seconds: float = Field(default=15.0, gt=0, le=120)

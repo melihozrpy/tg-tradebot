@@ -58,6 +58,8 @@ def _settings() -> SimpleNamespace:
         technical_screener_max_symbols_per_run=1000,
         trade_scenario_max_results=6,
         trade_scenario_minimum_core_confirmations=3,
+        trade_scenario_minimum_ten_confirmations=7,
+        trade_scenario_scan_minutes=180,
         market_opportunity_max_results=8,
         market_opportunity_minimum_confluence=5,
     )
@@ -109,11 +111,13 @@ def test_intraday_scenario_requires_confluence_and_uses_retest_entry() -> None:
     scenario = result.scenarios[0]
     assert scenario.confirmation_count >= 3
     assert scenario.core_confirmation_count >= 3
+    assert scenario.ten_confirmation_count >= 7
     assert len(scenario.core_checks) == 5
     assert {name for name, _ in scenario.core_checks} == {"VWAP", "EMA", "RSI", "ATR", "MACD"}
     assert scenario.entry_low <= scenario.entry_high
     assert scenario.stop < scenario.entry_low
-    assert "15 DK AKILLI FIRSAT RADARI" in format_trade_scenario_report(result)
+    assert "3 SAATLİK 10 İNDİKATÖRLÜ FIRSAT RADARI" in format_trade_scenario_report(result)
+    assert "10 GÖSTERGE" in format_trade_scenario_report(result)
     assert "UYUMLU" in format_trade_scenario_report(result)
 
 
@@ -262,7 +266,7 @@ def test_new_scanner_jobs_use_istanbul_market_hours() -> None:
         intraday_vwap_scan_enabled=True,
         intraday_vwap_scan_minute_step=30,
         trade_scenario_scan_enabled=True,
-        trade_scenario_scan_minutes=15,
+        trade_scenario_scan_minutes=180,
         trade_scenario_max_results=6,
         daily_top_picks_enabled=True,
         user_price_alerts_enabled=False,
@@ -278,3 +282,5 @@ def test_new_scanner_jobs_use_istanbul_market_hours() -> None:
     assert scheduler.get_job("full_universe_vwap_volume_profile_scan") is None
     assert str(scenario_job.trigger.timezone) == "Europe/Istanbul"
     assert str(daily_job.trigger.timezone) == "Europe/Istanbul"
+    assert str(scenario_job.trigger.fields[5]) == "10-18/3"
+    assert str(scenario_job.trigger.fields[6]) == "0"

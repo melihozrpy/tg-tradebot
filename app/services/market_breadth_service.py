@@ -11,6 +11,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable, Optional
 
+import pandas as pd
+
 from app.analysis.indicator_engine import ema
 from app.data.base_provider import BaseMarketDataProvider, DataUnavailableError
 
@@ -24,6 +26,9 @@ class BreadthCandidate:
     last_close: float
     relative_volume: float
     reasons: tuple[str, ...]
+    confirmation_level: float | None = None
+    technical_target: float | None = None
+    target_basis: str = ""
 
 
 @dataclass
@@ -75,6 +80,9 @@ class _Snapshot:
     momentum20: float
     new_high: bool
     new_low: bool
+    prior_high: float
+    prior_low: float
+    atr14: float
     long_score: int
     short_score: int
     long_reasons: tuple[str, ...]
@@ -147,8 +155,19 @@ def _score_snapshot(symbol: str, frame) -> _Snapshot:
         above200 = last > ema200_value
 
     prior_window = frame.iloc[-21:-1]
-    new_high = last >= _finite(prior_window["high"].max())
-    new_low = last <= _finite(prior_window["low"].min())
+    prior_high = _finite(prior_window["high"].max())
+    prior_low = _finite(prior_window["low"].min())
+    new_high = last >= prior_high
+    new_low = last <= prior_low
+    true_range = pd.concat(
+        [
+            (frame["high"].astype(float) - frame["low"].astype(float)).abs(),
+            (frame["high"].astype(float) - close.shift(1)).abs(),
+            (frame["low"].astype(float) - close.shift(1)).abs(),
+        ],
+        axis=1,
+    ).max(axis=1)
+    atr14 = _finite(true_range.ewm(alpha=1 / 14, min_periods=14, adjust=False).mean().iloc[-1])
     momentum20 = (last / _finite(close.iloc[-21]) - 1.0) * 100.0
     previous_volume = _finite(frame["volume"].astype(float).iloc[-21:-1].mean())
     current_volume = max(0.0, _finite(frame["volume"].iloc[-1]))
@@ -221,6 +240,9 @@ def _score_snapshot(symbol: str, frame) -> _Snapshot:
         momentum20=round(momentum20, 3),
         new_high=new_high,
         new_low=new_low,
+        prior_high=round(prior_high, 4),
+        prior_low=round(prior_low, 4),
+        atr14=round(atr14, 4),
         long_score=min(100, long_score),
         short_score=min(100, short_score),
         long_reasons=tuple(long_reasons),
@@ -230,6 +252,23 @@ def _score_snapshot(symbol: str, frame) -> _Snapshot:
 
 def _candidate(snapshot: _Snapshot, direction: str) -> BreadthCandidate:
     is_long = direction == "LONG"
+    # A report target must come from an observed opposing swing first.  When a
+    # stock has already closed beyond that swing, label the ATR extension
+    # explicitly instead of disguising a projection as a historical level.
+    if is_long:
+        confirmation_level = snapshot.prior_high
+        if snapshot.prior_high > snapshot.close:
+            technical_target, target_basis = snapshot.prior_high, "önceki 20g direnç"
+        else:
+            technical_target = snapshot.close + snapshot.atr14 * 1.5
+            target_basis = "1.5× ATR uzama bandı"
+    else:
+        confirmation_level = snapshot.prior_low
+        if 0 < snapshot.prior_low < snapshot.close:
+            technical_target, target_basis = snapshot.prior_low, "önceki 20g destek"
+        else:
+            technical_target = max(0.0, snapshot.close - snapshot.atr14 * 1.5)
+            target_basis = "1.5× ATR aşağı uzama bandı"
     return BreadthCandidate(
         symbol=snapshot.symbol,
         direction=direction,
@@ -238,6 +277,9 @@ def _candidate(snapshot: _Snapshot, direction: str) -> BreadthCandidate:
         last_close=snapshot.close,
         relative_volume=snapshot.relative_volume,
         reasons=(snapshot.long_reasons if is_long else snapshot.short_reasons)[:4],
+        confirmation_level=round(confirmation_level, 4) if confirmation_level > 0 else None,
+        technical_target=round(technical_target, 4) if technical_target > 0 else None,
+        target_basis=target_basis,
     )
 
 

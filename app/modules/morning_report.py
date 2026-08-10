@@ -18,6 +18,8 @@ from app.analysis.smart_money_engine import SmartMoneyResult, detect_smart_money
 from app.analysis.quality_zone_engine import format_quality_zone_scenario
 from app.models.database import MarketDailyReportLog, NewsArticle, NewsEvent
 from app.modules.chart_engine import ChecklistVisual, ReportChartSpec
+from app.modules.report_news_impact import ReportNewsImpact, format_report_news_impact
+from app.modules.report_presentation import format_breadth_panel
 from app.services.market_breadth_service import MarketBreadthResult
 
 logger = logging.getLogger("mergen_quant.modules.morning_report")
@@ -87,6 +89,7 @@ class MorningReport:
     calendar_events: tuple[EconomicCalendarEvent, ...]
     failures: tuple[tuple[str, str], ...] = ()
     breadth: MarketBreadthResult | None = None
+    news_impact: ReportNewsImpact | None = None
     index_symbol: str = "XU100"
 
     @property
@@ -570,6 +573,7 @@ def build_morning_report(
     now: datetime | None = None,
     calendar_events: Sequence[EconomicCalendarEvent] | None = None,
     breadth: MarketBreadthResult | None = None,
+    news_impact: ReportNewsImpact | None = None,
 ) -> MorningReport:
     generated_at = now or datetime.now(timezone.utc)
     events = list(calendar_events) if calendar_events is not None else fetch_economic_calendar(
@@ -629,6 +633,7 @@ def build_morning_report(
         calendar_events=tuple(events),
         failures=tuple(failures),
         breadth=breadth,
+        news_impact=news_impact,
         index_symbol=primary_symbol,
     )
     if db is not None:
@@ -722,25 +727,10 @@ def format_morning_report(report: MorningReport) -> str:
         )
     breadth = report.breadth
     if breadth and breadth.available:
-        lines.extend(
-            [
-                "",
-                "🌐 571 HİSSE • PİYASA İÇ YAPISI",
-                f"• Kapsam: {breadth.scanned}/{breadth.universe_size} (%{breadth.coverage_ratio:.1f})",
-                f"• Puan: {breadth.breadth_score}/100 • {breadth.regime}",
-                f"• Yükselen/Düşen/Yatay: {breadth.advancers}/{breadth.decliners}/{breadth.unchanged}",
-                f"• EMA20/50/200 üstü: %{breadth.above_ema20_ratio:.1f} / %{breadth.above_ema50_ratio:.1f} / "
-                + (f"%{breadth.above_ema200_ratio:.1f}" if breadth.above_ema200_ratio is not None else "veri yetersiz"),
-                f"• Long {breadth.long_count} • Short/Risk {breadth.short_count} • Nötr {breadth.neutral_count}",
-                f"🔮 Açılış çerçevesi: {breadth.tomorrow_bias}",
-            ]
-        )
-        if breadth.long_candidates:
-            lines.append("🟢 Güçlü long izleme: " + ", ".join(f"{x.symbol}({x.score})" for x in breadth.long_candidates[:6]))
-        if breadth.short_candidates:
-            lines.append("🔴 Zayıf/short-risk: " + ", ".join(f"{x.symbol}({x.score})" for x in breadth.short_candidates[:6]))
+        lines.extend(format_breadth_panel(breadth, report_kind="morning"))
     elif breadth is not None:
-        lines.extend(["", f"⚠️ 571 hisse taraması doğrulanamadı: {breadth.note}"])
+        lines.extend(["", "🌐 BIST genişlik paneli bu raporda üretilemedi."])
+    lines.extend(format_report_news_impact(report.news_impact, timezone_name="Europe/Istanbul"))
     lines.extend(["", "🗓️ BUGÜNÜN ÖNEMLİ TAKVİMİ"])
     important = [event for event in report.calendar_events if event.impact in {"high", "medium"}]
     if not important:
@@ -752,10 +742,4 @@ def format_morning_report(report: MorningReport) -> str:
         lines.append(f"{icon} {stamp} {event.country} • {event.title}\n   Etki: {affected}")
         if event.probable_effect:
             lines.append(f"   🧠 {event.probable_effect[:240]}")
-    if report.failures:
-        lines.append(f"\n⚠️ Veri alınamayan: {len(report.failures)} sembol (/veri_durumu ile kontrol et)")
-    lines.append(
-        "\nℹ️ Yön tahmini; XU100 kapanışı, 571 hisse genişliği ve doğrulanmış teknik kanıtların koşullu birleşimidir. "
-        "Açılış boşluğu ve ilk 15–30 dakikalık teyit görülmeden işlem sinyali sayılmaz; yatırım tavsiyesi değildir."
-    )
     return "\n".join(lines)[:4096]

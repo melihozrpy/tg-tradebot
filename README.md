@@ -226,10 +226,12 @@ python run_bot.py
 | `TECHNICAL_SCREENER_CHAT_ID` | Teknik alarmların gideceği kanal/grup ID; boşsa adminler | boş |
 | `RSI_OVERBOUGHT` / `RSI_OVERSOLD` | RSI ekstrem eşikleri | `75` / `25` |
 | `INTRADAY_VWAP_SCAN_ENABLED` | Piyasa saatlerinde VWAP/POC toplu raporu | `true` |
-| `TRADE_SCENARIO_SCAN_ENABLED` | 3+ teyitli, retest-bazlı 15dk AL/SAT/BEKLE radarını açar | `true` |
-| `TRADE_SCENARIO_SCAN_MINUTES` | Fırsat radarı aralığı (15-60 dakika) | `15` |
-| `TRADE_SCENARIO_MAX_RESULTS` | Bir kartta gösterilecek seçilmiş senaryo sayısı | `6` |
+| `TRADE_SCENARIO_SCAN_ENABLED` | 10 gösterge + çekirdek teyit filtresinden geçen, retest-bazlı AL/SAT/BEKLE radarını açar | `true` |
+| `TRADE_SCENARIO_SCAN_MINUTES` | Fırsat radarı aralığı (15-240 dakika); varsayılan 3 saattir | `180` |
+| `TRADE_SCENARIO_MAX_RESULTS` | Her radarda gönderilecek en fazla kaliteli aday | `5` |
+| `TRADE_SCENARIO_MINIMUM_TEN_CONFIRMATIONS` | VWAP, AVWAP, EMA, Supertrend, RSI, MACD, ADX, Bollinger, OBV ve VP/POC içinden gereken aynı-yön teyidi | `7` |
 | `TRADE_SCENARIO_MINIMUM_CORE_CONFIRMATIONS` | VWAP/EMA/RSI/ATR/MACD içinden gereken aynı yön teyidi | `3` |
+| `REPORT_KAP_SYMBOL_LIMIT` | Sabah/akşamda KAP etkisi için kontrol edilecek teknik öncelikli sembol sayısı | `20` |
 | `DAILY_TOP_PICKS_ENABLED` | Her saat başı günlük İlk 5 LONG radarını açar (10:00–17:00 İstanbul) | `true` |
 | `DAILY_TOP_PICKS_MAX_RESULTS` | Saatlik karttaki en fazla aday sayısı | `5` |
 | `DAILY_TOP_PICKS_MINIMUM_CONFIRMATIONS` | Günlük teknik filtreden gereken teyit sayısı (8 üzerinden) | `6` |

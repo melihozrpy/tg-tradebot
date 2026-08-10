@@ -59,6 +59,8 @@ class SymbolTechnicalState:
     resistance: float | None
     timestamp: datetime | pd.Timestamp
     patterns: tuple[ChartPattern, ...]
+    bullish_ten_confirmation_labels: tuple[str, ...] = ()
+    bearish_ten_confirmation_labels: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -106,6 +108,8 @@ class TradeScenario:
     confirmation_count: int
     core_confirmation_count: int
     core_checks: tuple[tuple[str, bool], ...]
+    ten_confirmation_count: int
+    ten_confirmation_labels: tuple[str, ...]
     price: float
     entry_low: float
     entry_high: float
@@ -125,6 +129,7 @@ class TradeScenarioRunResult:
     failed: int
     scenarios: tuple[TradeScenario, ...]
     created_at: datetime
+    interval_minutes: int = 15
 
 
 @dataclass(frozen=True)
@@ -250,6 +255,8 @@ def analyze_symbol_frame(
         resistance=resistance,
         timestamp=last["timestamp"],
         patterns=patterns,
+        bullish_ten_confirmation_labels=tuple(bullish_ten.confirmations),
+        bearish_ten_confirmation_labels=tuple(bearish_ten.confirmations),
     )
 
 
@@ -560,6 +567,7 @@ def build_trade_scenario(
     state: SymbolTechnicalState,
     *,
     minimum_core_confirmations: int = 3,
+    minimum_ten_confirmations: int = 7,
 ) -> TradeScenario | None:
     """Build a retest-first plan from a technically qualified state.
 
@@ -573,9 +581,17 @@ def build_trade_scenario(
     bullish = direction == "bullish"
     core_checks = _core_trade_checks(state, direction)
     core_confirmation_count = sum(is_confirmed for _, is_confirmed in core_checks)
+    ten_confirmation_count = state.bullish_ten_confluence if bullish else state.bearish_ten_confluence
+    ten_confirmation_labels = (
+        state.bullish_ten_confirmation_labels if bullish else state.bearish_ten_confirmation_labels
+    )
     confirmed_patterns = _matching_confirmed_patterns(state, direction)
     minimum_core_confirmations = max(3, min(5, int(minimum_core_confirmations)))
-    if core_confirmation_count < minimum_core_confirmations:
+    minimum_ten_confirmations = max(3, min(10, int(minimum_ten_confirmations)))
+    if (
+        core_confirmation_count < minimum_core_confirmations
+        or ten_confirmation_count < minimum_ten_confirmations
+    ):
         return None
     confirmation_count = state.bullish_confluence if bullish else state.bearish_confluence
     zone_basis = (state.ema20, state.vwap)
@@ -610,6 +626,7 @@ def build_trade_scenario(
         round(
             22
             + core_confirmation_count * 10
+            + ten_confirmation_count * 4
             + confirmation_count * 5
             + min(8, max((pattern.confidence for pattern in confirmed_patterns), default=0) / 10)
             + min(state.adx, 30)
@@ -624,6 +641,8 @@ def build_trade_scenario(
         confirmation_count=confirmation_count,
         core_confirmation_count=core_confirmation_count,
         core_checks=core_checks,
+        ten_confirmation_count=ten_confirmation_count,
+        ten_confirmation_labels=ten_confirmation_labels,
         price=state.price,
         entry_low=entry_low,
         entry_high=entry_high,
@@ -644,7 +663,7 @@ def run_intraday_trade_scenario_scan(
     provider_factory: Callable[[], BaseMarketDataProvider],
     settings,
 ) -> TradeScenarioRunResult:
-    """Scan the configured BIST universe and keep 3-of-5 core matches only."""
+    """Scan the BIST universe using all ten indicators plus a five-core gate."""
 
     limited = list(symbols)[: settings.technical_screener_max_symbols_per_run]
     states, failed = _fetch_states(
@@ -655,6 +674,7 @@ def run_intraday_trade_scenario_scan(
         settings=settings,
     )
     minimum_core = max(3, min(5, int(getattr(settings, "trade_scenario_minimum_core_confirmations", 3))))
+    minimum_ten = max(3, min(10, int(getattr(settings, "trade_scenario_minimum_ten_confirmations", 7))))
     scenarios = [
         scenario
         for state in states
@@ -662,18 +682,20 @@ def run_intraday_trade_scenario_scan(
             scenario := build_trade_scenario(
                 state,
                 minimum_core_confirmations=minimum_core,
+                minimum_ten_confirmations=minimum_ten,
             )
         )
         is not None
     ]
     action_priority = {"AL": 0, "SAT": 1, "BEKLE": 2}
     scenarios.sort(key=lambda item: (action_priority[item.action], -item.score, item.symbol))
-    maximum = max(3, min(12, int(getattr(settings, "trade_scenario_max_results", 6))))
+    maximum = max(3, min(12, int(getattr(settings, "trade_scenario_max_results", 5))))
     return TradeScenarioRunResult(
         scanned=len(states),
         failed=failed,
         scenarios=tuple(scenarios[:maximum]),
         created_at=datetime.now(timezone.utc),
+        interval_minutes=max(15, min(240, int(getattr(settings, "trade_scenario_scan_minutes", 180)))),
     )
 
 
@@ -1028,18 +1050,24 @@ def format_trade_scenario_report(
     from zoneinfo import ZoneInfo
 
     local = report.created_at.astimezone(ZoneInfo(timezone_name))
+    interval_label = (
+        f"{report.interval_minutes // 60} SAATLİK"
+        if report.interval_minutes >= 60 and report.interval_minutes % 60 == 0
+        else f"{report.interval_minutes} DK"
+    )
     lines = [
-        "┏━━ ✨ 15 DK AKILLI FIRSAT RADARI ━━┓",
+        f"┏━━ ✨ {interval_label} 10 İNDİKATÖRLÜ FIRSAT RADARI ━━┓",
         f"🕒 {local:%H:%M}  •  {report.scanned} hisse tarandı  •  {report.failed} atlandı",
-        "🧩 VWAP • EMA • RSI • ATR • MACD içinde en az 3/5 aynı yön teyidi gerekir.",
+        "🧩 VWAP • Anchored VWAP • EMA • Supertrend • RSI • MACD • ADX • Bollinger • OBV • VP/POC",
+        "✅ Seçim: 10 göstergeden en az 7 aynı yön + 5 çekirdek göstergeden en az 3 teyit.",
         "📌 Giriş yalnız retest bölgesinden; güncel fiyattan otomatik giriş yoktur.",
     ]
     if not report.scenarios:
         lines.extend(
             [
                 "",
-                "🟡 Şu an çekirdek 5 göstergede 3/5 uyumlu temiz bir senaryo yok.",
-                "⏳ Zorla işlem yok: sonraki 15dk mum kapanışı bekleniyor.",
+                "🟡 Şu an 10 göstergeli kalite filtresini geçen temiz bir senaryo yok.",
+                "⏳ Zorla işlem yok: sonraki radar turu bekleniyor.",
             ]
         )
         return "\n".join(lines)
@@ -1061,6 +1089,8 @@ def format_trade_scenario_report(
             [
                 "",
                 f"{action_icon[scenario.action]} {action_title[scenario.action]} · {scenario.symbol}  |  GÜVEN {scenario.score}/100",
+                f"🏅 10 GÖSTERGE: {scenario.ten_confirmation_count}/10 • "
+                + (" • ".join(scenario.ten_confirmation_labels[:3]) or "Teyitler kaydedildi"),
                 f"🧩 {scenario.core_confirmation_count}/5 UYUMLU: {core}",
                 f"📍 Fiyat: {_format_price(scenario.price)}  →  Giriş bölgesi: {_format_price(scenario.entry_low)}–{_format_price(scenario.entry_high)}",
                 f"🛑 Stop: {_format_price(scenario.stop)}  |  🎯 TP1: {_format_price(scenario.tp1)}  •  TP2: {_format_price(scenario.tp2)}",
