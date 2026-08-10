@@ -674,7 +674,9 @@ def run_intraday_trade_scenario_scan(
         settings=settings,
     )
     minimum_core = max(3, min(5, int(getattr(settings, "trade_scenario_minimum_core_confirmations", 3))))
-    minimum_ten = max(3, min(10, int(getattr(settings, "trade_scenario_minimum_ten_confirmations", 7))))
+    # The automatic radar is intentionally stricter than manual exploration:
+    # at least 8 of the 10 independent inputs must agree before a card is sent.
+    minimum_ten = max(8, min(10, int(getattr(settings, "trade_scenario_minimum_ten_confirmations", 8))))
     scenarios = [
         scenario
         for state in states
@@ -689,13 +691,13 @@ def run_intraday_trade_scenario_scan(
     ]
     action_priority = {"AL": 0, "SAT": 1, "BEKLE": 2}
     scenarios.sort(key=lambda item: (action_priority[item.action], -item.score, item.symbol))
-    maximum = max(3, min(12, int(getattr(settings, "trade_scenario_max_results", 5))))
+    maximum = max(1, min(5, int(getattr(settings, "trade_scenario_max_results", 5))))
     return TradeScenarioRunResult(
         scanned=len(states),
         failed=failed,
         scenarios=tuple(scenarios[:maximum]),
         created_at=datetime.now(timezone.utc),
-        interval_minutes=max(15, min(240, int(getattr(settings, "trade_scenario_scan_minutes", 180)))),
+        interval_minutes=180,
     )
 
 
@@ -1059,7 +1061,7 @@ def format_trade_scenario_report(
         f"┏━━ ✨ {interval_label} 10 İNDİKATÖRLÜ FIRSAT RADARI ━━┓",
         f"🕒 {local:%H:%M}  •  {report.scanned} hisse tarandı  •  {report.failed} atlandı",
         "🧩 VWAP • Anchored VWAP • EMA • Supertrend • RSI • MACD • ADX • Bollinger • OBV • VP/POC",
-        "✅ Seçim: 10 göstergeden en az 7 aynı yön + 5 çekirdek göstergeden en az 3 teyit.",
+        "✅ 10 GÖSTERGE UYUMLU: en az 8 aynı yön + 5 çekirdek göstergeden en az 3 teyit.",
         "📌 Giriş yalnız retest bölgesinden; güncel fiyattan otomatik giriş yoktur.",
     ]
     if not report.scenarios:
@@ -1079,22 +1081,19 @@ def format_trade_scenario_report(
         "SAT": "Neden azaltma düşünülebilir",
         "BEKLE": "Neden beklenmeli",
     }
-    for scenario in report.scenarios:
+    for rank, scenario in enumerate(report.scenarios, start=1):
         direction_name = "yukarı" if scenario.direction == "bullish" else "aşağı"
+        direction_label = "LONG" if scenario.direction == "bullish" else "SHORT / KORUMA"
         reasons = " • ".join(scenario.reasons[:4]) or "Teknik teyitler izleniyor"
-        core = " • ".join(
-            f"{name} {'✅' if is_confirmed else '▫️'}" for name, is_confirmed in scenario.core_checks
-        )
         lines.extend(
             [
                 "",
-                f"{action_icon[scenario.action]} {action_title[scenario.action]} · {scenario.symbol}  |  GÜVEN {scenario.score}/100",
-                f"🏅 10 GÖSTERGE: {scenario.ten_confirmation_count}/10 • "
-                + (" • ".join(scenario.ten_confirmation_labels[:3]) or "Teyitler kaydedildi"),
-                f"🧩 {scenario.core_confirmation_count}/5 UYUMLU: {core}",
-                f"📍 Fiyat: {_format_price(scenario.price)}  →  Giriş bölgesi: {_format_price(scenario.entry_low)}–{_format_price(scenario.entry_high)}",
-                f"🛑 Stop: {_format_price(scenario.stop)}  |  🎯 TP1: {_format_price(scenario.tp1)}  •  TP2: {_format_price(scenario.tp2)}",
-                f"⚖️ RR 1:{scenario.rr:.1f}  •  ATR %{scenario.atr_percent:.1f}  •  Ek teyit: {scenario.confirmation_count}",
+                f"{rank}. {action_icon[scenario.action]} {scenario.symbol} — {scenario.ten_confirmation_count}/10 gösterge uyumlu",
+                f"   Yön: {direction_label} • Güç skoru: {scenario.score}/100 • Durum: {action_title[scenario.action]}",
+                f"   Kısa gerekçe: {reasons}",
+                f"   Giriş bölgesi: {_format_price(scenario.entry_low)}–{_format_price(scenario.entry_high)} • Stop: {_format_price(scenario.stop)}",
+                f"   Hedef: TP1 {_format_price(scenario.tp1)} / TP2 {_format_price(scenario.tp2)} • RR 1:{scenario.rr:.1f}",
+                f"   Teknik teyit: {scenario.core_confirmation_count}/5 çekirdek • ATR %{scenario.atr_percent:.1f} • {direction_name} yapı",
                 *(
                     [
                         f"📐 Formasyon: {scenario.confirmed_patterns[0].name} ✅ "
@@ -1103,8 +1102,7 @@ def format_trade_scenario_report(
                     if scenario.confirmed_patterns
                     else []
                 ),
-                f"✅ {reason_label[scenario.action]} ({direction_name}): {reasons}",
-                f"⏳ İşlem teyidi: {scenario.confirmation_instruction}",
+                f"   {reason_label[scenario.action]}: {scenario.confirmation_instruction}",
             ]
         )
     lines.extend(

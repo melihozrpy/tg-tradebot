@@ -195,7 +195,7 @@ class Settings(BaseSettings):
     trade_scenario_scan_minutes: int = Field(default=180, ge=15, le=240)
     trade_scenario_max_results: int = Field(default=5, ge=3, le=12)
     trade_scenario_minimum_core_confirmations: int = Field(default=3, ge=3, le=5)
-    trade_scenario_minimum_ten_confirmations: int = Field(default=7, ge=3, le=10)
+    trade_scenario_minimum_ten_confirmations: int = Field(default=8, ge=3, le=10)
     # ---- Saatlik günlük ilk 5 teknik + temel doğrulama listesi ----
     daily_top_picks_enabled: bool = Field(default=True)
     daily_top_picks_max_results: int = Field(default=5, ge=1, le=10)
@@ -235,6 +235,7 @@ class Settings(BaseSettings):
     # KAP sağlayıcısı sembol bazlıysa, raporu rate-limit'e sokmamak için yalnız
     # teknik olarak önceliklendirilmiş kısa liste kontrol edilir.
     report_kap_symbol_limit: int = Field(default=20, ge=4, le=40)
+    report_news_impact_minimum_score: int = Field(default=70, ge=1, le=100)
     economic_calendar_enabled: bool = Field(default=True)
     economic_calendar_url: str = Field(default="https://tr.investing.com/economic-calendar/")
     economic_calendar_timeout_seconds: float = Field(default=15.0, gt=0, le=120)

@@ -54,9 +54,12 @@ def test_report_kap_impact_keeps_only_recent_material_disclosures(tmp_path):
     assert [item.symbol for item in impact.negative] == ["SASA"]
     assert [item.symbol for item in impact.positive] == ["THYAO"]
     text = "\n".join(format_report_news_impact(impact, timezone_name="Europe/Istanbul"))
-    assert "HABER ETKİSİ • DOĞRULANMIŞ KAP" in text
+    assert "HABER ETKİSİ — NEGATİF" in text
+    assert "HABER ETKİSİ — POZİTİF" in text
     assert "Faaliyet durdurma" in text
-    assert "Ulaştırma izlemesi: THYAO" in text
+    assert "Beslenen sektör: Ulaştırma" in text
+    assert "İzlenecek hisseler: THYAO" in text
+    assert all(item.impact_score >= 70 for item in (*impact.negative, *impact.positive))
 
 
 def test_report_kap_impact_stays_hidden_when_provider_is_disabled():

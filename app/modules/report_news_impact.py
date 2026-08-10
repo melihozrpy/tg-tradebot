@@ -26,6 +26,7 @@ _POSITIVE = (
     "ihale", "sözleşme", "sozlesme", "sipariş", "siparis", "yatırım",
     "yatirim", "kapasite art", "geri alım", "geri alim", "temettü", "temettu",
 )
+_STRONG_POSITIVE = ("ihale", "sözleşme", "sozlesme", "sipariş", "siparis", "kapasite art")
 
 
 @dataclass(frozen=True)
@@ -36,6 +37,8 @@ class KapImpactItem:
     source_url: str
     sector_name: str | None
     watch_symbols: tuple[str, ...]
+    impact_score: int
+    rationale: str
 
 
 @dataclass(frozen=True)
@@ -62,6 +65,36 @@ def _classify(disclosure: dict) -> str:
     if any(keyword in text for keyword in _POSITIVE):
         return "positive"
     return "neutral"
+
+
+def analyze_news_sector_impact(
+    disclosure: dict,
+    *,
+    sector_name: str | None,
+    watch_symbols: tuple[str, ...],
+) -> tuple[str, int, str]:
+    """Score a verified disclosure without inventing a macro-news conclusion.
+
+    This is intentionally deterministic and fast: scheduled reports must not
+    wait on an LLM.  The score combines the KAP source's reliability, the
+    seriousness of the disclosed event and whether a mapped sector has more
+    than one technically relevant symbol.  Only scores at the configured
+    threshold are shown to the user.
+    """
+
+    category = _classify(disclosure)
+    text = " ".join(str(disclosure.get(key) or "") for key in ("title", "summary", "subject")).casefold()
+    sector_bonus = 5 if sector_name and len(watch_symbols) > 1 else 0
+    if category == "negative":
+        score = min(100, 85 + sector_bonus)
+        rationale = "Resmî KAP bildirimindeki olumsuz başlık, ilgili hisse ve sektör algısını baskılayabilir."
+    elif category == "positive":
+        score = min(100, (80 if any(word in text for word in _STRONG_POSITIVE) else 70) + sector_bonus)
+        rationale = "Resmî KAP bildirimi olumlu bir katalizör olabilir; teknik teyit olmadan fiyat etkisi varsayılmaz."
+    else:
+        score = 0
+        rationale = ""
+    return category, score, rationale
 
 
 def _prioritised_symbols(breadth: MarketBreadthResult, maximum: int) -> list[str]:
@@ -146,10 +179,23 @@ def build_report_news_impact(
             continue
         for disclosure in disclosures[:8]:
             published_at = _as_utc(disclosure.get("published_at"))
-            category = _classify(disclosure)
-            if published_at is None or published_at < cutoff or category == "neutral":
+            if published_at is None or published_at < cutoff:
                 continue
             sector_name, watch_symbols = _sector_details(settings, symbol, candidates)
+            category, impact_score, rationale = analyze_news_sector_impact(
+                disclosure,
+                sector_name=sector_name,
+                watch_symbols=watch_symbols,
+            )
+            minimum_score = max(1, min(100, int(getattr(settings, "report_news_impact_minimum_score", 70))))
+            if category == "neutral" or impact_score < minimum_score:
+                logger.info(
+                    "KAP rapor etkisi sessizce atlandı symbol=%s category=%s score=%s",
+                    symbol,
+                    category,
+                    impact_score,
+                )
+                continue
             item = KapImpactItem(
                 symbol=symbol,
                 title=" ".join(str(disclosure.get("title") or "KAP bildirimi").split())[:260],
@@ -157,6 +203,8 @@ def build_report_news_impact(
                 source_url=str(disclosure.get("source_url") or "https://www.kap.org.tr/tr/bildirim-sorgu"),
                 sector_name=sector_name,
                 watch_symbols=watch_symbols,
+                impact_score=impact_score,
+                rationale=rationale,
             )
             (negative if category == "negative" else positive).append(item)
             break
@@ -172,17 +220,27 @@ def format_report_news_impact(impact: ReportNewsImpact | None, *, timezone_name:
         return []
     from zoneinfo import ZoneInfo
 
-    lines = ["", "📰 HABER ETKİSİ • DOĞRULANMIŞ KAP"]
-    for item in impact.negative:
-        local = item.published_at.astimezone(ZoneInfo(timezone_name))
-        lines.append(f"🔴 {item.symbol} • {item.title} ({local:%d.%m %H:%M})")
-        lines.append("   Risk: Resmî bildirim; teknik zayıflıkla birlikte yeniden değerlendirilir.")
-        lines.append(f"   KAP: {item.source_url}")
-    for item in impact.positive:
-        local = item.published_at.astimezone(ZoneInfo(timezone_name))
-        sector = item.sector_name or "Şirket"
-        watched = ", ".join(item.watch_symbols)
-        lines.append(f"🟢 {item.symbol} • {item.title} ({local:%d.%m %H:%M})")
-        lines.append(f"   {sector} izlemesi: {watched} — teknik teyit varsa ayrıca izlenebilir.")
-        lines.append(f"   KAP: {item.source_url}")
+    lines = [""]
+    if impact.negative:
+        lines.append("📰 HABER ETKİSİ — NEGATİF")
+        for item in impact.negative:
+            local = item.published_at.astimezone(ZoneInfo(timezone_name))
+            affected = item.sector_name or item.symbol
+            lines.append(f"- {item.title} ({local:%d.%m %H:%M})")
+            lines.append(f"- Etkilenen: {affected}")
+            lines.append(f"- Neden önemli: {item.rationale}")
+            lines.append(f"- Kaynak: KAP • {item.source_url}")
+    if impact.positive:
+        if impact.negative:
+            lines.append("")
+        lines.append("📰 HABER ETKİSİ — POZİTİF")
+        for item in impact.positive:
+            local = item.published_at.astimezone(ZoneInfo(timezone_name))
+            sector = item.sector_name or "Şirket"
+            watched = ", ".join(item.watch_symbols)
+            lines.append(f"- {item.title} ({local:%d.%m %H:%M})")
+            lines.append(f"- Beslenen sektör: {sector}")
+            lines.append(f"- İzlenecek hisseler: {watched}")
+            lines.append(f"- Neden: {item.rationale}")
+            lines.append(f"- Kaynak: KAP • {item.source_url}")
     return lines

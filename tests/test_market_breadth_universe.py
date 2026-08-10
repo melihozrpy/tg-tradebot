@@ -97,7 +97,7 @@ def test_breadth_panel_explains_each_selected_candidate_with_condition_and_targe
     text = "\n".join(format_breadth_panel(breadth, report_kind="evening"))
 
     assert "GÜÇLÜ LONG İZLEME" in text
-    assert "Neden: EMA20 üstü" in text
-    assert "Teknik hedef: 308,00" in text
-    assert "ZAYIFLIK / KORUMA İZLEME" in text
+    assert "Neden güçlü: EMA20 üstü" in text
+    assert "Potansiyel hedef: 308,00" in text
+    assert "ZAYIF / SHORT-RİSK İZLEME" in text
     assert "3,90 altında günlük kapanış sürerse" in text

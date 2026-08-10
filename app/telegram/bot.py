@@ -600,7 +600,9 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
                 logger.exception("Firsat radari hata verdi: %s", exc)
                 await _notify_report_error("10 göstergeli fırsat radarı", exc)
 
-        scenario_step = max(15, min(240, int(getattr(settings, "trade_scenario_scan_minutes", 180))))
+        # This is the heavy full-universe scan.  It deliberately runs at
+        # 10:00, 13:00 and 16:00 Istanbul time instead of every 15 minutes.
+        scenario_step = 180
         if scenario_step >= 60 and scenario_step % 60 == 0:
             scenario_trigger = CronTrigger(
                 day_of_week="mon-fri",

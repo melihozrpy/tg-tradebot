@@ -12,19 +12,34 @@ def _price(value: float | None) -> str:
 
 
 def _candidate_lines(candidate: BreadthCandidate, *, bullish: bool) -> list[str]:
-    reasons = " • ".join(candidate.reasons[:3]) or "Teknik teyitler izleniyor"
-    target = _price(candidate.technical_target)
+    reasons = " • ".join(candidate.reasons[:3])
+    target_line: str | None = None
+    if candidate.technical_target is not None and candidate.technical_target > 0:
+        distance = ((candidate.technical_target / candidate.last_close) - 1.0) * 100.0
+        target_label = "Potansiyel hedef" if bullish else "Düşüş potansiyeli"
+        target_line = (
+            f"   {target_label}: {_price(candidate.technical_target)} "
+            f"({candidate.target_basis}; %{distance:+.1f})"
+        )
     if bullish:
-        condition = f"{_price(candidate.confirmation_level)} üstünde günlük kapanış korunursa"
-        title = "🟢"
+        reason_label = "Neden güçlü"
+        risk = "Genel piyasa çerçevesi değişirse bireysel güç de zayıflayabilir."
     else:
-        condition = f"{_price(candidate.confirmation_level)} altında günlük kapanış sürerse"
-        title = "🔴"
-    return [
-        f"{title} {candidate.symbol}  •  Güç {candidate.score}/100  •  %{candidate.change_percent:+.1f}",
-        f"   Neden: {reasons}",
-        f"   Koşul: {condition}  →  Teknik hedef: {target} ({candidate.target_basis})",
+        reason_label = "Neden zayıf"
+        risk = "Spot BIST'te bu bir açığa satış çağrısı değil; hacim teyitsiz işlem alınmamalı."
+    lines = [
+        f"▸ {candidate.symbol}  (Skor: {candidate.score}/100 • Günlük: %{candidate.change_percent:+.1f})",
+        f"   {reason_label}: {reasons or 'Yeterli sayısal teknik gerekçe üretilemedi.'}",
     ]
+    if target_line:
+        lines.append(target_line)
+    if candidate.confirmation_level is not None and candidate.confirmation_level > 0:
+        if bullish:
+            lines.append(f"   Teyit seviyesi: {_price(candidate.confirmation_level)} üstünde günlük kapanış")
+        else:
+            lines.append(f"   Düşüş teyidi: {_price(candidate.confirmation_level)} altında günlük kapanış sürerse")
+    lines.append(f"   Risk notu: {risk}")
+    return lines
 
 
 def format_breadth_panel(breadth: MarketBreadthResult, *, report_kind: str) -> list[str]:
@@ -35,26 +50,28 @@ def format_breadth_panel(breadth: MarketBreadthResult, *, report_kind: str) -> l
     return promises.
     """
 
-    scope = f"{breadth.scanned}/{breadth.universe_size} hisse"
-    title = "AÇILIŞ ÖNCESİ GENİŞLİK" if report_kind == "morning" else "KAPANIŞ GENİŞLİĞİ"
+    coverage = f"%{breadth.coverage_ratio:.1f}" if breadth.coverage_ratio is not None else "—"
+    ema200 = f"%{breadth.above_ema200_ratio:.1f}" if breadth.above_ema200_ratio is not None else "veri yetersiz"
+    scope = f"{breadth.scanned}/{breadth.universe_size} ({coverage})"
+    phase = "AÇILIŞ ÖNCESİ" if report_kind == "morning" else "KAPANIŞ"
     lines = [
         "",
-        f"╔═ 🌐 BIST • {title} ═╗",
-        f"║ Kapsam: {scope}  |  Piyasa gücü: {breadth.breadth_score}/100 • {breadth.regime}",
-        f"║ Yükselen {breadth.advancers}  •  Düşen {breadth.decliners}  •  Yatay {breadth.unchanged}  |  Net {breadth.net_breadth:+d}",
-        f"║ Trend: EMA20 %{breadth.above_ema20_ratio:.1f}  •  EMA50 %{breadth.above_ema50_ratio:.1f}  •  "
-        + (f"EMA200 %{breadth.above_ema200_ratio:.1f}" if breadth.above_ema200_ratio is not None else "EMA200 veri yetersiz"),
-        f"║ Yeni 20g zirve/dip: {breadth.new_20d_highs}/{breadth.new_20d_lows}  •  Hacim artışı: %{breadth.rising_volume_ratio:.1f}",
-        f"║ Dağılım: {breadth.long_count} güçlü-yukarı  •  {breadth.short_count} zayıf-aşağı  •  {breadth.neutral_count} nötr",
-        f"╚═ Sonraki seans çerçevesi: {breadth.tomorrow_bias} ═╝",
+        f"🌐 {breadth.universe_size} HİSSE • PİYASA İÇ YAPISI ({phase})",
+        f"• Kapsam: {scope}",
+        f"• Puan: {breadth.breadth_score}/100 • {breadth.regime}",
+        f"• Yükselen/Düşen/Yatay: {breadth.advancers}/{breadth.decliners}/{breadth.unchanged} • Net genişlik: {breadth.net_breadth:+d}",
+        f"• EMA20/50/200 üstü: %{breadth.above_ema20_ratio:.1f} / %{breadth.above_ema50_ratio:.1f} / {ema200}",
+        f"• Yeni 20g zirve/dip: {breadth.new_20d_highs}/{breadth.new_20d_lows} • Hacim artışı: %{breadth.rising_volume_ratio:.1f}",
+        f"• Long {breadth.long_count} • Short/Risk {breadth.short_count} • Nötr {breadth.neutral_count}",
+        f"🔮 Açılış çerçevesi: {breadth.tomorrow_bias}",
     ]
 
     if breadth.long_candidates:
-        lines.extend(["", "🟢 GÜÇLÜ LONG İZLEME — neden / koşul / hedef"])
-        for candidate in breadth.long_candidates[:3]:
+        lines.extend(["", "🟢 GÜÇLÜ LONG İZLEME"])
+        for candidate in breadth.long_candidates[:6]:
             lines.extend(_candidate_lines(candidate, bullish=True))
     if breadth.short_candidates:
-        lines.extend(["", "🔴 ZAYIFLIK / KORUMA İZLEME — neden / koşul / hedef"])
-        for candidate in breadth.short_candidates[:3]:
+        lines.extend(["", "🔴 ZAYIF / SHORT-RİSK İZLEME"])
+        for candidate in breadth.short_candidates[:6]:
             lines.extend(_candidate_lines(candidate, bullish=False))
     return lines

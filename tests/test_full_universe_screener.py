@@ -111,7 +111,7 @@ def test_intraday_scenario_requires_confluence_and_uses_retest_entry() -> None:
     scenario = result.scenarios[0]
     assert scenario.confirmation_count >= 3
     assert scenario.core_confirmation_count >= 3
-    assert scenario.ten_confirmation_count >= 7
+    assert scenario.ten_confirmation_count >= 8
     assert len(scenario.core_checks) == 5
     assert {name for name, _ in scenario.core_checks} == {"VWAP", "EMA", "RSI", "ATR", "MACD"}
     assert scenario.entry_low <= scenario.entry_high
@@ -266,7 +266,7 @@ def test_new_scanner_jobs_use_istanbul_market_hours() -> None:
         intraday_vwap_scan_enabled=True,
         intraday_vwap_scan_minute_step=30,
         trade_scenario_scan_enabled=True,
-        trade_scenario_scan_minutes=180,
+        trade_scenario_scan_minutes=15,
         trade_scenario_max_results=6,
         daily_top_picks_enabled=True,
         user_price_alerts_enabled=False,
