@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -266,6 +267,7 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
             from app.data.provider_factory import build_market_data_provider
             from app.models.database import User, get_session_factory
             from app.services.daily_market_report_service import build_daily_market_report, format_daily_market_report
+            from app.services.scheduled_delivery_dedup import claim_scheduled_delivery
 
             db = get_session_factory()()
             try:
@@ -273,7 +275,22 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
                 report = await asyncio.to_thread(build_daily_market_report, provider, settings)
                 text = format_daily_market_report(report)
                 if application is not None:
+                    local_date = datetime.now(timezone.utc).astimezone(
+                        ZoneInfo(settings.timezone_name)
+                    ).date()
+                    delivery_key = f"scheduled:daily-brief:{local_date.isoformat()}"
                     for user in db.query(User).filter(User.kill_switch_active.is_(False)).all():
+                        if not claim_scheduled_delivery(
+                            db,
+                            dedup_key=delivery_key,
+                            chat_id=int(user.telegram_user_id),
+                        ):
+                            logger.info(
+                                "Tekrarlanan günlük brifing atlandı chat=%s key=%s",
+                                user.telegram_user_id,
+                                delivery_key,
+                            )
+                            continue
                         try:
                             await application.bot.send_message(chat_id=user.telegram_user_id, text=text)
                         except Exception as exc:  # noqa: BLE001
@@ -287,7 +304,12 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
             brief_hour, brief_minute = settings.daily_brief_time.split(":")
             scheduler.add_job(
                 _daily_brief_job,
-                CronTrigger(day_of_week="mon-fri", hour=int(brief_hour), minute=int(brief_minute)),
+                CronTrigger(
+                    day_of_week="mon-fri",
+                    hour=int(brief_hour),
+                    minute=int(brief_minute),
+                    timezone=settings.timezone_name,
+                ),
                 id="daily_market_brief",
                 coalesce=True,
                 max_instances=1,
@@ -392,21 +414,30 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
                     output_dir=settings.report_chart_output_dir,
                     dpi=settings.chart_dpi,
                 )
-                return text, caption, chart_path
+                delivery_key = f"scheduled:smxm:{kind}:{report.report_date.isoformat()}"
+                return text, caption, chart_path, delivery_key
             finally:
                 db.close()
 
         chart_path = None
         try:
-            text, caption, chart_path = await asyncio.to_thread(_build_payload)
+            text, caption, chart_path, delivery_key = await asyncio.to_thread(_build_payload)
             if application is None:
                 return
             from app.models.database import User, get_session_factory
+            from app.services.scheduled_delivery_dedup import claim_scheduled_delivery
 
             db = get_session_factory()()
             try:
                 recipients = db.query(User).filter(User.kill_switch_active.is_(False)).all()
                 for user in recipients:
+                    if not claim_scheduled_delivery(
+                        db,
+                        dedup_key=delivery_key,
+                        chat_id=int(user.telegram_user_id),
+                    ):
+                        logger.info("Tekrarlanan SMXM raporu atlandı chat=%s key=%s", user.telegram_user_id, delivery_key)
+                        continue
                     try:
                         with open(chart_path, "rb") as image:
                             await application.bot.send_photo(
@@ -542,6 +573,7 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
                     return
                 from app.analysis.screener_engine import format_trade_scenario_report
                 from app.models.database import User, get_session_factory
+                from app.services.scheduled_delivery_dedup import claim_scheduled_delivery
 
                 db = get_session_factory()()
                 try:
@@ -551,14 +583,19 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
                         for user in db.query(User).filter(User.is_admin.is_(True)).all()
                     }
                     recipients.update(int(value) for value in getattr(settings, "admin_ids", ()))
+                    text = format_trade_scenario_report(result, timezone_name=settings.timezone_name)
+                    local = result.created_at.astimezone(ZoneInfo(settings.timezone_name))
+                    delivery_key = f"scheduled:trade-scenario:{local:%Y%m%d%H%M}"
+                    for chat_id in recipients:
+                        if not claim_scheduled_delivery(db, dedup_key=delivery_key, chat_id=chat_id):
+                            logger.info("Tekrarlanan fırsat radarı atlandı chat=%s key=%s", chat_id, delivery_key)
+                            continue
+                        try:
+                            await application.bot.send_message(chat_id=chat_id, text=text)
+                        except Exception as exc:  # noqa: BLE001 - one recipient cannot stop the scheduler
+                            logger.warning("Firsat radari karti gonderilemedi chat=%s: %s", chat_id, exc)
                 finally:
                     db.close()
-                text = format_trade_scenario_report(result, timezone_name=settings.timezone_name)
-                for chat_id in recipients:
-                    try:
-                        await application.bot.send_message(chat_id=chat_id, text=text)
-                    except Exception as exc:  # noqa: BLE001 - one recipient cannot stop the scheduler
-                        logger.warning("Firsat radari karti gonderilemedi chat=%s: %s", chat_id, exc)
             except Exception as exc:  # noqa: BLE001 - scheduled jobs must survive
                 logger.exception("Firsat radari hata verdi: %s", exc)
                 await _notify_report_error("10 göstergeli fırsat radarı", exc)
@@ -621,6 +658,7 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
                     return
                 from app.analysis.screener_engine import format_daily_top_picks_report
                 from app.models.database import User, get_session_factory
+                from app.services.scheduled_delivery_dedup import claim_scheduled_delivery
 
                 db = get_session_factory()()
                 try:
@@ -630,14 +668,19 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
                         for user in db.query(User).filter(User.is_admin.is_(True)).all()
                     }
                     recipients.update(int(value) for value in getattr(settings, "admin_ids", ()))
+                    text = format_daily_top_picks_report(result, timezone_name=settings.timezone_name)
+                    local = result.created_at.astimezone(ZoneInfo(settings.timezone_name))
+                    delivery_key = f"scheduled:daily-top-picks:{local:%Y%m%d%H}"
+                    for chat_id in recipients:
+                        if not claim_scheduled_delivery(db, dedup_key=delivery_key, chat_id=chat_id):
+                            logger.info("Tekrarlanan günlük ilk 5 atlandı chat=%s key=%s", chat_id, delivery_key)
+                            continue
+                        try:
+                            await application.bot.send_message(chat_id=chat_id, text=text)
+                        except Exception as exc:  # noqa: BLE001 - one recipient cannot stop the scheduler
+                            logger.warning("Saatlik ilk 5 karti gonderilemedi chat=%s: %s", chat_id, exc)
                 finally:
                     db.close()
-                text = format_daily_top_picks_report(result, timezone_name=settings.timezone_name)
-                for chat_id in recipients:
-                    try:
-                        await application.bot.send_message(chat_id=chat_id, text=text)
-                    except Exception as exc:  # noqa: BLE001 - one recipient cannot stop the scheduler
-                        logger.warning("Saatlik ilk 5 karti gonderilemedi chat=%s: %s", chat_id, exc)
             except Exception as exc:  # noqa: BLE001 - scheduled jobs must survive
                 logger.exception("Saatlik gunluk ilk 5 taramasi hata verdi: %s", exc)
                 await _notify_report_error("saatlik günlük ilk 5 radarı", exc)

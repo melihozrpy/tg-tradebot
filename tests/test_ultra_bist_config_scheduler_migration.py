@@ -31,6 +31,7 @@ NEW_TABLES = {
     "news_cache",
     "staged_entry_plans",
     "staged_entry_events",
+    "scheduled_message_deliveries",
 }
 
 
@@ -162,7 +163,7 @@ def test_0008_fresh_database_migration_is_complete_and_idempotent(tmp_path):
         revision = connection.execute("select version_num from alembic_version").fetchone()[0]
         signal_columns = {row[1] for row in connection.execute("pragma table_info(signals)")}
     assert NEW_TABLES <= tables
-    assert revision == "0010_technical_screener_news_cache"
+    assert revision == "0011_scheduled_delivery_dedup"
     assert {"planned_entry_price", "current_stop_price", "row_version", "source"} <= signal_columns
     with sqlite3.connect(database) as connection:
         user_types = {

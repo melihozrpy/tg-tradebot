@@ -1085,6 +1085,23 @@ class MarketDailyReportLog(Base):
     created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
 
 
+class ScheduledMessageDelivery(Base):
+    """Cross-replica delivery lock for automatic Telegram report cards.
+
+    APScheduler's in-process ``max_instances`` cannot prevent two separate
+    Coolify bot containers from running the same scheduled job.  The unique
+    key below is the durable single-delivery boundary for those broadcasts.
+    """
+
+    __tablename__ = "scheduled_message_deliveries"
+    __table_args__ = (UniqueConstraint("dedup_key", "chat_id", name="uq_scheduled_message_delivery"),)
+
+    id = Column(Integer, primary_key=True)
+    dedup_key = Column(String(192), nullable=False, index=True)
+    chat_id = Column(BigInteger, nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
 class PriceAlertTrigger(Base):
     __tablename__ = "price_alert_triggers"
     __table_args__ = (UniqueConstraint("idempotency_key", name="uq_price_alert_trigger_key"),)
