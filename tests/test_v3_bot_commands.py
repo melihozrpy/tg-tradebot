@@ -45,7 +45,7 @@ def test_simple_alarm_company_and_kap_commands_are_registered():
     application = build_telegram_application()
     commands = _all_registered_commands(application)
     assert {
-        "alarm", "alarm_test", "sirket", "kap", "komutlar", "basitalsat", "viop"
+        "alarm", "alarm_test", "sirket", "kap", "komutlar", "basitalsat", "viop", "viopislem"
     }.issubset(commands)
 
 

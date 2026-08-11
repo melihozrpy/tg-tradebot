@@ -206,6 +206,13 @@ class Settings(BaseSettings):
     market_opportunity_max_results: int = Field(default=8, ge=3, le=12)
     market_opportunity_minimum_confluence: int = Field(default=5, ge=3, le=10)
 
+    # ---- VIOP egitim ve spot-dayanakli senaryo modulu ----
+    # Bu liste canli sozlesme/veri akisi degil, resmi kaynaktan tarihli izleme
+    # evrenidir. Emirden once araci kurum ekranindaki aktif vade/teminat esastir.
+    viop_underlyings_json_path: str = Field(default="app/config/viop_underlyings.json")
+    viop_watchlist_max_results: int = Field(default=8, ge=3, le=15)
+    viop_risk_percent: float = Field(default=0.5, gt=0, le=1)
+
     # ---- 24-48 hour symbol news digest ----
     news_digest_cache_minutes: int = Field(default=15, ge=1, le=1440)
     news_digest_lookback_hours: int = Field(default=48, ge=1, le=168)
