@@ -96,10 +96,13 @@ def build_telegram_application() -> Application:
     application.add_handler(CommandHandler("tara_liste", handlers_v3.cmd_tara_liste))
     application.add_handler(CommandHandler("tarama_durumu", handlers_v3.cmd_tarama_durumu))
     from app.telegram.market_opportunity_handlers import cmd_firsatlar, cmd_gunluk5
+    from app.telegram.basic_viop_handlers import cmd_basitalsat, cmd_viop
     application.add_handler(CommandHandler("firsatlar", cmd_firsatlar))
     application.add_handler(CommandHandler("firsat", cmd_firsatlar))
     application.add_handler(CommandHandler("gunluk5", cmd_gunluk5))
     application.add_handler(CommandHandler("gunluk_ilk5", cmd_gunluk5))
+    application.add_handler(CommandHandler("basitalsat", cmd_basitalsat))
+    application.add_handler(CommandHandler("viop", cmd_viop))
     application.add_handler(CommandHandler("aksam_raporu", smxm_report_handlers.cmd_smxm_aksam_raporu))
     application.add_handler(CommandHandler("tarama_ayarlari", handlers_v3.cmd_tarama_ayarlari))
     application.add_handler(CommandHandler("tum_hisseler", smxm_report_handlers.cmd_tum_hisseler))
