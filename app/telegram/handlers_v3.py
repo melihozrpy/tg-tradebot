@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy import or_
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 
 from app.analysis.breakout_scenario_engine import compute_breakout_scenarios
@@ -2963,51 +2964,66 @@ async def cmd_uzungrafik(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             db.close()
 
 
-# UTF-8 uyumlu, sade ana panel. Modül sonunda tanımlanarak eski sürümün yerini alır.
+# Renkli Telegram ana paneli. Telegram buton renklerini istemci belirlediği için
+# canlılık; tutarlı emoji renk kodları, hiyerarşi ve kısa görev açıklamalarıyla sağlanır.
 async def cmd_start_v3(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if await _reject_unauthorized(update):
         return
     keyboard = [
-        [InlineKeyboardButton("⌁ Analiz Merkezi", callback_data="menu_analiz"),
-         InlineKeyboardButton("◎ İşlem Planı", callback_data="menu_islemplani")],
-        [InlineKeyboardButton("◈ Fırsat Radarı", callback_data="menu_best50"),
-         InlineKeyboardButton("▣ Piyasa Yapısı", callback_data="menu_piyasa")],
-        [InlineKeyboardButton("◐ Sabah Raporu", callback_data="menu_morning_report"),
-         InlineKeyboardButton("◑ Kapanış Raporu", callback_data="menu_smxm_evening")],
-        [InlineKeyboardButton("◇ VİOP / Varant", callback_data="menu_copilot"),
-         InlineKeyboardButton("▤ Portföy & Risk", callback_data="menu_portfoy")],
-        [InlineKeyboardButton("◌ Alarm Merkezi", callback_data="menu_alarm_prompt"),
-         InlineKeyboardButton("◉ Aktif Sinyaller", callback_data="menu_sinyaller")],
-        [InlineKeyboardButton("⌘ Komutlar", callback_data="menu_commands"),
-         InlineKeyboardButton("⚙ Ayarlar", callback_data="menu_ayarlar")],
+        [InlineKeyboardButton("📊 Teknik Analiz", callback_data="menu_analiz"),
+         InlineKeyboardButton("🎯 İşlem Planı", callback_data="menu_islemplani")],
+        [InlineKeyboardButton("💎 Fırsat Radarı", callback_data="menu_best50"),
+         InlineKeyboardButton("🌍 Piyasa Yapısı", callback_data="menu_piyasa")],
+        [InlineKeyboardButton("🌅 Sabah Raporu", callback_data="menu_morning_report"),
+         InlineKeyboardButton("🌙 Kapanış Raporu", callback_data="menu_smxm_evening")],
+        [InlineKeyboardButton("🏢 Şirket & Bilanço", callback_data="menu_fundamental_prompt"),
+         InlineKeyboardButton("📰 KAP & Haberler", callback_data="menu_kap_prompt")],
+        [InlineKeyboardButton("🔔 Alarm Merkezi", callback_data="menu_alarm_prompt"),
+         InlineKeyboardButton("📡 Aktif Sinyaller", callback_data="menu_sinyaller")],
+        [InlineKeyboardButton("⚡ VİOP & Varant", callback_data="menu_copilot"),
+         InlineKeyboardButton("💼 Portföy & Risk", callback_data="menu_portfoy")],
+        [InlineKeyboardButton("⭐ İzleme Listem", callback_data="menu_liste"),
+         InlineKeyboardButton("🧪 Backtest", callback_data="menu_backtest_prompt")],
+        [InlineKeyboardButton("📚 Komut Rehberi", callback_data="menu_commands"),
+         InlineKeyboardButton("⚙️ Ayarlar", callback_data="menu_ayarlar")],
     ]
     await update.message.reply_text(
-        "MONTANA TERMINAL\n"
-        "BIST · Teknik Yapı · Risk Disiplini\n"
-        "────────────────────────\n"
-        "SİSTEM DURUMU   ● ÇEVRİMİÇİ\n"
-        "SAAT            Europe/Istanbul\n\n"
-        "HIZLI ERİŞİM\n"
-        "/analiz THYAO        Teknik görünüm + grafik\n"
-        "/islemplani THYAO    Bölge, stop ve hedef planı\n"
-        "/firsatlar           Çoklu gösterge fırsat radarı\n"
-        "/viopcopilot THYAO gunici\n"
-        "/varant THYAO swing 2026-10-30 0.45\n\n"
-        "Her seviye koşulludur; yatırım tavsiyesi değildir.",
+        "✨ <b>MONTANA MELİH HİSSE BOT</b> ✨\n"
+        "<i>Akıllı BIST Analiz · Sinyal · Risk Asistanı</i>\n\n"
+        "🟢 <b>SİSTEM AKTİF</b>   🇹🇷 BIST   🕘 Europe/Istanbul\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "<b>🚀 NELER YAPABİLİRİM?</b>\n"
+        "📊 <b>Teknik Analiz:</b> Mum grafik, OB, FVG, MSS, destek/direnç\n"
+        "🎯 <b>İşlem Planı:</b> Giriş bölgesi, stop, TP hedefleri ve R/R\n"
+        "💎 <b>Fırsat Radarı:</b> 10 indikatör uyumlu güçlü adaylar\n"
+        "🌍 <b>Piyasa Yapısı:</b> 571 hisse genişliği ve günün yön çerçevesi\n"
+        "🏢 <b>Şirket & Haber:</b> Bilanço, KAP ve son gelişmeler\n"
+        "🔔 <b>Alarm Merkezi:</b> Hedef fiyatta anlık bildirim ve ses\n"
+        "⚡ <b>VİOP / Varant:</b> 6 adım teyitli, risk odaklı senaryo\n"
+        "🧪 <b>Backtest:</b> Geçmiş performans ve sanal portföy takibi\n\n"
+        "<b>⚡ HIZLI BAŞLANGIÇ</b>\n"
+        "<code>/analiz THYAO</code> — Grafik + teknik özet\n"
+        "<code>/islemplani THYAO</code> — Bölge, SL ve hedefler\n"
+        "<code>/firsatlar 1s</code> — Saatlik güçlü fırsatlar\n"
+        "<code>/viopcopilot THYAO gunici</code> — VİOP planı\n\n"
+        "💡 Bir hisse kodu veya grafik fotoğrafı gönder; başlayalım.\n"
+        "<i>Çıktılar koşullu analizdir; yatırım tavsiyesi değildir.</i>",
+        parse_mode=ParseMode.HTML,
         reply_markup=InlineKeyboardMarkup(keyboard),
+        disable_web_page_preview=True,
     )
 
 
 def _analysis_action_keyboard(symbol: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("◎ Plan", callback_data=f"menu_plan_{symbol}"),
-         InlineKeyboardButton("⌁ Ayrıntı", callback_data=f"detay_{symbol}")],
-        [InlineKeyboardButton("▤ Seviyeler", callback_data=f"menu_stage5e_seviyeler_{symbol}"),
-         InlineKeyboardButton("◫ Çoklu TF", callback_data=f"menu_stage5e_coklu_{symbol}")],
-        [InlineKeyboardButton("◇ Temel", callback_data=f"menu_fundamental_{symbol}"),
-         InlineKeyboardButton("▱ KAP", callback_data=f"menu_kap_{symbol}")],
-        [InlineKeyboardButton("◌ Alarm", callback_data=f"menu_stage5e_alarm_{symbol}"),
-         InlineKeyboardButton("▤ Portföy", callback_data=f"menu_stage5e_portfoy_{symbol}")],
+        [InlineKeyboardButton("🎯 İşlem Planı", callback_data=f"menu_plan_{symbol}"),
+         InlineKeyboardButton("🔎 Detaylı Analiz", callback_data=f"detay_{symbol}")],
+        [InlineKeyboardButton("🧱 Seviyeler", callback_data=f"menu_stage5e_seviyeler_{symbol}"),
+         InlineKeyboardButton("⏱️ Çoklu Zaman", callback_data=f"menu_stage5e_coklu_{symbol}")],
+        [InlineKeyboardButton("🏢 Temel Analiz", callback_data=f"menu_fundamental_{symbol}"),
+         InlineKeyboardButton("📰 KAP Haberleri", callback_data=f"menu_kap_{symbol}")],
+        [InlineKeyboardButton("🔔 Alarm Kur", callback_data=f"menu_stage5e_alarm_{symbol}"),
+         InlineKeyboardButton("💼 Portföye Ekle", callback_data=f"menu_stage5e_portfoy_{symbol}")],
     ])
 
 
@@ -3048,11 +3064,11 @@ async def handle_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     }
     if data in direct:
         await query.message.reply_text(
-            "MONTANA TERMINAL\n"
-            "────────────────────────\n"
-            f"{direct[data]}\n"
-            "────────────────────────\n"
-            "Komutu kopyalayıp sembolünü ekleyebilirsin."
+            "✨ <b>MONTANA MELİH HİSSE BOT</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            f"{direct[data]}\n\n"
+            "💡 <i>Komutu kopyalayıp sembolünü ekleyebilirsin.</i>",
+            parse_mode=ParseMode.HTML,
         )
         return
     if data.startswith("menu_plan_"):
