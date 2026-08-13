@@ -69,16 +69,17 @@ def test_professional_chart_has_vivid_indicators_zones_and_no_volume_panel(
     fig = chart_service.plt.gcf()
     try:
         assert os.path.exists(path)
-        assert len(fig.axes) == 1
-        price = fig.axes[0]
+        assert len(fig.axes) == 2
+        price, rail = fig.axes
         price_labels = {line.get_label() for line in price.lines}
-        assert {"EMA20", "EMA50", "EMA100", "EMA200", "Bollinger", "VWAP"} <= price_labels
+        assert {"EMA20", "EMA50"} <= price_labels
+        assert not {"EMA100", "EMA200", "Bollinger", "VWAP"} & price_labels
         assert len(price.patches) >= 120  # son 120 mum + fiyat zoneları
         assert all(axis.get_ylabel() != "Hacim" for axis in fig.axes)
+        assert "BÖLGELER" in {text.get_text() for text in rail.texts}
         figure_text = " ".join(text.get_text() for text in fig.texts)
         assert "THYAO" in figure_text
         assert "DETAYLI" in figure_text
-        assert "TEKNİK CHECKLIST" in figure_text
         assert "MONTANA FİNANS ROBOTU" in figure_text
     finally:
         delete_chart_file(path)
@@ -136,14 +137,14 @@ def test_intraday_chart_has_vivid_candles_and_optional_context_without_volume(
     fig = chart_service.plt.gcf()
     try:
         assert os.path.exists(path)
-        assert len(fig.axes) == 1
-        price = fig.axes[0]
+        assert len(fig.axes) == 2
+        price, rail = fig.axes
         assert len(price.patches) >= 140  # okunabilirlik için son 140 bar
         assert {"VWAP", "EMA20", "EMA50"} <= {line.get_label() for line in price.lines}
         assert all(axis.get_ylabel() != "Hacim" for axis in fig.axes)
         figure_text = " ".join(text.get_text() for text in fig.texts)
         assert "GÜN İÇİ" in figure_text
-        assert "GÜN İÇİ CHECKLIST" in figure_text
+        assert "BÖLGELER" in {text.get_text() for text in rail.texts}
     finally:
         delete_chart_file(path)
         real_close(fig)

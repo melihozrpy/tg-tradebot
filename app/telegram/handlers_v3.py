@@ -2968,55 +2968,46 @@ async def cmd_start_v3(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     if await _reject_unauthorized(update):
         return
     keyboard = [
-        [InlineKeyboardButton("📊 Teknik Analiz", callback_data="menu_analiz"),
-         InlineKeyboardButton("🎯 AL / SAT Planı", callback_data="menu_islemplani")],
-        [InlineKeyboardButton("📚 Tüm Hisseler", callback_data="menu_all_stocks"),
-         InlineKeyboardButton("🏆 En İyi 50", callback_data="menu_best50")],
-        [InlineKeyboardButton("🌅 Sabah Raporu", callback_data="menu_morning_report"),
-         InlineKeyboardButton("🌙 Kapanış Raporu", callback_data="menu_smxm_evening")],
-        [InlineKeyboardButton("🏢 Şirket Analizi", callback_data="menu_fundamental_prompt"),
-         InlineKeyboardButton("📣 KAP Bildirimleri", callback_data="menu_kap_prompt")],
-        [InlineKeyboardButton("🔔 Alarm Kur", callback_data="menu_alarm_prompt"),
-         InlineKeyboardButton("🔊 Alarmı Dene", callback_data="menu_alarm_test")],
-        [InlineKeyboardButton("📋 Alarmlarım", callback_data="menu_alarm_list"),
-         InlineKeyboardButton("🎯 Aktif Sinyaller", callback_data="menu_sinyaller")],
-        [InlineKeyboardButton("⭐ İzleme Listem", callback_data="menu_liste"),
-         InlineKeyboardButton("🔎 Piyasa Tara", callback_data="menu_tara")],
-        [InlineKeyboardButton("💼 Portföy", callback_data="menu_portfoy"),
-         InlineKeyboardButton("🌍 Piyasa Özeti", callback_data="menu_piyasa")],
-        [InlineKeyboardButton("🧪 Backtest", callback_data="menu_backtest_prompt"),
-         InlineKeyboardButton("📈 Test Sonuçları", callback_data="menu_backtest_summary")],
-        [InlineKeyboardButton("📚 Komut Rehberi", callback_data="menu_commands"),
-         InlineKeyboardButton("⚙️ Ayarlar", callback_data="menu_ayarlar")],
+        [InlineKeyboardButton("⌁ Analiz Merkezi", callback_data="menu_analiz"),
+         InlineKeyboardButton("◎ İşlem Planı", callback_data="menu_islemplani")],
+        [InlineKeyboardButton("◈ Fırsat Radarı", callback_data="menu_best50"),
+         InlineKeyboardButton("▣ Piyasa Yapısı", callback_data="menu_piyasa")],
+        [InlineKeyboardButton("◐ Sabah Raporu", callback_data="menu_morning_report"),
+         InlineKeyboardButton("◑ Kapanış Raporu", callback_data="menu_smxm_evening")],
+        [InlineKeyboardButton("◇ VİOP / Varant", callback_data="menu_copilot"),
+         InlineKeyboardButton("▤ Portföy & Risk", callback_data="menu_portfoy")],
+        [InlineKeyboardButton("◌ Alarm Merkezi", callback_data="menu_alarm_prompt"),
+         InlineKeyboardButton("◉ Aktif Sinyaller", callback_data="menu_sinyaller")],
+        [InlineKeyboardButton("⌘ Komutlar", callback_data="menu_commands"),
+         InlineKeyboardButton("⚙ Ayarlar", callback_data="menu_ayarlar")],
     ]
     await update.message.reply_text(
-        "🏔️✨ MONTANA FİNANS ROBOTU HİSSE BOT ✨📈\n"
-        "BIST Teknik • Temel Analiz • Alarm Asistanı\n\n"
-        "🧭 Hızlı başlangıç:\n"
-        "• /analiz THYAO — teknik + 5dk/15dk/1s/4s\n"
-        "• /islemplani THYAO — AL/SAT, stop ve TP1–TP5\n"
-        "• /sirket THYAO — şirket ve bilanço analizi\n"
-        "• /alarm 9.20 THYAO — fiyat alarmı\n\n"
-        "📚 Bütün seçenekler: /komutlar\n"
-        "ℹ️ Çıktılar teknik senaryodur; yatırım tavsiyesi değildir.",
+        "MONTANA TERMINAL\n"
+        "BIST · Teknik Yapı · Risk Disiplini\n"
+        "────────────────────────\n"
+        "SİSTEM DURUMU   ● ÇEVRİMİÇİ\n"
+        "SAAT            Europe/Istanbul\n\n"
+        "HIZLI ERİŞİM\n"
+        "/analiz THYAO        Teknik görünüm + grafik\n"
+        "/islemplani THYAO    Bölge, stop ve hedef planı\n"
+        "/firsatlar           Çoklu gösterge fırsat radarı\n"
+        "/viopcopilot THYAO gunici\n"
+        "/varant THYAO swing 2026-10-30 0.45\n\n"
+        "Her seviye koşulludur; yatırım tavsiyesi değildir.",
         reply_markup=InlineKeyboardMarkup(keyboard),
     )
 
 
 def _analysis_action_keyboard(symbol: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🗺️ İşlem Planı", callback_data=f"menu_plan_{symbol}"),
-         InlineKeyboardButton("📋 Detaylı Analiz", callback_data=f"detay_{symbol}")],
-        [InlineKeyboardButton("🧱 Destek / Direnç", callback_data=f"menu_stage5e_seviyeler_{symbol}"),
-         InlineKeyboardButton("⏱️ Çoklu Zaman", callback_data=f"menu_stage5e_coklu_{symbol}")],
-        [InlineKeyboardButton("🏢 Temel Analiz", callback_data=f"menu_fundamental_{symbol}"),
-         InlineKeyboardButton("📣 KAP Bildirimleri", callback_data=f"menu_kap_{symbol}")],
-        [InlineKeyboardButton("🧪 2 Yıllık Backtest", callback_data=f"menu_backtest_{symbol}"),
-         InlineKeyboardButton("📈 Backtest Sonuçları", callback_data="menu_backtest_summary")],
-        [InlineKeyboardButton("Standart Grafik", callback_data=f"menu_stage5e_grafik_{symbol}"),
-         InlineKeyboardButton("Detaylı Grafik", callback_data=f"menu_stage5e_detaygrafik_{symbol}")],
-        [InlineKeyboardButton("🔔 Alarm Kur", callback_data=f"menu_stage5e_alarm_{symbol}"),
-         InlineKeyboardButton("💼 Portföye Ekle", callback_data=f"menu_stage5e_portfoy_{symbol}")],
+        [InlineKeyboardButton("◎ Plan", callback_data=f"menu_plan_{symbol}"),
+         InlineKeyboardButton("⌁ Ayrıntı", callback_data=f"detay_{symbol}")],
+        [InlineKeyboardButton("▤ Seviyeler", callback_data=f"menu_stage5e_seviyeler_{symbol}"),
+         InlineKeyboardButton("◫ Çoklu TF", callback_data=f"menu_stage5e_coklu_{symbol}")],
+        [InlineKeyboardButton("◇ Temel", callback_data=f"menu_fundamental_{symbol}"),
+         InlineKeyboardButton("▱ KAP", callback_data=f"menu_kap_{symbol}")],
+        [InlineKeyboardButton("◌ Alarm", callback_data=f"menu_stage5e_alarm_{symbol}"),
+         InlineKeyboardButton("▤ Portföy", callback_data=f"menu_stage5e_portfoy_{symbol}")],
     ])
 
 
@@ -3046,9 +3037,23 @@ async def handle_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         "menu_sinyaller": "Aktif sinyaller için /aktif_sinyaller yaz.",
         "menu_piyasa": "571 hisse piyasa özeti: /piyasa • tüm adaylar: /piyasa tum • yalnız long/short: /piyasa long veya /piyasa short",
         "menu_ayarlar": "Ayarların için /ayarlar yaz.",
+        "menu_copilot": (
+            "BORSA COPILOT · VİOP & VARANT\n"
+            "────────────────────────\n"
+            "6 zorunlu kontrolün tamamı geçmeden sinyal üretmez.\n\n"
+            "VİOP: /viopcopilot THYAO gunici\n"
+            "Varant: /varant THYAO swing 2026-10-30 0.45\n\n"
+            "Varantta vade ve delta; VİOP'ta aktif sözleşme, teminat ve derinlik ayrıca doğrulanmalıdır."
+        ),
     }
     if data in direct:
-        await query.message.reply_text(direct[data])
+        await query.message.reply_text(
+            "MONTANA TERMINAL\n"
+            "────────────────────────\n"
+            f"{direct[data]}\n"
+            "────────────────────────\n"
+            "Komutu kopyalayıp sembolünü ekleyebilirsin."
+        )
         return
     if data.startswith("menu_plan_"):
         await query.message.reply_text(f"İşlem planı için /islemplani {data.removeprefix('menu_plan_')} yaz.")
@@ -3292,6 +3297,8 @@ async def cmd_komutlar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "/basitalsat — günlük teknik + doğrulanabilir temel kalite filtresiyle güçlü adayları tarar\n"
         "/viop — VİOP eğitimi, teminat/teslimat riski ve uygun dayanak izleme listesini gösterir\n"
         "/viopislem THYAO gunici 5000 — spot-dayanaklı koşullu VİOP planı ve %0,5 stop-risk hesabı\n"
+        "/viopcopilot THYAO gunici — Borsa Copilot ile 6-adım VİOP senaryosu\n"
+        "/varant THYAO swing 2026-10-30 0.45 — vade/delta kontrollü dayanak planı\n"
         "/aksam_raporu — kapanış raporunu hemen üretir\n\n"
         "💼 PORTFÖY\n"
         "/portfoy — portföy özetini gösterir\n"

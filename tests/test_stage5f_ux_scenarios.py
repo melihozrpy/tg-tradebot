@@ -263,7 +263,7 @@ def test_18_standard_chart_contains_only_primary_indicators(monkeypatch, tmp_pat
     fig = chart_service.plt.gcf()
     try:
         labels = {line.get_label() for line in fig.axes[0].lines}
-        assert len(fig.axes) == 1
+        assert len(fig.axes) == 2
         assert {"EMA20", "EMA50"} <= labels
         assert not {"EMA100", "EMA200", "Bollinger", "VWAP"} & labels
         assert all(axis.get_ylabel() not in {"Hacim", "MACD"} for axis in fig.axes)
@@ -273,7 +273,7 @@ def test_18_standard_chart_contains_only_primary_indicators(monkeypatch, tmp_pat
         real_close(fig)
 
 
-def test_19_detailed_chart_contains_secondary_indicators(monkeypatch, tmp_path):
+def test_19_detailed_chart_keeps_main_price_panel_limited_to_two_emas(monkeypatch, tmp_path):
     monkeypatch.setenv("CHART_CACHE_DIR", str(tmp_path / "charts"))
     get_settings.cache_clear()
     clear_chart_cache()
@@ -285,8 +285,9 @@ def test_19_detailed_chart_contains_secondary_indicators(monkeypatch, tmp_path):
     fig = chart_service.plt.gcf()
     try:
         labels = {line.get_label() for line in fig.axes[0].lines}
-        assert len(fig.axes) == 1
-        assert {"EMA100", "EMA200", "Bollinger", "VWAP"} <= labels
+        assert len(fig.axes) == 2
+        assert {"EMA20", "EMA50"} <= labels
+        assert not {"EMA100", "EMA200", "Bollinger", "VWAP"} & labels
         assert all(axis.get_ylabel() not in {"Hacim", "MACD"} for axis in fig.axes)
         assert "DETAYLI" in " ".join(text.get_text() for text in fig.texts)
     finally:

@@ -21,16 +21,19 @@ import pandas as pd
 from matplotlib.patches import Rectangle
 from matplotlib.ticker import FuncFormatter
 
-from app.analysis.indicator_engine import bollinger_bands, ema, macd, rsi
+from app.analysis.indicator_engine import ema, macd, rsi
 from app.analysis.smart_money_engine import SmartMoneyResult, detect_smart_money
 from app.analysis.support_resistance_engine import SupportResistanceResult
 from app.services.vivid_chart_style import (
+    MONO_FONT,
+    SANS_FONT,
     VIVID,
+    ZoneRailItem,
     add_banner,
-    add_checklist,
     add_price_card,
     add_score_bar,
     add_watermark,
+    draw_zone_rail,
     style_axes as style_vivid_axes,
 )
 
@@ -266,11 +269,12 @@ def _draw_smart_money_overlay(
     detailed: bool = True,
     compact: bool = False,
     exclude_zone: tuple[str, float, float] | None = None,
+    zone_sink: list[ZoneRailItem] | None = None,
 ) -> None:
     x_end = length - 0.2
     zone_count = 3 if detailed else 2
     zones = [*smart.order_blocks[-zone_count:], *smart.fvg[-zone_count:]]
-    for slot, zone in enumerate(zones):
+    for zone in zones:
         if (
             exclude_zone is not None
             and zone.kind == exclude_zone[0]
@@ -290,41 +294,43 @@ def _draw_smart_money_overlay(
             Rectangle(
                 (x_start, lower), max(0.5, x_end - x_start), height,
                 facecolor=color, edgecolor=color, linewidth=0.9,
-                alpha=0.10 if compact else 0.14, zorder=1,
+                alpha=0.08 if compact else 0.10, zorder=1,
             )
         )
-        label_x = max(x_start + 0.5, x_end - 0.8 - (slot % 3) * 5.0)
-        ax.annotate(
-            zone.kind if compact else f"{zone.kind}  {lower:.{decimals}f}-{upper:.{decimals}f}",
-            xy=(label_x, upper),
-            xytext=(0, 2 + (slot % 3) * (7 if compact else 11)),
-            textcoords="offset points",
-            ha="right",
-            color=color,
-            fontsize=5.8 if compact else 7.6,
-            fontweight="bold",
-            va="bottom",
-            bbox={"boxstyle": "round,pad=.15", "facecolor": VIVID.background, "edgecolor": color, "alpha": .84},
-            zorder=8,
-        )
+        if zone_sink is not None:
+            zone_sink.append(
+                ZoneRailItem(
+                    kind=zone.kind,
+                    low=lower,
+                    high=upper,
+                    color=color,
+                    direction=zone.direction,
+                )
+            )
 
     event_count = 3 if compact else 5
-    for event in smart.structure[-event_count:]:
+    used_indices: list[int] = []
+    minimum_event_distance = max(4, round(length * 0.055))
+    for event in reversed(smart.structure[-event_count:]):
         if not 0 <= event.index < length:
             continue
+        if any(abs(event.index - item) < minimum_event_distance for item in used_indices):
+            continue
+        used_indices.append(event.index)
         color = VIVID.bull if event.direction == "bullish" else VIVID.bear
         marker = "▲" if event.direction == "bullish" else "▼"
         ax.annotate(
             f"{marker} {event.kind}",
-            xy=(event.index, event.price),
-            xytext=(0, 14 if event.direction == "bullish" else -17),
+            xy=(event.index, 0.982 if event.direction == "bullish" else 0.018),
+            xycoords=("data", "axes fraction"),
+            xytext=(0, 0),
             textcoords="offset points",
             ha="center",
             va="center",
             fontsize=6.1 if compact else 8.2,
             fontweight="bold",
             color=color,
-            arrowprops={"arrowstyle": "-|>", "color": color, "lw": 0.9},
+            fontfamily=SANS_FONT,
             zorder=15,
         )
 
@@ -442,9 +448,10 @@ def _annotate_vivid_price(
         va="center",
         fontsize=fontsize,
         fontweight="bold",
-        color="#ffffff",
+        color=VIVID.background,
+        fontfamily=MONO_FONT,
         arrowprops={"arrowstyle": "-", "color": color, "lw": 0.7, "alpha": 0.85},
-        bbox={"boxstyle": "round,pad=0.30", "facecolor": color, "edgecolor": color, "alpha": 0.95},
+        bbox={"boxstyle": "round,pad=0.30", "facecolor": color, "edgecolor": color, "linewidth": 0.7, "alpha": 0.95},
         clip_on=False,
         zorder=25,
     )
@@ -470,7 +477,8 @@ def _draw_indicator_ribbon(ax, state: dict, *, detailed: bool) -> None:
         color=VIVID.text,
         fontsize=7.8,
         fontweight="bold",
-        bbox={"boxstyle": "round,pad=0.38", "facecolor": VIVID.panel_alt, "edgecolor": VIVID.grid, "alpha": 0.92},
+        fontfamily=SANS_FONT,
+        bbox={"boxstyle": "round,pad=0.38", "facecolor": VIVID.panel_alt, "edgecolor": VIVID.border, "alpha": 0.92},
         zorder=20,
     )
 
@@ -723,38 +731,20 @@ def _render_professional_daily_chart(
         info_box=info_box,
     )
     theme = THEMES["dark"]
-    fig = plt.figure(figsize=(15, 9), facecolor=VIVID.background)
-    ax_price = fig.add_axes([0.06, 0.16, 0.76, 0.67], facecolor=VIVID.panel)
+    fig = plt.figure(figsize=(16, 9), facecolor=VIVID.background)
+    ax_price = fig.add_axes([0.055, 0.16, 0.60, 0.67], facecolor=VIVID.panel)
+    ax_rail = fig.add_axes([0.685, 0.16, 0.26, 0.67], facecolor=VIVID.panel)
     style_vivid_axes(ax_price)
     x = _draw_candles(ax_price, data, theme, width=0.72)
     label_items: list[tuple[float, str, str, int]] = []
 
     full_close = all_data["close"].astype(float)
-    ema_styles = [(20, VIVID.amber, 1.15), (50, VIVID.cyan, 1.15)]
-    if detailed:
-        ema_styles.extend([(100, VIVID.purple, 0.95), (200, "#a78bfa", 0.95)])
+    # Main price panel stays deliberately quiet: two trend references maximum.
+    ema_styles = [(20, VIVID.amber, 1.15), (50, VIVID.blue, 1.15)]
     for period, color, width in ema_styles:
         if len(all_data) >= period:
             values = ema(full_close, period).tail(visible_count).reset_index(drop=True)
             ax_price.plot(x, values, color=color, linewidth=width, label=f"EMA{period}", alpha=0.94)
-
-    if detailed and len(all_data) >= 20:
-        upper, middle, lower, _ = bollinger_bands(full_close, 20, 2.0)
-        upper_v = upper.tail(visible_count).reset_index(drop=True).to_numpy(float)
-        middle_v = middle.tail(visible_count).reset_index(drop=True).to_numpy(float)
-        lower_v = lower.tail(visible_count).reset_index(drop=True).to_numpy(float)
-        ax_price.plot(x, upper_v, color=VIVID.muted, linewidth=0.65, linestyle="--", alpha=0.55, label="Bollinger")
-        ax_price.plot(x, middle_v, color=VIVID.muted, linewidth=0.5, alpha=0.32)
-        ax_price.plot(x, lower_v, color=VIVID.muted, linewidth=0.65, linestyle="--", alpha=0.55)
-        ax_price.fill_between(x, lower_v, upper_v, color=VIVID.cyan, alpha=0.025)
-
-        typical = (all_data["high"] + all_data["low"] + all_data["close"]) / 3
-        cumulative_volume = all_data["volume"].cumsum().replace(0, pd.NA)
-        anchored_vwap = ((typical * all_data["volume"]).cumsum() / cumulative_volume).astype(float)
-        ax_price.plot(
-            x, anchored_vwap.tail(visible_count).reset_index(drop=True),
-            color="#ec4899", linewidth=1.0, label="VWAP", alpha=0.9,
-        )
 
     _draw_timeframe_levels(
         ax_price,
@@ -766,8 +756,14 @@ def _render_professional_daily_chart(
     if detailed:
         _draw_confluence_zones(ax_price, confluence_zones)
         _draw_price_scenario_bands(ax_price, price_scenario)
+    zone_rail_items: list[ZoneRailItem] = []
     _draw_smart_money_overlay(
-        ax_price, state["smart"], length=len(data), decimals=decimals, detailed=detailed,
+        ax_price,
+        state["smart"],
+        length=len(data),
+        decimals=decimals,
+        detailed=detailed,
+        zone_sink=zone_rail_items,
     )
 
     current_price = state["current"]
@@ -781,12 +777,11 @@ def _render_professional_daily_chart(
         ax_price.add_patch(
             Rectangle(
                 (x_start, lower), len(data) - 0.2 - x_start, max(upper - lower, upper * 0.0003),
-                facecolor=VIVID.bull, edgecolor=VIVID.bull, linewidth=1.0, alpha=0.17, zorder=1,
+                facecolor=VIVID.bull, edgecolor=VIVID.bull, linewidth=0.8, alpha=0.10, zorder=1,
             )
         )
-        ax_price.text(
-            x_start + 0.5, upper, f"BUY ZONE  {lower:.{decimals}f}-{upper:.{decimals}f}",
-            color=VIVID.bull, fontsize=8.2, fontweight="bold", va="bottom",
+        zone_rail_items.append(
+            ZoneRailItem("ENTRY ZONE", lower, upper, VIVID.bull, direction=state["direction_name"])
         )
         if entry is None:
             entry = (lower + upper) / 2.0
@@ -800,8 +795,8 @@ def _render_professional_daily_chart(
     visible_targets = visible_targets[:5] if detailed else visible_targets[:3]
     for index, target in enumerate(visible_targets, start=1):
         target = float(target)
-        ax_price.axhline(target, color="#22c55e", linestyle=(0, (5, 4)), linewidth=1.0, alpha=max(0.48, 0.9 - index * 0.07))
-        label_items.append((target, f"TP{index}", "#22c55e", 104 - index))
+        ax_price.axhline(target, color=VIVID.bull, linestyle=(0, (5, 4)), linewidth=1.0, alpha=max(0.48, 0.9 - index * 0.07))
+        label_items.append((target, f"TP{index}", VIVID.bull, 104 - index))
 
     if detailed:
         _draw_anomaly_markers(ax_price, data, anomalies)
@@ -843,31 +838,45 @@ def _render_professional_daily_chart(
 
     ax_price.yaxis.set_major_formatter(FuncFormatter(lambda value, _pos: f"{value:.{decimals}f}"))
     _format_trading_axis(ax_price, data, right_margin=2.5, label_format="%d %b")
+    draw_zone_rail(
+        ax_price,
+        ax_rail,
+        zone_rail_items,
+        current_price=current_price,
+        decimals=decimals,
+    )
     _draw_indicator_ribbon(ax_price, state, detailed=detailed)
-    ax_price.set_ylabel("Fiyat", fontsize=8)
+    ax_price.set_ylabel("Fiyat", fontsize=8, fontfamily=SANS_FONT)
     handles, labels = ax_price.get_legend_handles_labels()
     if handles:
         unique = dict(zip(labels, handles))
         ax_price.legend(
             unique.values(), unique.keys(), loc="lower left", fontsize=6.4, ncol=4,
-            facecolor=VIVID.panel_alt, edgecolor=VIVID.grid, labelcolor=VIVID.text, framealpha=0.82,
+            facecolor=VIVID.panel_alt, edgecolor=VIVID.border, labelcolor=VIVID.text, framealpha=0.82,
         )
 
     mode_label = "STANDART" if not detailed else "DETAYLI"
     date_label = pd.Timestamp(data.iloc[-1]["timestamp"]).strftime("%d.%m.%Y")
     fig.text(
-        0.06, 0.94, f"{symbol.upper()}  •  1D  •  {date_label}  •  {mode_label}",
-        color=VIVID.text, fontsize=19, fontweight="bold",
+        0.055, 0.94, f"{symbol.upper()}  •  1D  •  {date_label}  •  {mode_label}",
+        color=VIVID.text, fontsize=18, fontweight="bold", fontfamily=SANS_FONT,
     )
     arrow = "▲" if state["direction"] == "YUKARI" else "▼" if state["direction"] == "AŞAĞI" else "◆"
-    add_banner(fig, f"{arrow}  TEKNİK YÖN: {state['direction']}", state["color"], left=0.06, top=0.875)
-    add_price_card(fig, current_price, state["color"], decimals=decimals, x=0.95, y=0.865)
+    add_banner(fig, f"{arrow}  TEKNİK YÖN: {state['direction']}", state["color"], left=0.055, top=0.875)
+    add_price_card(fig, current_price, state["color"], decimals=decimals, x=0.86, y=0.875)
     if state["rr"] is not None:
-        fig.text(0.95, 0.805, f"RR  1:{state['rr']:.2f}", color=VIVID.text, fontsize=14.5, fontweight="bold", ha="center")
-    add_checklist(fig, state["checklist"], x=0.835, y=0.22)
+        fig.text(0.86, 0.81, f"RR  1:{state['rr']:.2f}", color=VIVID.text, fontsize=12, fontweight="bold", ha="center", fontfamily=MONO_FONT)
     add_score_bar(fig, state["score"], label="TEKNİK GÜVEN")
     add_watermark(fig)
-    fig.text(0.06, 0.105, "FVG • Order Block • BOS/MSS • Destek/Direnç • ENTRY/SL/TP", color=VIVID.muted, fontsize=7.5)
+    last_mss = next((event for event in reversed(state["smart"].structure) if event.kind == "MSS"), None)
+    fig.text(
+        0.41,
+        0.057,
+        f"Trend {state['direction']}  ·  Son MSS {last_mss.direction if last_mss else 'yok'}  ·  {len(zone_rail_items)} aktif bölge",
+        color=VIVID.muted,
+        fontsize=8.0,
+        fontfamily=SANS_FONT,
+    )
 
     out_path = os.path.join(tempfile.gettempdir(), f"mergen_pro_chart_{symbol}_{uuid.uuid4().hex[:8]}.png")
     fig.savefig(out_path, dpi=max(settings.chart_dpi, 140), facecolor=VIVID.background, bbox_inches="tight")
@@ -894,11 +903,7 @@ def generate_professional_daily_chart(
     last_signal_point: Optional[tuple] = None,
     chart_mode: str = "detailed",
 ) -> str:
-    """Hacimsiz, yüksek kontrastlı standart/detaylı SMXM teknik grafik.
-
-    Standart görünüm ana sinyal katmanlarını; detaylı görünüm EMA100/200,
-    Bollinger, VWAP, daha fazla FVG/OB ve hedef katmanını da gösterir.
-    """
+    """Hacimsiz, sade ve yüksek kontrastlı standart/detaylı SMXM teknik grafik."""
     return _render_professional_daily_chart(
         df,
         symbol,
@@ -996,12 +1001,13 @@ def generate_bist_trade_plan_chart(df: pd.DataFrame, plan) -> str:
     data = _normalise_chart_frame(df).tail(160).reset_index(drop=True)
     settings, _theme = _chart_settings()
     theme = THEMES["dark"]
-    fig = plt.figure(figsize=(15, 9), facecolor=VIVID.background)
-    ax = fig.add_axes([0.055, 0.15, 0.76, 0.68], facecolor=VIVID.panel)
+    fig = plt.figure(figsize=(16, 9), facecolor=VIVID.background)
+    ax = fig.add_axes([0.055, 0.15, 0.60, 0.68], facecolor=VIVID.panel)
+    ax_rail = fig.add_axes([0.685, 0.15, 0.26, 0.68], facecolor=VIVID.panel)
     style_vivid_axes(ax)
     x = _draw_candles(ax, data, theme, width=.72)
     close = data["close"].astype(float)
-    for period, color, width in ((20, VIVID.amber, 1.15), (50, VIVID.cyan, 1.15), (200, VIVID.purple, 1.0)):
+    for period, color, width in ((20, VIVID.amber, 1.15), (50, VIVID.blue, 1.15)):
         if len(data) >= period:
             ax.plot(x, ema(close, period), color=color, linewidth=width, label=f"EMA {period}", alpha=.94)
 
@@ -1024,19 +1030,12 @@ def generate_bist_trade_plan_chart(df: pd.DataFrame, plan) -> str:
     ax.add_patch(
         Rectangle(
             (zone_start, lower), len(data) - .2 - zone_start, max(upper - lower, upper * .0003),
-            facecolor=direction_color, edgecolor=direction_color, linewidth=1.1, alpha=.18, zorder=1,
+            facecolor=direction_color, edgecolor=direction_color, linewidth=.8, alpha=.10, zorder=1,
         )
     )
-    ax.text(
-        zone_start + (len(data) - zone_start) * .35,
-        upper,
-        f"{zone_label}  {lower:.2f}-{upper:.2f}",
-        color=direction_color,
-        fontsize=8,
-        fontweight="bold",
-        va="bottom",
-        bbox={"boxstyle": "round,pad=.2", "facecolor": VIVID.background, "edgecolor": direction_color, "alpha": .88},
-    )
+    zone_rail_items: list[ZoneRailItem] = [
+        ZoneRailItem(zone_label, lower, upper, direction_color, direction=preferred.direction)
+    ]
 
     entry_price = float(quality_zone.entry) if quality_zone is not None else float(preferred.trigger)
     stop_price = float(quality_zone.invalidation) if quality_zone is not None else float(preferred.stop_standard)
@@ -1067,6 +1066,7 @@ def generate_bist_trade_plan_chart(df: pd.DataFrame, plan) -> str:
         exclude_zone=(quality_zone.zone_kind, quality_zone.zone_low, quality_zone.zone_high)
         if quality_zone is not None
         else None,
+        zone_sink=zone_rail_items,
     )
     ax.axhline(plan.current_price, color=direction_color, linewidth=1.0, linestyle=(0, (6, 4)), alpha=.85)
     ax.axhline(entry_price, color=VIVID.blue, linewidth=1.35)
@@ -1077,8 +1077,8 @@ def generate_bist_trade_plan_chart(df: pd.DataFrame, plan) -> str:
         (stop_price, "SL", VIVID.bear, 113),
     ])
     for index, target in enumerate(selected_targets, 1):
-        ax.axhline(target, color="#22c55e", linewidth=.95, linestyle=(0, (5, 4)), alpha=max(.48, .92 - index * .08))
-        label_items.append((float(target), f"TP{index}", "#22c55e", 108 - index))
+        ax.axhline(target, color=VIVID.bull, linewidth=.95, linestyle=(0, (5, 4)), alpha=max(.48, .92 - index * .08))
+        label_items.append((float(target), f"TP{index}", VIVID.bull, 108 - index))
     for index, level in enumerate(plan.support_levels, 1):
         if any(abs(float(level) - float(target)) < 0.005 for target in selected_targets):
             continue
@@ -1101,21 +1101,27 @@ def generate_bist_trade_plan_chart(df: pd.DataFrame, plan) -> str:
         _annotate_vivid_price(ax, actual, display, label, color, decimals=2, fontsize=7.8)
 
     _format_trading_axis(ax, data, right_margin=2.5, label_format="%d %b")
+    draw_zone_rail(
+        ax,
+        ax_rail,
+        zone_rail_items,
+        current_price=float(plan.current_price),
+        decimals=2,
+    )
     ax.yaxis.set_major_formatter(FuncFormatter(lambda value, _pos: f"{value:.2f}"))
     ax.text(
         .012, .982,
-        f"RSI {plan.rsi:.1f}   •   ADX {plan.adx:.1f}   •   RVOL {plan.relative_volume:.2f}x   •   ATR %{plan.atr_percent:.2f}   •   TREND {plan.trend}",
-        transform=ax.transAxes, va="top", color=VIVID.text, fontsize=7.7, fontweight="bold",
-        bbox={"boxstyle": "round,pad=.38", "facecolor": VIVID.panel_alt, "edgecolor": VIVID.grid, "alpha": .93},
+        f"RSI {plan.rsi:.1f}   ·   ADX {plan.adx:.1f}   ·   RVOL {plan.relative_volume:.2f}x   ·   ATR %{plan.atr_percent:.2f}",
+        transform=ax.transAxes, va="top", color=VIVID.muted, fontsize=7.4, fontweight="bold", fontfamily=MONO_FONT,
     )
-    ax.legend(loc="lower left", fontsize=6.5, ncol=3, facecolor=VIVID.panel_alt, edgecolor=VIVID.grid, labelcolor=VIVID.text)
+    ax.legend(loc="lower left", fontsize=6.5, ncol=3, facecolor=VIVID.panel_alt, edgecolor=VIVID.border, labelcolor=VIVID.text)
 
     date_label = pd.Timestamp(plan.data_timestamp).strftime("%d.%m.%Y")
-    fig.text(.055, .94, f"{plan.symbol}  •  1D  •  {date_label}  •  SMXM BÖLGE PLANI", color=VIVID.text, fontsize=18, fontweight="bold")
+    fig.text(.055, .94, f"{plan.symbol}  •  1D  •  {date_label}  •  SMXM BÖLGE PLANI", color=VIVID.text, fontsize=18, fontweight="bold", fontfamily=SANS_FONT)
     decision = quality_zone.direction if quality_zone is not None else plan.preferred_direction or "RANGE"
     arrow = "▲" if decision == "LONG" else "▼" if decision == "SHORT" else "◆"
     add_banner(fig, f"{arrow}  ANA İZLEME SENARYOSU: {decision}", direction_color if decision != "RANGE" else VIVID.amber, left=.055, top=.875)
-    add_price_card(fig, plan.current_price, VIVID.bull, decimals=2, x=.95, y=.865)
+    add_price_card(fig, plan.current_price, direction_color, decimals=2, x=.86, y=.875)
     rr_candidates = (
         [value for value in (quality_zone.rr_1, quality_zone.rr_2) if value is not None]
         if quality_zone is not None
@@ -1124,34 +1130,26 @@ def generate_bist_trade_plan_chart(df: pd.DataFrame, plan) -> str:
     display_rr = next((value for value in rr_candidates if value >= 2), rr_candidates[-1] if rr_candidates else 0.0)
     rr_text = f"RR  1:{display_rr:.2f}" if display_rr >= 2 else f"RR YETERSİZ  1:{display_rr:.2f}"
     fig.text(
-        .95,
-        .805,
+        .86,
+        .81,
         rr_text,
         color=VIVID.text if display_rr >= 2 else VIVID.bear,
         fontsize=14.5,
         fontweight="bold",
         ha="center",
+        fontfamily=MONO_FONT,
     )
     setup_score = quality_zone.quality_score if quality_zone is not None else preferred.score
-    checklist = [
-        ("İşlem puanı ≥ 68", setup_score >= 68),
-        ("Trend yönü uyumlu", decision == preferred.direction),
-        ("FVG / Order Block", bool(smart.fvg or smart.order_blocks)),
-        ("BOS / MSS teyidi", any(event.direction == preferred.direction.casefold().replace("long", "bullish").replace("short", "bearish") for event in smart.structure)),
-        ("Minimum 1:2 RR", display_rr >= 2),
-        ("Hacim teyidi", plan.relative_volume >= 1.1),
-    ]
-    add_checklist(fig, checklist, title="İŞLEM CHECKLIST", x=.83, y=.22)
     add_score_bar(fig, setup_score, label="İŞLEM KALİTESİ", left=.07, bottom=.035, width=.49)
     add_watermark(fig)
     last_mss = next((event for event in reversed(smart.structure) if event.kind == "MSS"), None)
     fig.text(
-        .055,
-        .105,
-        f"Trend {plan.trend} • {len(smart.order_blocks)} OB • {len(smart.fvg)} FVG aktif • "
-        f"Son MSS: {last_mss.direction.title() if last_mss else 'Yok'}",
+        .41,
+        .057,
+        f"Trend {plan.trend}  ·  Son MSS {last_mss.direction.title() if last_mss else 'yok'}  ·  {len(zone_rail_items)} aktif bölge",
         color=VIVID.muted,
-        fontsize=7.5,
+        fontsize=8,
+        fontfamily=SANS_FONT,
     )
     out_path = os.path.join(tempfile.gettempdir(), f"bist_tv_{plan.symbol}_{uuid.uuid4().hex[:8]}.png")
     fig.savefig(out_path, dpi=max(settings.chart_dpi, 150), facecolor=VIVID.background, bbox_inches="tight")
@@ -1190,8 +1188,9 @@ def generate_intraday_chart(
     close = df["close"].astype(float)
     theme = THEMES["dark"]
     state = _technical_visual_state(df, info_box=info_box)
-    fig = plt.figure(figsize=(15, 9), facecolor=VIVID.background)
-    ax_price = fig.add_axes([.06, .16, .76, .67], facecolor=VIVID.panel)
+    fig = plt.figure(figsize=(16, 9), facecolor=VIVID.background)
+    ax_price = fig.add_axes([.055, .16, .60, .67], facecolor=VIVID.panel)
+    ax_rail = fig.add_axes([.685, .16, .26, .67], facecolor=VIVID.panel)
     style_vivid_axes(ax_price)
     x = _draw_candles(ax_price, df, theme)
     label_items: list[tuple[float, str, str, int]] = []
@@ -1203,12 +1202,12 @@ def generate_intraday_chart(
     cumulative_volume = df["volume"].groupby(session).cumsum().replace(0, pd.NA)
     vwap = weighted.groupby(session).cumsum() / cumulative_volume
     vwap = vwap.astype(float)
-    ax_price.plot(x, vwap, color="#ec4899", linewidth=1.1, label="VWAP")
+    ax_price.plot(x, vwap, color=VIVID.blue, linewidth=1.0, label="VWAP")
 
     if len(df) >= 20:
         ax_price.plot(x, ema(close, 20), color=VIVID.amber, linewidth=1.05, label="EMA20")
     if len(df) >= 50:
-        ax_price.plot(x, ema(close, 50), color=VIVID.cyan, linewidth=1.05, label="EMA50")
+        ax_price.plot(x, ema(close, 50), color=VIVID.blue, linewidth=1.05, label="EMA50")
 
     latest_session = session.iloc[-1]
     latest_mask = session == latest_session
@@ -1238,7 +1237,11 @@ def generate_intraday_chart(
         label_items.append((daily_resistance, "DİRENÇ", VIVID.bear, 90))
 
     _draw_anomaly_markers(ax_price, df, anomalies)
-    _draw_smart_money_overlay(ax_price, state["smart"], length=len(df), decimals=_price_decimals(symbol), detailed=True)
+    zone_rail_items: list[ZoneRailItem] = []
+    _draw_smart_money_overlay(
+        ax_price, state["smart"], length=len(df), decimals=_price_decimals(symbol),
+        detailed=True, zone_sink=zone_rail_items,
+    )
     timestamps = pd.to_datetime(df["timestamp"], utc=True)
     for point in active_alarm_points or []:
         timestamp, price = point[:2]
@@ -1261,6 +1264,9 @@ def generate_intraday_chart(
 
     _format_trading_axis(ax_price, df, right_margin=2.5, label_format="%d.%m %H:%M")
     ax_price.yaxis.set_major_formatter(FuncFormatter(lambda value, _pos: f"{value:.{_price_decimals(symbol)}f}"))
+    draw_zone_rail(
+        ax_price, ax_rail, zone_rail_items, current_price=current, decimals=_price_decimals(symbol),
+    )
     _draw_indicator_ribbon(ax_price, state, detailed=True)
     ax_price.set_ylabel("Fiyat", fontsize=8)
     ax_price.legend(loc="lower left", fontsize=6.5, ncol=3, facecolor=VIVID.panel_alt, edgecolor=VIVID.grid, labelcolor=VIVID.text)
@@ -1279,14 +1285,18 @@ def generate_intraday_chart(
     if score is None:
         score = sum(ok for _label, ok in intraday_checklist) / len(intraday_checklist) * 100
     date_label = pd.Timestamp(df.iloc[-1]["timestamp"]).strftime("%d.%m.%Y %H:%M")
-    fig.text(.06, .94, f"{symbol.upper()}  •  15DK  •  {date_label}  •  GÜN İÇİ", color=VIVID.text, fontsize=18, fontweight="bold")
+    fig.text(.055, .94, f"{symbol.upper()}  •  15DK  •  {date_label}  •  GÜN İÇİ", color=VIVID.text, fontsize=18, fontweight="bold", fontfamily=SANS_FONT)
     arrow = "▲" if state["direction"] == "YUKARI" else "▼" if state["direction"] == "AŞAĞI" else "◆"
-    add_banner(fig, f"{arrow}  GÜN İÇİ YÖN: {state['direction']}", state["color"], left=.06, top=.875)
-    add_price_card(fig, current, state["color"], decimals=_price_decimals(symbol), x=.95, y=.865)
-    add_checklist(fig, intraday_checklist, title="GÜN İÇİ CHECKLIST", x=.83, y=.22)
+    add_banner(fig, f"{arrow}  GÜN İÇİ YÖN: {state['direction']}", state["color"], left=.055, top=.875)
+    add_price_card(fig, current, state["color"], decimals=_price_decimals(symbol), x=.86, y=.875)
     add_score_bar(fig, score, label="GÜN İÇİ GÜVEN")
     add_watermark(fig)
-    fig.text(.06, .105, "VWAP • EMA20/50 • Seans seviyeleri • FVG/OB • BOS/MSS • Aktif alarm", color=VIVID.muted, fontsize=7.5)
+    last_mss = next((event for event in reversed(state["smart"].structure) if event.kind == "MSS"), None)
+    fig.text(
+        .41, .057,
+        f"Trend {state['direction']}  ·  Son MSS {last_mss.direction if last_mss else 'yok'}  ·  {len(zone_rail_items)} aktif bölge",
+        color=VIVID.muted, fontsize=8.0, fontfamily=SANS_FONT,
+    )
 
     out_path = os.path.join(tempfile.gettempdir(), f"mergen_intraday_chart_{symbol}_{uuid.uuid4().hex[:8]}.png")
     fig.savefig(out_path, dpi=max(settings.chart_dpi, 140), facecolor=VIVID.background, bbox_inches="tight")
@@ -1342,49 +1352,52 @@ def generate_long_term_chart(
     if cached:
         return cached
 
-    fig = plt.figure(figsize=(15, 9), facecolor=VIVID.background)
-    ax = fig.add_axes([.06, .16, .76, .67], facecolor=VIVID.panel)
+    fig = plt.figure(figsize=(16, 9), facecolor=VIVID.background)
+    ax = fig.add_axes([.055, .16, .60, .67], facecolor=VIVID.panel)
+    ax_rail = fig.add_axes([.685, .16, .26, .67], facecolor=VIVID.panel)
     style_vivid_axes(ax)
     x = _draw_candles(ax, data, theme, width=0.62)
     ax.set_yscale("log")
 
     close = data["close"].astype(float)
     normalized = timeframe.strip().lower()
-    ema_periods = (10, 20, 40) if normalized in {"monthly", "aylik", "aylık", "1mo", "1m"} else (20, 50, 100)
-    colors = (theme.accent, "#f59e0b", "#8b5cf6")
+    ema_periods = (10, 20) if normalized in {"monthly", "aylik", "aylık", "1mo", "1m"} else (20, 50)
+    colors = (VIVID.amber, VIVID.blue)
     for period, color in zip(ema_periods, colors):
         if len(data) >= period:
             ax.plot(x, ema(close, period), color=color, linewidth=0.9, label=f"EMA{period}")
 
     smart = detect_smart_money(data)
-    _draw_smart_money_overlay(ax, smart, length=len(data), decimals=_price_decimals(symbol), detailed=True)
+    zone_rail_items: list[ZoneRailItem] = []
+    _draw_smart_money_overlay(
+        ax, smart, length=len(data), decimals=_price_decimals(symbol), detailed=True,
+        zone_sink=zone_rail_items,
+    )
 
     # Logaritmik regresyon kanalı.
     log_close = np.log(close.to_numpy())
     slope, intercept = np.polyfit(x, log_close, 1)
     trend = intercept + slope * x
     residual = float(np.std(log_close - trend))
-    ax.plot(x, np.exp(trend), color=theme.foreground, linewidth=1.0, label="Log trend")
-    ax.plot(x, np.exp(trend + 2 * residual), color=theme.muted, linestyle="--", linewidth=0.7)
-    ax.plot(x, np.exp(trend - 2 * residual), color=theme.muted, linestyle="--", linewidth=0.7)
-    ax.fill_between(x, np.exp(trend - 2 * residual), np.exp(trend + 2 * residual), color=theme.accent, alpha=0.035)
+    ax.plot(x, np.exp(trend), color=VIVID.muted, linewidth=1.0, label="Log trend")
+    ax.plot(x, np.exp(trend + 2 * residual), color=VIVID.faint, linestyle="--", linewidth=0.7)
+    ax.plot(x, np.exp(trend - 2 * residual), color=VIVID.faint, linestyle="--", linewidth=0.7)
+    ax.fill_between(x, np.exp(trend - 2 * residual), np.exp(trend + 2 * residual), color=VIVID.blue, alpha=0.035)
 
     historical_low = float(data["low"].min())
     historical_high = float(data["high"].max())
     price_range = historical_high - historical_low
-    for ratio, color in ((0.382, theme.support), (0.5, theme.muted), (0.618, theme.resistance)):
+    for ratio, color in ((0.382, VIVID.bull), (0.5, VIVID.muted), (0.618, VIVID.bear)):
         level = historical_high - price_range * ratio
         ax.axhline(level, color=color, linestyle=":", linewidth=0.65, alpha=0.65)
-        ax.text(len(data) - 1, level, f" Fib {ratio:.3f}", fontsize=6, color=color, va="bottom")
     for ratio in (1.272, 1.618):
         level = historical_low + price_range * ratio
-        ax.axhline(level, color=theme.accent, linestyle="--", linewidth=0.55, alpha=0.5)
+        ax.axhline(level, color=VIVID.amber, linestyle="--", linewidth=0.55, alpha=0.5)
 
     # Çok yıllık destek/direnç ve uygun hacim bölgeleri.
-    for quantile, label, color in ((0.10, "Ana destek", theme.support), (0.90, "Ana direnç", theme.resistance)):
+    for quantile, _label, color in ((0.10, "Ana destek", VIVID.bull), (0.90, "Ana direnç", VIVID.bear)):
         level = float(close.quantile(quantile))
         ax.axhspan(level * 0.98, level * 1.02, color=color, alpha=0.06)
-        ax.text(0, level, label, fontsize=6, color=color, va="center")
     typical = (data["high"] + data["low"] + data["close"]) / 3
     if float(data["volume"].sum()) > 0:
         bins = np.geomspace(historical_low, historical_high, min(25, max(8, len(data) // 4)))
@@ -1403,8 +1416,7 @@ def generate_long_term_chart(
         _annotate_vivid_price(ax, float(user_target), float(user_target), "HEDEF", VIVID.amber, decimals=_price_decimals(symbol))
     for step in getattr(roadmap, "steps", []) or []:
         if getattr(step, "mid", None):
-            ax.axhline(step.mid, color=theme.accent, linestyle=":", linewidth=0.75, alpha=0.75)
-            ax.text(len(data) - 1, step.mid, f" Yol {step.sequence}", fontsize=6, color=theme.accent, va="center")
+            ax.axhline(step.mid, color=VIVID.amber, linestyle=":", linewidth=0.75, alpha=0.75)
 
     if long_term_scenario is not None:
         extreme = getattr(long_term_scenario, "extreme_bull", None)
@@ -1422,37 +1434,20 @@ def generate_long_term_chart(
         distances = abs(timestamps.dt.date.apply(lambda value: (value - event_date).days))
         position = int(distances.to_numpy().argmin())
         if distances.iloc[position] <= 40:
-            ax.axvline(position, color=theme.muted, linestyle=":", linewidth=0.6)
-            ax.text(position, historical_low * 1.02, getattr(event, "corporate_action_type", "Sermaye"), rotation=90, fontsize=5, color=theme.muted)
-
-    details = {
-        "Güncel fiyat": f"{display_current:.2f} TL",
-        "Kullanıcı hedefi": f"{user_target:.2f} TL" if user_target is not None else None,
-        "Gereken yüzde": f"{((user_target / display_current) - 1) * 100:+.2f}%" if user_target and display_current else None,
-        "Gereken kat": f"{user_target / display_current:.2f}x" if user_target and display_current else None,
-        "Uzun vadeli trend": "Yükseliş" if trend_up else "Düşüş",
-        "Ana destek": f"{close.quantile(0.10):.2f} TL",
-        "Ana direnç": f"{close.quantile(0.90):.2f} TL",
-        "Temel değerleme": valuation_status or "Veri yetersiz",
-        "Spekülasyon riski": speculation_risk or "Veri yetersiz",
-        **(info_box or {}),
-    }
-    info_lines = [f"{key}: {value}" for key, value in details.items() if value is not None]
-    ax.text(
-        0.012, 0.982, "   •   ".join(info_lines[:4]), transform=ax.transAxes, va="top", ha="left",
-        fontsize=7.2, color=VIVID.text, fontweight="bold",
-        bbox={"boxstyle": "round,pad=.38", "facecolor": VIVID.panel_alt, "alpha": 0.92, "edgecolor": VIVID.grid},
-    )
+            ax.axvline(position, color=VIVID.faint, linestyle=":", linewidth=0.6)
 
     ax.set_ylabel("Fiyat (log)", fontsize=7)
     label = "Aylık" if normalized in {"monthly", "aylik", "aylık", "1mo", "1m"} else "Haftalık"
     ax.legend(loc="lower left", fontsize=6.5, ncol=4, facecolor=VIVID.panel_alt, edgecolor=VIVID.grid, labelcolor=VIVID.text)
     _format_trading_axis(ax, data, right_margin=2.5, label_format="%m.%Y")
     ax.yaxis.set_major_formatter(FuncFormatter(lambda value, _pos: f"{value:.{_price_decimals(symbol)}f}"))
+    draw_zone_rail(
+        ax, ax_rail, zone_rail_items, current_price=display_current, decimals=_price_decimals(symbol),
+    )
     date_label = pd.Timestamp(data.iloc[-1]["timestamp"]).strftime("%m.%Y")
-    fig.text(.06, .94, f"{symbol.upper()}  •  {label.upper()}  •  {date_label}  •  LOGARİTMİK", color=VIVID.text, fontsize=18, fontweight="bold")
-    add_banner(fig, f"{'▲' if trend_up else '▼'}  UZUN VADELİ YÖN: {'YUKARI' if trend_up else 'AŞAĞI'}", trend_color, left=.06, top=.875)
-    add_price_card(fig, display_current, trend_color, decimals=_price_decimals(symbol), x=.95, y=.865)
+    fig.text(.055, .94, f"{symbol.upper()}  •  {label.upper()}  •  {date_label}  •  LOGARİTMİK", color=VIVID.text, fontsize=18, fontweight="bold", fontfamily=SANS_FONT)
+    add_banner(fig, f"{'▲' if trend_up else '▼'}  UZUN VADELİ YÖN: {'YUKARI' if trend_up else 'AŞAĞI'}", trend_color, left=.055, top=.875)
+    add_price_card(fig, display_current, trend_color, decimals=_price_decimals(symbol), x=.86, y=.875)
     checklist = [
         ("Log trend eğimi", trend_up),
         ("Fiyat log trend üstünde", display_current >= float(np.exp(trend[-1]))),
@@ -1462,10 +1457,14 @@ def generate_long_term_chart(
         ("Hedef mesafesi makul", bool(user_target and display_current and user_target / display_current <= 2.5)),
     ]
     score = sum(ok for _name, ok in checklist) / len(checklist) * 100
-    add_checklist(fig, checklist, title="UZUN VADE CHECKLIST", x=.83, y=.22)
     add_score_bar(fig, score, label="UZUN VADE GÜVENİ")
     add_watermark(fig)
-    fig.text(.06, .105, "Log trend kanalı • Fibonacci • FVG/OB • BOS/MSS • Destek/Direnç • Hedef yol haritası", color=VIVID.muted, fontsize=7.5)
+    last_mss = next((event for event in reversed(smart.structure) if event.kind == "MSS"), None)
+    fig.text(
+        .41, .057,
+        f"Trend {'YUKARI' if trend_up else 'AŞAĞI'}  ·  Son MSS {last_mss.direction if last_mss else 'yok'}  ·  {len(zone_rail_items)} aktif bölge",
+        color=VIVID.muted, fontsize=8.0, fontfamily=SANS_FONT,
+    )
     out_path = os.path.join(tempfile.gettempdir(), f"mergen_long_{symbol}_{uuid.uuid4().hex[:8]}.png")
     fig.savefig(out_path, dpi=max(settings.chart_dpi, 140), facecolor=VIVID.background, bbox_inches="tight")
     plt.close(fig)

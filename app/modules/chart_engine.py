@@ -19,11 +19,16 @@ from matplotlib.ticker import FuncFormatter
 
 from app.analysis.smart_money_engine import SmartMoneyResult
 from app.services.vivid_chart_style import (
+    MONO_FONT,
+    SANS_FONT,
     VIVID,
+    ZoneRailItem,
     add_checklist as add_vivid_checklist,
     add_price_card,
     add_score_bar,
     add_watermark,
+    draw_zone_rail,
+    style_axes,
 )
 
 
@@ -35,10 +40,10 @@ MUTED = VIVID.muted
 BULL = VIVID.bull
 BEAR = VIVID.bear
 ENTRY = VIVID.blue
-TP = "#22c55e"
+TP = VIVID.bull
 SL = VIVID.bear
-OB_BULL = "#14b8a6"
-OB_BEAR = "#fb7185"
+OB_BULL = VIVID.bull
+OB_BEAR = VIVID.bear
 FVG_BULL = VIVID.amber
 FVG_BEAR = VIVID.amber
 
@@ -133,7 +138,8 @@ def _label_price(ax, price: float, text: str, color: str, decimals: int, *, x: f
         va="center",
         fontsize=9.2,
         fontweight="bold",
-        color="#ffffff",
+        color=VIVID.background,
+        fontfamily=MONO_FONT,
         bbox={"boxstyle": "round,pad=0.32", "facecolor": color, "edgecolor": color, "alpha": 0.92},
         clip_on=False,
         zorder=20,
@@ -150,8 +156,8 @@ def _draw_zone(
     x_start: float,
     x_end: float,
     alpha: float = 0.16,
-    decimals: int = 2,
-    label_offset_points: float = 3.0,
+    zone_sink: list[ZoneRailItem] | None = None,
+    direction: str = "",
 ) -> None:
     lower, upper = sorted((float(low), float(high)))
     if not math.isfinite(lower) or not math.isfinite(upper) or upper <= 0:
@@ -160,31 +166,29 @@ def _draw_zone(
     ax.add_patch(
         Rectangle(
             (x_start, lower), max(0.5, x_end - x_start), height,
-            facecolor=color, edgecolor=color, linewidth=1.0, alpha=alpha, zorder=1,
+            facecolor=color, edgecolor=color, linewidth=0.8, alpha=min(alpha, 0.12), zorder=1,
         )
     )
-    label_x = x_start + max(0.5, (x_end - x_start) * 0.32)
-    ax.annotate(
-        f"{label}  {lower:.{decimals}f}-{upper:.{decimals}f}",
-        xy=(label_x, upper),
-        xytext=(0, label_offset_points),
-        textcoords="offset points",
-        ha="center",
-        color=color,
-        fontsize=8.2,
-        fontweight="bold",
-        va="bottom",
-        bbox={"boxstyle": "round,pad=0.18", "facecolor": BG, "edgecolor": color, "alpha": 0.86},
-        zorder=8,
-    )
+    if zone_sink is not None:
+        zone_sink.append(
+            ZoneRailItem(kind=label, low=lower, high=upper, color=color, direction=direction)
+        )
 
 
-def _draw_smart_money(ax, smart: SmartMoneyResult | None, *, offset: int, length: int, decimals: int) -> None:
+def _draw_smart_money(
+    ax,
+    smart: SmartMoneyResult | None,
+    *,
+    offset: int,
+    length: int,
+    decimals: int,
+    zone_sink: list[ZoneRailItem] | None = None,
+) -> None:
     if smart is None:
         return
     x_end = length - 0.2
     zones = [*smart.order_blocks[-3:], *smart.fvg[-3:]]
-    for slot, zone in enumerate(zones):
+    for zone in zones:
         local_index = max(0.0, float((zone.origin_index if zone.origin_index is not None else zone.index) - offset))
         if local_index > length:
             continue
@@ -196,28 +200,34 @@ def _draw_smart_money(ax, smart: SmartMoneyResult | None, *, offset: int, length
             ax, zone.low, zone.high, zone.kind, color,
             x_start=local_index,
             x_end=x_end,
-            alpha=0.15 if zone.kind == "OB" else 0.18,
-            decimals=decimals,
-            label_offset_points=4.0 + (slot % 3) * 12.0,
+            alpha=0.10 if zone.kind == "OB" else 0.08,
+            zone_sink=zone_sink,
+            direction=zone.direction,
         )
 
-    for event in smart.structure[-5:]:
+    used_indices: list[int] = []
+    minimum_event_distance = max(4, round(length * 0.055))
+    for event in reversed(smart.structure[-5:]):
         local_index = event.index - offset
         if not 0 <= local_index < length:
             continue
+        if any(abs(local_index - used) < minimum_event_distance for used in used_indices):
+            continue
+        used_indices.append(local_index)
         color = BULL if event.direction == "bullish" else BEAR
         marker = "▲" if event.direction == "bullish" else "▼"
         ax.annotate(
             f"{marker} {event.kind}",
-            xy=(local_index, event.price),
-            xytext=(0, 18 if event.direction == "bullish" else -22),
+            xy=(local_index, 0.982 if event.direction == "bullish" else 0.018),
+            xycoords=("data", "axes fraction"),
+            xytext=(0, 0),
             textcoords="offset points",
             ha="center",
             va="center",
             fontsize=9,
             fontweight="bold",
             color=color,
-            arrowprops={"arrowstyle": "-|>", "color": color, "lw": 1.1},
+            fontfamily=SANS_FONT,
             zorder=15,
         )
 
@@ -263,14 +273,14 @@ def _draw_checklist(fig, checklist: Sequence[ChecklistVisual]) -> None:
 def _draw_timeline(fig, items: Sequence[NewsTimelineItem]) -> None:
     if not items:
         return
-    color_map = {"high": BEAR, "medium": "#fb923c", "low": "#eab308"}
+    color_map = {"high": BEAR, "medium": VIVID.amber, "low": VIVID.amber}
     visible = list(items[:4])
     x_values = [0.12 + index * (0.48 / max(1, len(visible) - 1)) for index in range(len(visible))]
     y = 0.105
     if len(visible) > 1:
         fig.lines.append(plt.Line2D([x_values[0], x_values[-1]], [y, y], transform=fig.transFigure, color=GRID, lw=2))
     for x, item in zip(x_values, visible):
-        color = color_map.get(item.impact.casefold(), "#f59e0b")
+        color = color_map.get(item.impact.casefold(), VIVID.amber)
         fig.patches.append(plt.Circle((x, y), 0.006, transform=fig.transFigure, color=color))
         title = item.title if len(item.title) <= 27 else item.title[:24] + "..."
         fig.text(x, y - 0.018, f"{item.time}\n{title}", color=MUTED, fontsize=7, ha="center", va="top")
@@ -294,13 +304,19 @@ def render_report_chart(
     direction = spec.direction.strip().upper()
     bullish = direction in {"BULLISH", "YUKARI", "LONG", "RISK-ON"}
     bearish = direction in {"BEARISH", "AŞAĞI", "ASAGI", "SHORT", "RISK-OFF"}
-    bias_color = BULL if bullish else BEAR if bearish else "#f59e0b"
+    bias_color = BULL if bullish else BEAR if bearish else VIVID.amber
     arrow = "▲" if bullish else "▼" if bearish else "◆"
 
-    fig = plt.figure(figsize=(15, 9), facecolor=BG)
-    ax = fig.add_axes([0.075, 0.19, 0.72, 0.66], facecolor=BG)
+    fig = plt.figure(figsize=(16, 9), facecolor=BG)
+    ax = fig.add_axes([0.055, 0.19, 0.60, 0.64], facecolor=VIVID.panel)
+    ax_rail = fig.add_axes([0.685, 0.19, 0.26, 0.64], facecolor=VIVID.panel)
+    style_axes(ax)
     _draw_candles(ax, data)
-    _draw_smart_money(ax, smart_money, offset=offset, length=len(data), decimals=decimals)
+    zone_rail_items: list[ZoneRailItem] = []
+    _draw_smart_money(
+        ax, smart_money, offset=offset, length=len(data), decimals=decimals,
+        zone_sink=zone_rail_items,
+    )
 
     x_end = len(data) - 0.2
     x_start = max(0.0, len(data) - 32.0)
@@ -309,7 +325,8 @@ def render_report_chart(
         zone_color = BULL if not bearish else BEAR
         _draw_zone(
             ax, spec.entry_low, spec.entry_high, zone_label, zone_color,
-            x_start=x_start, x_end=x_end, alpha=0.18, decimals=decimals,
+            x_start=x_start, x_end=x_end, alpha=0.12, zone_sink=zone_rail_items,
+            direction="bullish" if not bearish else "bearish",
         )
         entry = (
             float(spec.entry_price)
@@ -324,9 +341,8 @@ def render_report_chart(
     for index, target in enumerate(spec.targets[:5], start=1):
         ax.axhline(target, color=TP, linestyle=(0, (5, 4)), linewidth=1.05, alpha=max(0.45, 1 - index * 0.08), zorder=7)
         _label_price(ax, float(target), f"TP{index}", TP, decimals, x=1.002 + (index % 2) * 0.0001)
-    for level, label in spec.liquidity_levels:
-        ax.axhline(level, color="#c084fc", linestyle=(0, (2, 5)), linewidth=1.0, alpha=0.9)
-        ax.text(0.7, level, f"Liquidity Sweep • {label}", color="#d8b4fe", fontsize=8, va="bottom")
+    for level, _label in spec.liquidity_levels:
+        ax.axhline(level, color=VIVID.blue, linestyle=(0, (2, 5)), linewidth=0.8, alpha=0.58)
 
     ax.axhline(current, color=bias_color, linestyle=(0, (5, 4)), linewidth=1.0, alpha=0.72)
     _label_price(ax, current, "GÜNCEL", bias_color, decimals)
@@ -350,9 +366,13 @@ def render_report_chart(
     )
     for spine in ax.spines.values():
         spine.set_color(GRID)
+    draw_zone_rail(ax, ax_rail, zone_rail_items, current_price=current, decimals=decimals)
 
     title_date = spec.date_label or datetime.now().strftime("%d.%m.%Y")
-    fig.text(0.075, 0.93, f"{spec.instrument}  •  {spec.timeframe}  •  {title_date}", color=TEXT, fontsize=20, fontweight="bold")
+    fig.text(
+        0.055, 0.93, f"{spec.instrument}  •  {spec.timeframe}  •  {title_date}",
+        color=TEXT, fontsize=19, fontweight="bold", fontfamily=SANS_FONT,
+    )
     if spec.report_kind == "morning":
         banner = f"BUGÜN OLASI YÖN: {direction or 'NÖTR'}"
     elif spec.report_kind == "evening":
@@ -366,15 +386,14 @@ def render_report_chart(
     else:
         banner = f"{arrow}  {direction or 'NÖTR'} BIAS"
     fig.text(
-        0.075, 0.87, f"{arrow}  {banner}", color="#ffffff", fontsize=15, fontweight="bold",
+        0.055, 0.87, f"{arrow}  {banner}", color=VIVID.background, fontsize=14, fontweight="bold", fontfamily=SANS_FONT,
         bbox={"boxstyle": "round,pad=0.5", "facecolor": bias_color, "edgecolor": bias_color, "alpha": 0.9},
     )
-    add_price_card(fig, current, BULL, decimals=decimals, x=0.94, y=0.865)
+    add_price_card(fig, current, bias_color, decimals=decimals, x=0.83, y=0.875)
     if spec.rr is not None:
-        fig.text(0.94, 0.805, f"RR  1:{spec.rr:.2f}", color=TEXT, fontsize=15, fontweight="bold", ha="center")
+        fig.text(0.83, 0.805, f"RR  1:{spec.rr:.2f}", color=TEXT, fontsize=13, fontweight="bold", ha="center", fontfamily=MONO_FONT)
 
     _draw_market_status(fig, spec.sentiment_score, direction=direction, smart=smart_money)
-    _draw_checklist(fig, spec.checklist)
     if spec.report_kind == "evening":
         _draw_timeline(fig, spec.news_timeline)
     add_watermark(fig)

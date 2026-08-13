@@ -97,6 +97,7 @@ def build_telegram_application() -> Application:
     application.add_handler(CommandHandler("tarama_durumu", handlers_v3.cmd_tarama_durumu))
     from app.telegram.market_opportunity_handlers import cmd_firsatlar, cmd_gunluk5
     from app.telegram.basic_viop_handlers import cmd_basitalsat, cmd_viop, cmd_viopislem
+    from app.telegram.borsa_copilot_handlers import cmd_borsa_copilot, cmd_varant, cmd_viop_copilot
     application.add_handler(CommandHandler("firsatlar", cmd_firsatlar))
     application.add_handler(CommandHandler("firsat", cmd_firsatlar))
     application.add_handler(CommandHandler("gunluk5", cmd_gunluk5))
@@ -104,6 +105,9 @@ def build_telegram_application() -> Application:
     application.add_handler(CommandHandler("basitalsat", cmd_basitalsat))
     application.add_handler(CommandHandler("viop", cmd_viop))
     application.add_handler(CommandHandler("viopislem", cmd_viopislem))
+    application.add_handler(CommandHandler("borsacopilot", cmd_borsa_copilot))
+    application.add_handler(CommandHandler("viopcopilot", cmd_viop_copilot))
+    application.add_handler(CommandHandler("varant", cmd_varant))
     application.add_handler(CommandHandler("aksam_raporu", smxm_report_handlers.cmd_smxm_aksam_raporu))
     application.add_handler(CommandHandler("tarama_ayarlari", handlers_v3.cmd_tarama_ayarlari))
     application.add_handler(CommandHandler("tum_hisseler", smxm_report_handlers.cmd_tum_hisseler))
