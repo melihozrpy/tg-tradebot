@@ -2972,8 +2972,9 @@ async def cmd_start_v3(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     keyboard = [
         [InlineKeyboardButton("📊 Teknik Analiz", callback_data="menu_analiz"),
          InlineKeyboardButton("🎯 İşlem Planı", callback_data="menu_islemplani")],
-        [InlineKeyboardButton("💎 Fırsat Radarı", callback_data="menu_best50"),
-         InlineKeyboardButton("🌍 Piyasa Yapısı", callback_data="menu_piyasa")],
+        [InlineKeyboardButton("🧸 Bebek Hisse • En İyi 2", callback_data="menu_bebekhisse"),
+         InlineKeyboardButton("💎 Fırsat Radarı", callback_data="menu_best50")],
+        [InlineKeyboardButton("🌍 Piyasa Yapısı", callback_data="menu_piyasa")],
         [InlineKeyboardButton("🌅 Sabah Raporu", callback_data="menu_morning_report"),
          InlineKeyboardButton("🌙 Kapanış Raporu", callback_data="menu_smxm_evening")],
         [InlineKeyboardButton("🏢 Şirket & Bilanço", callback_data="menu_fundamental_prompt"),
@@ -3004,6 +3005,7 @@ async def cmd_start_v3(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "<b>⚡ HIZLI BAŞLANGIÇ</b>\n"
         "<code>/analiz THYAO</code> — Grafik + teknik özet\n"
         "<code>/islemplani THYAO</code> — Bölge, SL ve hedefler\n"
+        "<code>/bebekhisse 200000</code> — Çoklu teyitle en fazla 2 spot aday\n"
         "<code>/firsatlar 1s</code> — Saatlik güçlü fırsatlar\n"
         "<code>/viopcopilot THYAO gunici</code> — VİOP planı\n\n"
         "💡 Bir hisse kodu veya grafik fotoğrafı gönder; başlayalım.\n"
@@ -3037,6 +3039,15 @@ async def handle_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         "menu_islemplani": "Bir sembol yaz: /islemplani THYAO",
         "menu_all_stocks": "PDF'den aktarılan 571 kodu görmek için /tum_hisseler yaz.",
         "menu_best50": "Tüm evrende en kaliteli giriş bölgelerini taramak için /eniyi50 yaz.",
+        "menu_bebekhisse": (
+            "🧸 BEBEK HİSSE • PROFESYONEL SPOT RADAR\n"
+            "────────────────────────\n"
+            "571 hisseden yalnız günlük trend, 1s + 15dk + 5dk teyidi, likidite ve en az 1:2 R/R kapılarının tamamını geçen en fazla iki aday çıkar.\n"
+            "Giriş, son fiyattan değil retest bölgesinden hesaplanır; aday yoksa zorla isim yazmaz.\n\n"
+            "Tarama: /bebekhisse 200000\n"
+            "Tek hisse denetimi: /bebekhisse_kontrol THYAO 200000\n"
+            "Risk kuralları: /bebekhisse_ayar"
+        ),
         "menu_morning_report": "09:00 raporunu şimdi üretmek için /sabah_raporu yaz.",
         "menu_smxm_evening": "21:00 kapanış raporunu şimdi üretmek için /smxm_aksam_raporu yaz.",
         "menu_fundamental_prompt": "Şirketi bilanço, borç, kârlılık ve riskleriyle incelemek için: /sirket THYAO",
@@ -3253,11 +3264,8 @@ async def cmd_komutlar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "MSS/CHoCH teyidi, stop, TP1–TP2 ve RR verir\n"
         "  Örnek çıktı: ‘Ben olsam X seviyesinden girerim, çünkü OB/FVG retestidir.’\n"
         "  Not: Son kapanışı entry yapmaz; fiyat uzaktaysa beklenen retest seviyesini yazar.\n"
-        "/kademe THYAO — aktif OB/FVG'yi %40/%35/%25 böler; PENDING/CONFIRMED durumunu, "
-        "ortak SL'yi ve sade varsayımsal senaryo grafiğini gösterir; dolan kademeleri sanal izleyip "
-        "yeni ortalama maliyeti bildirir\n"
-        "/kirilsanaryo THYAO — destek/direnç kırılırsa gidilebilecek sonraki dinamik hedefi "
-        "ve bullish/bearish mini mum grafiğini gösterir\n\n"
+        "/kademe THYAO — OB/FVG'yi %40/%35/%25 kademeye böler; ortak SL ve senaryo grafiğini gösterir\n"
+        "/kirilsanaryo THYAO — kırılım sonrası dinamik hedefi ve mini mum grafiğini gösterir\n\n"
         "📊 ANALİZ\n"
         "/analiz THYAO — teknik analiz + 5dk/15dk/1s/4s okuması\n"
         "/islemplani THYAO — tek ana LONG/SHORT senaryosu ve yapısal entry planı\n"
@@ -3308,6 +3316,8 @@ async def cmd_komutlar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "/tara — listedeki hisseleri tarar\n"
         "/piyasa — 571 hisse piyasa genişliği ve yarın yön çerçevesi\n"
         "/piyasa long|short|tum — puan eşiğini geçen tüm adayları sayfalar\n"
+        "/bebekhisse 200000 — çoklu teyitli en fazla 2 spot LONG aday\n"
+        "/bebekhisse_kontrol THYAO 200000 — tek hisse denetimi • /bebekhisse_ayar — risk çerçevesi\n"
         "/firsatlar 5dk|1s|4s — seçtiğin zaman diliminde 10 gösterge filtresiyle fırsatları tarar (varsayılan: 1s)\n"
         "/gunluk5 — formasyon + teknik teyit + temel kalite filtresiyle günlük ilk 5 LONG adayını tarar\n"
         "/basitalsat — günlük teknik + doğrulanabilir temel kalite filtresiyle güçlü adayları tarar\n"

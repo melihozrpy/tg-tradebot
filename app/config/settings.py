@@ -206,6 +206,25 @@ class Settings(BaseSettings):
     market_opportunity_max_results: int = Field(default=8, ge=3, le=12)
     market_opportunity_minimum_confluence: int = Field(default=5, ge=3, le=10)
 
+    # ---- Bebek Hisse: iki adayla sınırlı, retest-first spot radar ----
+    # Bu ayarlar yalnızca /bebekhisse komutunun sıkı çoklu-zaman filtresidir.
+    # Varsayılanlar kaldıraçsız BIST spot işlemi içindir; otomatik emir vermez.
+    baby_stock_enabled: bool = Field(default=True)
+    baby_stock_default_capital: float = Field(default=200_000.0, gt=0)
+    baby_stock_risk_per_trade_percent: float = Field(default=0.5, gt=0, le=2)
+    baby_stock_daily_loss_limit_percent: float = Field(default=1.5, gt=0, le=5)
+    baby_stock_max_open_positions: int = Field(default=2, ge=1, le=5)
+    baby_stock_max_position_percent: float = Field(default=20.0, gt=0, le=50)
+    baby_stock_max_candidates: int = Field(default=2, ge=1, le=2)
+    baby_stock_hourly_min_confirmations: int = Field(default=8, ge=6, le=10)
+    baby_stock_15m_min_confirmations: int = Field(default=7, ge=5, le=10)
+    baby_stock_5m_min_confirmations: int = Field(default=6, ge=4, le=10)
+    baby_stock_min_liquidity_score: float = Field(default=60.0, ge=0, le=100)
+    baby_stock_shortlist_size: int = Field(default=12, ge=4, le=12)
+    baby_stock_no_overnight: bool = Field(default=True)
+    baby_stock_require_fundamental: bool = Field(default=False)
+    baby_stock_minimum_fundamental_score: int = Field(default=65, ge=0, le=100)
+
     # ---- VIOP egitim ve spot-dayanakli senaryo modulu ----
     # Bu liste canli sozlesme/veri akisi degil, resmi kaynaktan tarihli izleme
     # evrenidir. Emirden once araci kurum ekranindaki aktif vade/teminat esastir.
