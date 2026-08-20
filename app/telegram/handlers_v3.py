@@ -2974,6 +2974,8 @@ async def cmd_start_v3(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
          InlineKeyboardButton("🎯 İşlem Planı", callback_data="menu_islemplani")],
         [InlineKeyboardButton("🧸 Bebek Hisse • En İyi 2", callback_data="menu_bebekhisse"),
          InlineKeyboardButton("💎 Fırsat Radarı", callback_data="menu_best50")],
+        [InlineKeyboardButton("⏰ Günlük 2 Plan", callback_data="menu_oneriler"),
+         InlineKeyboardButton("📊 Plan Takibi", callback_data="menu_oneri_performans")],
         [InlineKeyboardButton("🌍 Piyasa Yapısı", callback_data="menu_piyasa")],
         [InlineKeyboardButton("🌅 Sabah Raporu", callback_data="menu_morning_report"),
          InlineKeyboardButton("🌙 Kapanış Raporu", callback_data="menu_smxm_evening")],
@@ -2997,6 +2999,7 @@ async def cmd_start_v3(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "📊 <b>Teknik Analiz:</b> Mum grafik, OB, FVG, MSS, destek/direnç\n"
         "🎯 <b>İşlem Planı:</b> Giriş bölgesi, stop, TP hedefleri ve R/R\n"
         "💎 <b>Fırsat Radarı:</b> 10 indikatör uyumlu güçlü adaylar\n"
+        "⏰ <b>Günlük 2 Plan:</b> 09:30 ve 16:30’da retest teyitli iki aday\n"
         "🌍 <b>Piyasa Yapısı:</b> 571 hisse genişliği ve günün yön çerçevesi\n"
         "🏢 <b>Şirket & Haber:</b> Bilanço, KAP ve son gelişmeler\n"
         "🔔 <b>Alarm Merkezi:</b> Hedef fiyatta anlık bildirim ve ses\n"
@@ -3006,6 +3009,8 @@ async def cmd_start_v3(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "<code>/analiz THYAO</code> — Grafik + teknik özet\n"
         "<code>/islemplani THYAO</code> — Bölge, SL ve hedefler\n"
         "<code>/bebekhisse 200000</code> — Çoklu teyitle en fazla 2 spot aday\n"
+        "<code>/oneriler</code> — Günlük iki planı şimdi tara\n"
+        "<code>/temelanaliz THYAO</code> — Doğrulanmış oranlar ve riskler\n"
         "<code>/firsatlar 1s</code> — Saatlik güçlü fırsatlar\n"
         "<code>/viopcopilot THYAO gunici</code> — VİOP planı\n\n"
         "💡 Bir hisse kodu veya grafik fotoğrafı gönder; başlayalım.\n"
@@ -3022,6 +3027,8 @@ def _analysis_action_keyboard(symbol: str) -> InlineKeyboardMarkup:
          InlineKeyboardButton("🔎 Detaylı Analiz", callback_data=f"detay_{symbol}")],
         [InlineKeyboardButton("🧱 Seviyeler", callback_data=f"menu_stage5e_seviyeler_{symbol}"),
          InlineKeyboardButton("⏱️ Çoklu Zaman", callback_data=f"menu_stage5e_coklu_{symbol}")],
+        [InlineKeyboardButton("Standart Grafik", callback_data=f"menu_stage5e_grafik_{symbol}"),
+         InlineKeyboardButton("Detaylı Grafik", callback_data=f"menu_stage5e_detaygrafik_{symbol}")],
         [InlineKeyboardButton("🏢 Temel Analiz", callback_data=f"menu_fundamental_{symbol}"),
          InlineKeyboardButton("📰 KAP Haberleri", callback_data=f"menu_kap_{symbol}")],
         [InlineKeyboardButton("🔔 Alarm Kur", callback_data=f"menu_stage5e_alarm_{symbol}"),
@@ -3048,9 +3055,18 @@ async def handle_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             "Tek hisse denetimi: /bebekhisse_kontrol THYAO 200000\n"
             "Risk kuralları: /bebekhisse_ayar"
         ),
+        "menu_oneriler": (
+            "⏰ GÜNLÜK 2 PLAN\n"
+            "────────────────────────\n"
+            "Her iş günü 09:30 ve 16:30’da iki aday için formasyon, çoklu teknik teyit, retest bölgesi ve en az 1:2 RR kontrol edilir.\n"
+            "Giriş son fiyattan değil, yalnız yazılan bölgeye dönüş ve 15dk teyitle geçerlidir.\n\n"
+            "Şimdi tara: /oneriler\n"
+            "2 günlük gerçekçi takip: /oneri_performans"
+        ),
+        "menu_oneri_performans": "Kayıtlı planların yalnız tetiklenenlerini doğrulanmış kapanmış günlük barlarla görmek için: /oneri_performans",
         "menu_morning_report": "09:00 raporunu şimdi üretmek için /sabah_raporu yaz.",
         "menu_smxm_evening": "21:00 kapanış raporunu şimdi üretmek için /smxm_aksam_raporu yaz.",
-        "menu_fundamental_prompt": "Şirketi bilanço, borç, kârlılık ve riskleriyle incelemek için: /sirket THYAO",
+        "menu_fundamental_prompt": "Şirketi bilanço, borç, kârlılık ve riskleriyle incelemek için: /temelanaliz THYAO",
         "menu_kap_prompt": "Son resmî şirket bildirimleri için: /kap THYAO",
         "menu_alarm_prompt": "Fiyat alarmı örneği: /alarm 9.20 THYAO",
         "menu_alarm_test": "Alarm sesini denemek için: /alarm_test radar",
@@ -3086,7 +3102,7 @@ async def handle_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         await query.message.reply_text(f"İşlem planı için /islemplani {data.removeprefix('menu_plan_')} yaz.")
         return
     if data.startswith("menu_fundamental_"):
-        await query.message.reply_text(f"Temel analiz için /sirket {data.removeprefix('menu_fundamental_')} yaz.")
+        await query.message.reply_text(f"Temel analiz için /temelanaliz {data.removeprefix('menu_fundamental_')} yaz.")
         return
     if data.startswith("menu_kap_"):
         await query.message.reply_text(f"KAP bildirimleri için /kap {data.removeprefix('menu_kap_')} yaz.")
@@ -3268,8 +3284,8 @@ async def cmd_komutlar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "/kirilsanaryo THYAO — kırılım sonrası dinamik hedefi ve mini mum grafiğini gösterir\n\n"
         "📊 ANALİZ\n"
         "/analiz THYAO — teknik analiz + 5dk/15dk/1s/4s okuması\n"
-        "/islemplani THYAO — tek ana LONG/SHORT senaryosu ve yapısal entry planı\n"
         "/sirket THYAO — şirketi ve finansal durumunu anlatır\n"
+        "/temelanaliz THYAO — oranlar, borç/nakit ve doğrulanmış riskler\n"
         "/kap THYAO — lisanslı akış varsa son KAP bildirimlerini, yoksa resmî aramayı gösterir\n"
         "/haber THYAO — son 24–48 saat haber/KAP başlıklarını kaynak, tarih ve piyasa algısıyla özetler\n"
         "/seviyeler THYAO — destek ve dirençleri gösterir\n"
@@ -3283,18 +3299,12 @@ async def cmd_komutlar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "/backtest THYAO — son 2 yılı masraflarla test eder\n"
         "/backtest THYAO 2023-01-01 2026-01-01 — özel dönem\n"
         "/backtest_ozet — son testleri ve başarı oranlarını gösterir\n\n"
-        "/smxm_backtest THYAO 2025-01-01 2025-06-01 10000 — A+ setup simülasyonu\n"
-        "/sanal_portfoy_olustur Ana 10000 — bağımsız sanal hesap oluşturur\n"
-        "/sanal_portfoyler — tüm SMXM sanal hesaplarını listeler\n\n"
+        "/smxm_backtest THYAO 2025-01-01 2025-06-01 10000 — A+ setup simülasyonu\n\n"
         "📌 SİNYAL TAKİBİ\n"
         "/sinyaller — üretilen sinyalleri listeler\n"
         "/sinyal 123 — sinyal planı ve olay geçmişi\n"
         "/takip 123 — planı sana ait PENDING_ENTRY kaydı olarak izler\n"
-        "/takip_birak 123 — otomatik izlemeyi durdurur\n"
-        "/sinyal_iptal 123 — gerçekleşmemiş giriş planını iptal eder\n"
-        "/stop_girise 123 — aktif pozisyon stopunu girişe taşır\n"
-        "/pozisyon_kapat 123 — doğrulanmış canlı fiyatla sanal takibi kapatır\n"
-        "/aktif_pozisyonlar — açık sanal takip pozisyonlarını gösterir\n\n"
+        "/takip_birak 123 — otomatik izlemeyi durdurur • /aktif_pozisyonlar — açık sanal takip\n\n"
         "🧪 GELİŞMİŞ BACKTEST\n"
         "/backtest_signal 123 — kayıtlı sinyali kronolojik yeniden oynatır\n"
         "/backtest_watchlist 1g 3y — izleme listesini test eder\n"
@@ -3320,6 +3330,8 @@ async def cmd_komutlar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "/bebekhisse_kontrol THYAO 200000 — tek hisse denetimi • /bebekhisse_ayar — risk çerçevesi\n"
         "/firsatlar 5dk|1s|4s — seçtiğin zaman diliminde 10 gösterge filtresiyle fırsatları tarar (varsayılan: 1s)\n"
         "/gunluk5 — formasyon + teknik teyit + temel kalite filtresiyle günlük ilk 5 LONG adayını tarar\n"
+        "/oneriler — 09:30/16:30 iki aday planını şimdi üretir; giriş yalnız retest bölgesinde geçerlidir\n"
+        "/oneri_performans — iki gün yaşı gelen planların yalnız tetiklenen sonuçlarını gösterir\n"
         "/basitalsat — günlük teknik + doğrulanabilir temel kalite filtresiyle güçlü adayları tarar\n"
         "/viop — VİOP eğitimi, teminat/teslimat riski ve uygun dayanak izleme listesini gösterir\n"
         "/viopislem THYAO gunici 5000 — spot-dayanaklı koşullu VİOP planı ve %0,5 stop-risk hesabı\n"

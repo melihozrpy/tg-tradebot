@@ -1102,6 +1102,58 @@ class ScheduledMessageDelivery(Base):
     created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
 
 
+class ScheduledTradeIdea(Base):
+    """Immutable record of an automatic retest-first trade idea.
+
+    The record makes the later two-day card auditable: it never rewrites the
+    original entry, stop or target after the fact and it distinguishes a zone
+    that was never reached from an actual simulated outcome.
+    """
+
+    __tablename__ = "scheduled_trade_ideas"
+    __table_args__ = (UniqueConstraint("run_key", "symbol", name="uq_scheduled_trade_idea_run_symbol"),)
+
+    id = Column(Integer, primary_key=True)
+    run_key = Column(String(96), nullable=False, index=True)
+    slot = Column(String(16), nullable=False, index=True)  # morning | afternoon
+    symbol = Column(String(16), nullable=False, index=True)
+    score = Column(Integer, nullable=False)
+    observed_price = Column(Float, nullable=False)
+    entry_low = Column(Float, nullable=False)
+    entry_high = Column(Float, nullable=False)
+    stop_price = Column(Float, nullable=False)
+    tp1_price = Column(Float, nullable=False)
+    tp2_price = Column(Float, nullable=True)
+    planned_rr = Column(Float, nullable=False)
+    pattern_name = Column(String(96), nullable=True)
+    technical_reasons_json = Column(Text, nullable=True)
+    fundamental_status = Column(String(48), nullable=True)
+    fundamental_score = Column(Integer, nullable=True)
+    issued_at = Column(DateTime(timezone=True), default=utcnow, nullable=False, index=True)
+    evaluation_status = Column(String(32), nullable=False, default="PENDING", index=True)
+    evaluated_at = Column(DateTime(timezone=True), nullable=True)
+    evaluation_price = Column(Float, nullable=True)
+    return_percent = Column(Float, nullable=True)
+    note = Column(Text, nullable=True)
+
+
+class KapMonitorEvent(Base):
+    """Deduplication ledger for permitted third-party KAP headline feeds."""
+
+    __tablename__ = "kap_monitor_events"
+    __table_args__ = (UniqueConstraint("content_hash", name="uq_kap_monitor_event_hash"),)
+
+    id = Column(Integer, primary_key=True)
+    content_hash = Column(String(64), nullable=False, unique=True, index=True)
+    source = Column(String(64), nullable=False)
+    source_url = Column(Text, nullable=False)
+    title = Column(Text, nullable=False)
+    impact_score = Column(Float, nullable=False)
+    category = Column(String(64), nullable=False)
+    detected_at = Column(DateTime(timezone=True), default=utcnow, nullable=False, index=True)
+    delivered_at = Column(DateTime(timezone=True), nullable=True)
+
+
 class PriceAlertTrigger(Base):
     __tablename__ = "price_alert_triggers"
     __table_args__ = (UniqueConstraint("idempotency_key", name="uq_price_alert_trigger_key"),)

@@ -114,8 +114,12 @@ def _analysis_from_snapshot(snapshot: "FundamentalSnapshot") -> CompanyAnalysis:
             "market_cap": _number(latest.value("market_cap")),
             "total_debt": _number(latest.value("total_debt")),
             "total_cash": _number(latest.value("cash_and_equivalents")),
+            "total_assets": _number(latest.value("total_assets")),
+            "total_liabilities": _number(latest.value("total_liabilities")),
         }
     )
+    assets, liabilities = metrics.get("total_assets"), metrics.get("total_liabilities")
+    metrics["asset_to_liability"] = assets / liabilities if assets is not None and liabilities not in {None, 0} else None
     trends = tuple(
         filter(
             None,
@@ -271,6 +275,17 @@ def analyze_company(
     net_income = _row(income, "Net Income", "Net Income Common Stockholders")
     ebitda = _row(income, "EBITDA", "Normalized EBITDA")
     operating_cash = _row(cashflow, "Operating Cash Flow", "Total Cash From Operating Activities")
+    total_assets = _row(balance, "Total Assets")
+    total_liabilities = _row(balance, "Total Liabilities Net Minority Interest", "Total Liabilities")
+    latest_assets = _number(total_assets.iloc[-1]) if total_assets is not None and len(total_assets) else None
+    latest_liabilities = _number(total_liabilities.iloc[-1]) if total_liabilities is not None and len(total_liabilities) else None
+    metrics["total_assets"] = latest_assets
+    metrics["total_liabilities"] = latest_liabilities
+    metrics["asset_to_liability"] = (
+        latest_assets / latest_liabilities
+        if latest_assets is not None and latest_liabilities not in {None, 0}
+        else None
+    )
     trends = tuple(filter(None, (
         _trend_line("Ciro", revenue, str(info.get("financialCurrency") or "TRY")),
         _trend_line("Net kâr", net_income, str(info.get("financialCurrency") or "TRY")),

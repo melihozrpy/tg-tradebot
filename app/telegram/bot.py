@@ -82,6 +82,8 @@ def build_telegram_application() -> Application:
     application.add_handler(CommandHandler("ai_analiz", cmd_ai_analiz))
     application.add_handler(CommandHandler("hisse_ai", cmd_ai_analiz))
     application.add_handler(CommandHandler("sirket", handlers_v3.cmd_sirket))
+    from app.telegram.fundamental_handlers import cmd_temelanaliz
+    application.add_handler(CommandHandler("temelanaliz", cmd_temelanaliz))
     application.add_handler(CommandHandler("kap", handlers_v3.cmd_kap))
     application.add_handler(CommandHandler("skor_detay", handlers_v3.cmd_skor_detay))
 
@@ -99,6 +101,7 @@ def build_telegram_application() -> Application:
     from app.telegram.baby_stock_handlers import cmd_bebekhisse, cmd_bebekhisse_ayar, cmd_bebekhisse_kontrol
     from app.telegram.basic_viop_handlers import cmd_basitalsat, cmd_viop, cmd_viopislem
     from app.telegram.borsa_copilot_handlers import cmd_borsa_copilot, cmd_varant, cmd_viop_copilot
+    from app.telegram.scheduled_idea_handlers import cmd_oneriler, cmd_oneri_performans
     application.add_handler(CommandHandler("firsatlar", cmd_firsatlar))
     application.add_handler(CommandHandler("firsat", cmd_firsatlar))
     application.add_handler(CommandHandler("gunluk5", cmd_gunluk5))
@@ -112,6 +115,8 @@ def build_telegram_application() -> Application:
     application.add_handler(CommandHandler("borsacopilot", cmd_borsa_copilot))
     application.add_handler(CommandHandler("viopcopilot", cmd_viop_copilot))
     application.add_handler(CommandHandler("varant", cmd_varant))
+    application.add_handler(CommandHandler("oneriler", cmd_oneriler))
+    application.add_handler(CommandHandler("oneri_performans", cmd_oneri_performans))
     application.add_handler(CommandHandler("aksam_raporu", smxm_report_handlers.cmd_smxm_aksam_raporu))
     application.add_handler(CommandHandler("tarama_ayarlari", handlers_v3.cmd_tarama_ayarlari))
     application.add_handler(CommandHandler("tum_hisseler", smxm_report_handlers.cmd_tum_hisseler))
@@ -358,6 +363,225 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
                     )
         finally:
             db.close()
+
+    def _scheduled_recipients(db, *, configured_chat_id: int | None = None) -> set[int]:
+        """Resolve recipients once, respecting an explicit broadcast chat first."""
+
+        from app.models.database import User
+
+        if configured_chat_id:
+            return {int(configured_chat_id)}
+        recipients = {
+            int(user.telegram_user_id)
+            for user in db.query(User).filter(User.kill_switch_active.is_(False)).all()
+        }
+        recipients.update(int(value) for value in getattr(settings, "admin_ids", ()))
+        return recipients
+
+    async def _deliver_scheduled_ideas(slot: str) -> None:
+        """Run the top-two, retest-first scanner and store the exact plans."""
+
+        def _scan_and_save():
+            from app.analysis.screener_engine import run_daily_top_picks_scan
+            from app.config.instruments import universe_symbols
+            from app.data.provider_factory import build_market_data_provider
+            from app.fundamentals.factory import build_fundamental_provider
+            from app.models.database import get_session_factory
+            from app.services.scheduled_idea_service import persist_scheduled_ideas
+
+            scan_settings = settings.model_copy(
+                update={
+                    "daily_top_picks_max_results": int(settings.scheduled_ideas_max_results),
+                    "daily_top_picks_require_fundamental": bool(settings.scheduled_ideas_require_fundamental),
+                }
+            )
+            result = run_daily_top_picks_scan(
+                symbols=universe_symbols(settings.bist_universe_json_path),
+                provider_factory=lambda: build_market_data_provider(settings),
+                fundamental_provider_factory=lambda: build_fundamental_provider(settings),
+                settings=scan_settings,
+            )
+            db = get_session_factory()()
+            try:
+                persist_scheduled_ideas(
+                    db,
+                    report=result,
+                    slot=slot,
+                    maximum=settings.scheduled_ideas_max_results,
+                )
+            finally:
+                db.close()
+            return result
+
+        result = await asyncio.to_thread(_scan_and_save)
+        logger.info("Zamanlanmış iki aday tarandı slot=%s scanned=%s picks=%s", slot, result.scanned, len(result.picks))
+        if application is None:
+            return
+        from app.models.database import get_session_factory
+        from app.services.scheduled_delivery_dedup import claim_scheduled_delivery
+        from app.services.scheduled_idea_service import format_scheduled_ideas_report
+
+        text = format_scheduled_ideas_report(
+            result,
+            slot=slot,
+            timezone_name=settings.timezone_name,
+            maximum=settings.scheduled_ideas_max_results,
+        )
+        local = result.created_at.astimezone(ZoneInfo(settings.timezone_name))
+        delivery_key = f"scheduled:two-ideas:{slot}:{local:%Y%m%d}"
+        db = get_session_factory()()
+        try:
+            for chat_id in _scheduled_recipients(db):
+                if not claim_scheduled_delivery(db, dedup_key=delivery_key, chat_id=chat_id):
+                    continue
+                try:
+                    await application.bot.send_message(chat_id=chat_id, text=text)
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("İki aday kartı gönderilemedi chat=%s: %s", chat_id, exc)
+        finally:
+            db.close()
+
+    # Default false for legacy/test settings objects that predate this additive
+    # feature; real Settings declares the feature enabled by default.
+    if getattr(settings, "scheduled_ideas_enabled", False):
+        def _add_idea_job(slot: str, at_time: str, job_id: str) -> None:
+            try:
+                hour_text, minute_text = at_time.split(":")
+
+                async def _idea_job(current_slot: str = slot) -> None:
+                    await _deliver_scheduled_ideas(current_slot)
+
+                scheduler.add_job(
+                    _idea_job,
+                    CronTrigger(
+                        day_of_week="mon-fri",
+                        hour=int(hour_text),
+                        minute=int(minute_text),
+                        timezone="Europe/Istanbul",
+                    ),
+                    id=job_id,
+                    coalesce=True,
+                    max_instances=1,
+                    replace_existing=True,
+                )
+            except (AttributeError, TypeError, ValueError):
+                logger.warning("Zamanlanmış iki aday saati geçersiz slot=%s time=%s", slot, at_time)
+
+        _add_idea_job("morning", settings.scheduled_ideas_morning_time, "scheduled_two_ideas_morning")
+        _add_idea_job("afternoon", settings.scheduled_ideas_afternoon_time, "scheduled_two_ideas_afternoon")
+
+    if getattr(settings, "scheduled_idea_performance_enabled", False):
+        async def _scheduled_idea_performance_job() -> None:
+            def _evaluate():
+                from app.data.provider_factory import build_market_data_provider
+                from app.models.database import get_session_factory
+                from app.services.scheduled_idea_service import evaluate_due_ideas
+
+                db = get_session_factory()()
+                try:
+                    return evaluate_due_ideas(
+                        db,
+                        provider=build_market_data_provider(settings),
+                        minimum_age_days=settings.scheduled_idea_performance_days,
+                    )
+                finally:
+                    db.close()
+
+            items = await asyncio.to_thread(_evaluate)
+            if application is None or not items:
+                return
+            from app.models.database import get_session_factory
+            from app.services.scheduled_delivery_dedup import claim_scheduled_delivery
+            from app.services.scheduled_idea_service import format_idea_performance_report
+
+            local = datetime.now(timezone.utc).astimezone(ZoneInfo(settings.timezone_name))
+            text = format_idea_performance_report(items, timezone_name=settings.timezone_name)
+            delivery_key = f"scheduled:two-ideas-performance:{local:%G-W%V}"
+            db = get_session_factory()()
+            try:
+                for chat_id in _scheduled_recipients(db):
+                    if not claim_scheduled_delivery(db, dedup_key=delivery_key, chat_id=chat_id):
+                        continue
+                    try:
+                        await application.bot.send_message(chat_id=chat_id, text=text)
+                    except Exception as exc:  # noqa: BLE001
+                        logger.warning("İki günlük plan takibi gönderilemedi chat=%s: %s", chat_id, exc)
+            finally:
+                db.close()
+
+        try:
+            perf_hour, perf_minute = settings.scheduled_idea_performance_time.split(":")
+            scheduler.add_job(
+                _scheduled_idea_performance_job,
+                CronTrigger(
+                    day_of_week="tue,thu",
+                    hour=int(perf_hour),
+                    minute=int(perf_minute),
+                    timezone="Europe/Istanbul",
+                ),
+                id="scheduled_two_ideas_performance",
+                coalesce=True,
+                max_instances=1,
+                replace_existing=True,
+            )
+        except (AttributeError, TypeError, ValueError):
+            logger.warning("SCHEDULED_IDEA_PERFORMANCE_TIME geçersiz: %s", settings.scheduled_idea_performance_time)
+
+    if getattr(settings, "kap_monitor_enabled", False):
+        async def _kap_monitor_job() -> None:
+            def _claim():
+                from app.models.database import get_session_factory
+                from app.services.kap_monitor_service import claim_new_impacting_headlines
+
+                db = get_session_factory()()
+                try:
+                    return claim_new_impacting_headlines(
+                        db,
+                        url=settings.kap_monitor_url,
+                        minimum_impact_score=settings.kap_monitor_minimum_impact_score,
+                    )
+                finally:
+                    db.close()
+
+            try:
+                headlines = await asyncio.to_thread(_claim)
+            except PermissionError as exc:
+                logger.warning("KAP başlık monitörü robots politikası nedeniyle durdu: %s", exc)
+                return
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("KAP başlık monitörü hata verdi: %s", type(exc).__name__)
+                return
+            if application is None or not headlines:
+                return
+            from app.models.database import get_session_factory
+            from app.services.kap_monitor_service import format_kap_alert
+
+            db = get_session_factory()()
+            try:
+                for headline in headlines[:8]:
+                    for chat_id in _scheduled_recipients(
+                        db,
+                        configured_chat_id=getattr(settings, "kap_monitor_chat_id", None),
+                    ):
+                        try:
+                            await application.bot.send_message(
+                                chat_id=chat_id,
+                                text=format_kap_alert(headline),
+                                disable_web_page_preview=True,
+                            )
+                        except Exception as exc:  # noqa: BLE001
+                            logger.warning("KAP başlık bildirimi gönderilemedi chat=%s: %s", chat_id, exc)
+            finally:
+                db.close()
+
+        scheduler.add_job(
+            _kap_monitor_job,
+            IntervalTrigger(minutes=int(settings.kap_monitor_interval_minutes), timezone="Europe/Istanbul"),
+            id="midas_kap_headline_monitor",
+            coalesce=True,
+            max_instances=1,
+            replace_existing=True,
+        )
 
     async def _deliver_smxm_report(kind: str) -> None:
         """DB/provider işlemlerini worker thread'de, Telegram'ı event-loop'ta tutar."""

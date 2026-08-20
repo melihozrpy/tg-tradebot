@@ -30,6 +30,8 @@ REQUIRED_TABLES = {
     "ema_cross_state", "rsi_alert_state", "news_cache",
     "staged_entry_plans", "staged_entry_events",
     "scheduled_message_deliveries",
+    "scheduled_trade_ideas",
+    "kap_monitor_events",
 }
 
 
@@ -65,14 +67,14 @@ def test_55_fresh_migration_reaches_stage5g_head(migrated_databases):
         names = {row[0] for row in connection.execute("select name from sqlite_master where type='table'")}
         version = connection.execute("select version_num from alembic_version").fetchone()[0]
     assert REQUIRED_TABLES.issubset(names)
-    assert version == "0011_scheduled_delivery_dedup"
+    assert version == "0012_scheduled_ideas_kap_monitor"
 
 
 def test_56_existing_database_migration_reaches_stage5g_head(migrated_databases):
     _, existing = migrated_databases
     with sqlite3.connect(existing) as connection:
         version = connection.execute("select version_num from alembic_version").fetchone()[0]
-    assert version == "0011_scheduled_delivery_dedup"
+    assert version == "0012_scheduled_ideas_kap_monitor"
 
 
 def test_57_existing_user_record_is_preserved_by_migration(migrated_databases):

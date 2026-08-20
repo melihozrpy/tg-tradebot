@@ -225,6 +225,27 @@ class Settings(BaseSettings):
     baby_stock_require_fundamental: bool = Field(default=False)
     baby_stock_minimum_fundamental_score: int = Field(default=65, ge=0, le=100)
 
+    # ---- Zamanlanmış iki aday / doğrulanmış performans takibi ----
+    # Bu yayınlar otomatik emir veya getiri taahhüdü değildir. Adaylar yalnız
+    # mevcut teknik kapıları geçen, retest teyidi bekleyen izleme planlarıdır.
+    scheduled_ideas_enabled: bool = Field(default=True)
+    scheduled_ideas_morning_time: str = Field(default="09:30")
+    scheduled_ideas_afternoon_time: str = Field(default="16:30")
+    scheduled_ideas_max_results: int = Field(default=2, ge=1, le=2)
+    scheduled_ideas_require_fundamental: bool = Field(default=True)
+    scheduled_idea_performance_enabled: bool = Field(default=True)
+    scheduled_idea_performance_time: str = Field(default="18:15")
+    scheduled_idea_performance_days: int = Field(default=2, ge=1, le=10)
+
+    # ---- KAP başlık monitörü ----
+    # Midas sayfası yalnız robots.txt izin verirse başlık düzeyinde okunur;
+    # ham haber metni kopyalanmaz ve Midas, resmî KAP yerine geçmez.
+    kap_monitor_enabled: bool = Field(default=True)
+    kap_monitor_interval_minutes: int = Field(default=5, ge=5, le=60)
+    kap_monitor_url: str = Field(default="https://www.getmidas.com/kap-haberleri/")
+    kap_monitor_chat_id: int | None = Field(default=None)
+    kap_monitor_minimum_impact_score: int = Field(default=20, ge=1, le=100)
+
     # ---- VIOP egitim ve spot-dayanakli senaryo modulu ----
     # Bu liste canli sozlesme/veri akisi degil, resmi kaynaktan tarihli izleme
     # evrenidir. Emirden once araci kurum ekranindaki aktif vade/teminat esastir.
