@@ -103,7 +103,8 @@ def format_scheduled_ideas_report(
     lines = [
         f"┏━━ 📍 {slot_title} • 2 HİSSE PLANI ━━┓",
         f"🕒 {local:%d.%m.%Y %H:%M} TSİ  •  {report.scanned} hisse tarandı",
-        "🛡 Filtre: doğrulanmış formasyon + çoklu teknik teyit + retest bölgesi + RR ≥ 1:2.",
+        "🛡 Filtre: 7/8 teknik + 7/10 gösterge + likidite + GÜÇLÜ temel görünüm + retest + RR ≥ 1:2.",
+        "⛔ Koşmuş, düşük likit veya manipülasyon riski taşıyan isimler elenir.",
         "⛔ Son fiyattan giriş yok; plan yalnız bölgeye dönüş ve kapanış/hacim teyidiyle aktiftir.",
     ]
     if not picks:
@@ -134,6 +135,11 @@ def format_scheduled_ideas_report(
                 f"📐 Yapı: {pick.pattern.name} — {pick.pattern.detail}",
                 f"✅ Uyum: {reasons}",
                 f"🏢 Temel kontrol: {fundamental}",
+                *(
+                    [f"💧 Likidite: {pick.liquidity_score:.0f}/100 • 20g işlem tutarı: {pick.average_turnover_try / 1_000_000:.1f} mn TL"]
+                    if pick.liquidity_score is not None and pick.average_turnover_try is not None
+                    else []
+                ),
                 f"⏳ Tetik: {pick.confirmation_instruction}",
             ]
         )

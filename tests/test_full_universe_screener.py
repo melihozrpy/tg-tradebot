@@ -157,7 +157,7 @@ def test_daily_top_pick_requires_real_pattern_target_and_retest_entry() -> None:
     )
     state = SymbolTechnicalState(
         symbol="THYAO",
-        price=106.0,
+        price=102.0,
         ema20=101.0,
         ema50=99.0,
         ema100=97.0,
@@ -212,6 +212,31 @@ def test_daily_top_pick_requires_real_pattern_target_and_retest_entry() -> None:
     assert "Ters Omuz Baş Omuz" in card
     assert "%3 kâr garantisi değildir" in card
 
+
+def test_daily_top_pick_rejects_extended_or_low_liquidity_name() -> None:
+    pattern = ChartPattern(
+        name="Yükselen Üçgen",
+        kind="continuation",
+        direction="bullish",
+        confirmed=True,
+        confidence=88,
+        breakout_level=104.0,
+        target=116.0,
+        detail="Kırılım kapanışla doğrulandı.",
+    )
+    base = dict(
+        symbol="THYAO", price=102.0, ema20=101.0, ema50=99.0, ema100=97.0,
+        relation="above", crossover=None, rsi=60.0, rsi_state="normal", adx=28.0,
+        relative_volume=1.25, supertrend_direction="up", bullish_confluence=6,
+        bearish_confluence=0, bullish_qualified=True, bearish_qualified=False,
+        bullish_ten_confluence=7, bearish_ten_confluence=1, bullish_ten_qualified=True,
+        bearish_ten_qualified=False, vwap=103.0, macd_histogram=0.4, obv_rising=True,
+        poc=102.0, vah=107.0, val=99.0, atr=2.0, support=100.0, resistance=110.0,
+        timestamp=pd.Timestamp("2026-08-09", tz="UTC"), patterns=(pattern,),
+    )
+
+    assert _build_daily_top_pick(SymbolTechnicalState(**{**base, "price": 106.0}), minimum_confirmations=7) is None
+    assert _build_daily_top_pick(SymbolTechnicalState(**{**base, "liquidity_score": 55.0}), minimum_confirmations=7) is None
 
 def test_opportunity_scan_accepts_hourly_ten_indicator_mode() -> None:
     report = run_market_opportunity_scan(

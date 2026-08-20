@@ -19,6 +19,7 @@ from app.analysis.indicator_engine import (
     evaluate_ten_indicator_confluence,
     pivot_support_resistance,
 )
+from app.analysis.liquidity_engine import compute_liquidity
 from app.analysis.pattern_engine import ChartPattern, detect_chart_patterns
 from app.data.base_provider import BaseMarketDataProvider
 from app.models.database import EmaCrossState, RsiAlertState
@@ -61,6 +62,12 @@ class SymbolTechnicalState:
     patterns: tuple[ChartPattern, ...]
     bullish_ten_confirmation_labels: tuple[str, ...] = ()
     bearish_ten_confirmation_labels: tuple[str, ...] = ()
+    # These values keep thin or erratic symbols out of scheduled picks. They
+    # stay optional for backwards-compatible direct state construction; real
+    # scans always calculate them from OHLCV.
+    liquidity_score: float | None = None
+    average_turnover_try: float | None = None
+    manipulation_risk: bool = False
 
 
 @dataclass(frozen=True)
@@ -158,6 +165,8 @@ class DailyTopPick:
     fundamental_score: int | None
     fundamental_status: str
     fundamental_source: str | None
+    liquidity_score: float | None = None
+    average_turnover_try: float | None = None
 
 
 @dataclass(frozen=True)
@@ -223,6 +232,7 @@ def analyze_symbol_frame(
     atr_values = atr(data, 14)
     support, resistance = pivot_support_resistance(data, lookback=20)
     patterns = detect_chart_patterns(frame)
+    liquidity = compute_liquidity(frame)
     return SymbolTechnicalState(
         symbol=symbol.upper().removesuffix(".IS"),
         price=float(last["close"]),
@@ -257,6 +267,9 @@ def analyze_symbol_frame(
         patterns=patterns,
         bullish_ten_confirmation_labels=tuple(bullish_ten.confirmations),
         bearish_ten_confirmation_labels=tuple(bearish_ten.confirmations),
+        liquidity_score=liquidity.score if liquidity.available else None,
+        average_turnover_try=liquidity.avg_turnover_20d_try if liquidity.available else None,
+        manipulation_risk=liquidity.manipulation_risk if liquidity.available else False,
     )
 
 
@@ -701,7 +714,13 @@ def run_intraday_trade_scenario_scan(
     )
 
 
-def _daily_top_pick_checks(state: SymbolTechnicalState) -> tuple[tuple[str, bool], ...]:
+def _daily_top_pick_checks(
+    state: SymbolTechnicalState,
+    *,
+    minimum_relative_volume: float = 1.0,
+    minimum_adx: float = 22.0,
+    maximum_atr_percent: float = 6.0,
+) -> tuple[tuple[str, bool], ...]:
     """Independent daily-long checks; daily VWAP is not counted as session VWAP.
 
     A one-day candle cannot recreate an intraday session VWAP accurately, so
@@ -715,23 +734,48 @@ def _daily_top_pick_checks(state: SymbolTechnicalState) -> tuple[tuple[str, bool
         ("EMA20/50/100", state.ema20 > state.ema50 > state.ema100),
         ("Fiyat > EMA100", state.price > state.ema100),
         ("Supertrend", state.supertrend_direction == "up"),
-        ("RSI", 50 <= state.rsi <= 68),
+        ("RSI", 50 <= state.rsi <= 64),
         ("MACD", state.macd_histogram > 0),
-        ("ADX", state.adx >= 20),
-        ("Hacim/OBV", state.relative_volume >= 0.80 and state.obv_rising),
-        ("ATR", 0.8 <= atr_percent <= 8.0),
+        ("ADX", state.adx >= minimum_adx),
+        ("Hacim/OBV", state.relative_volume >= minimum_relative_volume and state.obv_rising),
+        ("ATR", 0.8 <= atr_percent <= maximum_atr_percent),
     )
 
 
-def _build_daily_top_pick(state: SymbolTechnicalState, *, minimum_confirmations: int) -> DailyTopPick | None:
+def _build_daily_top_pick(
+    state: SymbolTechnicalState,
+    *,
+    minimum_confirmations: int,
+    minimum_ten_confirmations: int = 7,
+    minimum_relative_volume: float = 1.0,
+    minimum_adx: float = 22.0,
+    maximum_atr_percent: float = 6.0,
+    maximum_extension_atr: float = 0.75,
+    minimum_target_potential_percent: float = 4.0,
+    minimum_liquidity_score: float = 65.0,
+) -> DailyTopPick | None:
     """Build a conservative daily-long plan from confirmed evidence only."""
 
     if state.price <= 0 or state.atr <= 0:
         return None
+    # A scheduled idea is deliberately stricter than the generic opportunity
+    # scanner: broad technical agreement plus liquid, non-erratic trading is
+    # required. A large chart target alone cannot promote a thin name.
+    if state.manipulation_risk:
+        return None
+    if state.liquidity_score is not None and state.liquidity_score < minimum_liquidity_score:
+        return None
+    if state.bullish_ten_confluence < minimum_ten_confirmations:
+        return None
     patterns = _matching_confirmed_patterns(state, "bullish")
     if not patterns:
         return None
-    checks = _daily_top_pick_checks(state)
+    checks = _daily_top_pick_checks(
+        state,
+        minimum_relative_volume=minimum_relative_volume,
+        minimum_adx=minimum_adx,
+        maximum_atr_percent=maximum_atr_percent,
+    )
     technical_confirmations = sum(passed for _, passed in checks)
     if technical_confirmations < max(5, min(8, int(minimum_confirmations))):
         return None
@@ -744,6 +788,9 @@ def _build_daily_top_pick(state: SymbolTechnicalState, *, minimum_confirmations:
     zone_padding = max(state.atr * 0.15, state.price * 0.001)
     entry_low = max(0.0001, zone_center - zone_padding)
     entry_high = zone_center + zone_padding
+    # A move already far above its retest zone is not a fresh opportunity.
+    if state.price > entry_high + state.atr * maximum_extension_atr:
+        return None
     entry = (entry_low + entry_high) / 2.0
     stop_reference = min(entry_low, support) if support is not None else entry_low
     stop = max(0.0001, stop_reference - max(state.atr * 0.75, entry * 0.004))
@@ -759,7 +806,7 @@ def _build_daily_top_pick(state: SymbolTechnicalState, *, minimum_confirmations:
     rr = (tp1 - entry) / risk
     # A target should be a real next resistance/pattern objective.  We do not
     # invent a three-percent level simply to fill the hourly report.
-    if target_potential_percent < 3.0 or rr < 2.0:
+    if target_potential_percent < minimum_target_potential_percent or rr < 2.0:
         return None
     tp2 = max(
         float(pattern.target) if pattern.target is not None else 0.0,
@@ -794,10 +841,18 @@ def _build_daily_top_pick(state: SymbolTechnicalState, *, minimum_confirmations:
         fundamental_score=None,
         fundamental_status="DOĞRULANMADI",
         fundamental_source=None,
+        liquidity_score=state.liquidity_score,
+        average_turnover_try=state.average_turnover_try,
     )
 
 
-def _verify_pick_fundamentals(pick: DailyTopPick, provider) -> DailyTopPick | None:
+def _verify_pick_fundamentals(
+    pick: DailyTopPick,
+    provider,
+    *,
+    minimum_score: int = 70,
+    minimum_coverage: int = 80,
+) -> DailyTopPick | None:
     """Allow only verified, sufficiently complete fundamentals into the strong list."""
 
     from app.services.company_analysis_service import analyze_company
@@ -808,7 +863,7 @@ def _verify_pick_fundamentals(pick: DailyTopPick, provider) -> DailyTopPick | No
         logger.info("Gunluk ilk 5 temel dogrulama atlandi symbol=%s error=%s", pick.symbol, type(exc).__name__)
         return None
     status = str(analysis.status)
-    if status in {"RİSKLİ", "VERİ YETERSİZ"} or analysis.score < 65 or analysis.data_coverage < 60:
+    if status != "GÜÇLÜ" or analysis.score < minimum_score or analysis.data_coverage < minimum_coverage:
         return None
     final_score = min(99, round(pick.score * 0.68 + analysis.score * 0.32))
     return replace(
@@ -844,11 +899,23 @@ def run_daily_top_picks_scan(
         timeframe="1d",
         settings=settings,
     )
-    minimum = max(5, min(8, int(getattr(settings, "daily_top_picks_minimum_confirmations", 6))))
+    minimum = max(5, min(8, int(getattr(settings, "daily_top_picks_minimum_confirmations", 7))))
     candidates = [
         candidate
         for state in states
-        if (candidate := _build_daily_top_pick(state, minimum_confirmations=minimum)) is not None
+        if (
+            candidate := _build_daily_top_pick(
+                state,
+                minimum_confirmations=minimum,
+                minimum_ten_confirmations=max(5, min(10, int(getattr(settings, "daily_top_picks_minimum_ten_confirmations", 7)))),
+                minimum_relative_volume=float(getattr(settings, "daily_top_picks_min_relative_volume", 1.0)),
+                minimum_adx=float(getattr(settings, "daily_top_picks_min_adx", 22.0)),
+                maximum_atr_percent=float(getattr(settings, "daily_top_picks_max_atr_percent", 6.0)),
+                maximum_extension_atr=float(getattr(settings, "daily_top_picks_max_extension_atr", 0.75)),
+                minimum_target_potential_percent=float(getattr(settings, "daily_top_picks_min_target_potential_percent", 4.0)),
+                minimum_liquidity_score=float(getattr(settings, "daily_top_picks_min_liquidity_score", 65.0)),
+            )
+        ) is not None
     ]
     candidates.sort(key=lambda item: (-item.score, -item.target_potential_percent, item.symbol))
     inspect_limit = max(5, min(40, int(getattr(settings, "daily_top_picks_fundamental_candidates", 20))))
@@ -865,7 +932,12 @@ def run_daily_top_picks_scan(
         if fundamental_provider is not None:
             for candidate in shortlist:
                 checked += 1
-                verified_pick = _verify_pick_fundamentals(candidate, fundamental_provider)
+                verified_pick = _verify_pick_fundamentals(
+                    candidate,
+                    fundamental_provider,
+                    minimum_score=int(getattr(settings, "daily_top_picks_min_fundamental_score", 70)),
+                    minimum_coverage=int(getattr(settings, "daily_top_picks_min_fundamental_coverage", 80)),
+                )
                 if verified_pick is not None:
                     verified.append(verified_pick)
     selected = verified if require_fundamental else (verified or shortlist)
@@ -1133,7 +1205,8 @@ def format_daily_top_picks_report(
             if report.fundamental_checked
             else "🧾 Temel doğrulama: kaynak sonucu bekleniyor"
         ),
-        "🛡 Şart: günlük çoklu teyit + kapanışla doğrulanmış formasyon + gerçek dirençe kadar ≥%3 potansiyel + RR ≥1:2.",
+        "🛡 Şart: 7/8 teknik + 7/10 gösterge, likidite/temel kalite, teyitli formasyon, ≥%4 hedef alanı ve RR ≥1:2.",
+        "⛔ Koşmuş, düşük likit veya manipülasyon riski taşıyan isimler otomatik elenir.",
         "📌 Giriş yalnız retest bölgesinden; güncel fiyattan otomatik AL yok.",
     ]
     if not report.picks:
@@ -1159,6 +1232,11 @@ def format_daily_top_picks_report(
                 f"{rank}. 🟢 {pick.symbol}  •  KALİTE {pick.score}/100  •  {pick.technical_confirmations}/8 teknik teyit",
                 f"📐 Formasyon: {pick.pattern.name} ✅ — {pick.pattern.detail}",
                 f"🏢 Temel görünüm: {fundamental}",
+                *(
+                    [f"💧 Likidite: {pick.liquidity_score:.0f}/100  •  20g ort. işlem tutarı: {pick.average_turnover_try / 1_000_000:.1f} mn TL"]
+                    if pick.liquidity_score is not None and pick.average_turnover_try is not None
+                    else []
+                ),
                 f"📍 Fiyat: {_format_price(pick.price)}  →  Giriş bölgesi: {_format_price(pick.entry_low)}–{_format_price(pick.entry_high)}",
                 f"🛑 Geçersizlik/Stop: {_format_price(pick.stop)}",
                 f"🎯 TP1: {_format_price(pick.tp1)}  •  TP2: {_format_price(pick.tp2)}  •  Potansiyel: %{pick.target_potential_percent:.1f}",

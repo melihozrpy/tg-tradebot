@@ -199,7 +199,19 @@ class Settings(BaseSettings):
     # ---- Saatlik günlük ilk 5 teknik + temel doğrulama listesi ----
     daily_top_picks_enabled: bool = Field(default=True)
     daily_top_picks_max_results: int = Field(default=5, ge=1, le=10)
-    daily_top_picks_minimum_confirmations: int = Field(default=6, ge=5, le=8)
+    daily_top_picks_minimum_confirmations: int = Field(default=7, ge=5, le=8)
+    # The scheduled two-name card is intentionally stricter than the general
+    # radar: it filters extended candles, thin/erratic names and weak
+    # financial snapshots instead of filling two slots at any cost.
+    daily_top_picks_minimum_ten_confirmations: int = Field(default=7, ge=5, le=10)
+    daily_top_picks_min_relative_volume: float = Field(default=1.0, gt=0, le=5)
+    daily_top_picks_min_adx: float = Field(default=22.0, ge=5, le=80)
+    daily_top_picks_max_atr_percent: float = Field(default=6.0, gt=0, le=20)
+    daily_top_picks_max_extension_atr: float = Field(default=0.75, gt=0, le=5)
+    daily_top_picks_min_target_potential_percent: float = Field(default=4.0, gt=0, le=30)
+    daily_top_picks_min_liquidity_score: float = Field(default=65.0, ge=0, le=100)
+    daily_top_picks_min_fundamental_score: int = Field(default=70, ge=0, le=100)
+    daily_top_picks_min_fundamental_coverage: int = Field(default=80, ge=0, le=100)
     daily_top_picks_fundamental_candidates: int = Field(default=20, ge=5, le=40)
     # Sağlam firma etiketi ancak temel veri kaynağı gerçekten doğruladığında kullanılır.
     daily_top_picks_require_fundamental: bool = Field(default=True)
