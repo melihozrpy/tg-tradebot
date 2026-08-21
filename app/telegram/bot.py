@@ -102,6 +102,7 @@ def build_telegram_application() -> Application:
     from app.telegram.basic_viop_handlers import cmd_basitalsat, cmd_viop, cmd_viopislem
     from app.telegram.borsa_copilot_handlers import cmd_borsa_copilot, cmd_varant, cmd_viop_copilot
     from app.telegram.scheduled_idea_handlers import cmd_oneriler, cmd_oneri_performans
+    from app.telegram.mechanical_bist_handlers import cmd_mekanik_kurallar, cmd_mekanik_setup
     application.add_handler(CommandHandler("firsatlar", cmd_firsatlar))
     application.add_handler(CommandHandler("firsat", cmd_firsatlar))
     application.add_handler(CommandHandler("gunluk5", cmd_gunluk5))
@@ -117,6 +118,8 @@ def build_telegram_application() -> Application:
     application.add_handler(CommandHandler("varant", cmd_varant))
     application.add_handler(CommandHandler("oneriler", cmd_oneriler))
     application.add_handler(CommandHandler("oneri_performans", cmd_oneri_performans))
+    application.add_handler(CommandHandler("mekanik", cmd_mekanik_setup))
+    application.add_handler(CommandHandler("mekanik_kurallar", cmd_mekanik_kurallar))
     application.add_handler(CommandHandler("aksam_raporu", smxm_report_handlers.cmd_smxm_aksam_raporu))
     application.add_handler(CommandHandler("tarama_ayarlari", handlers_v3.cmd_tarama_ayarlari))
     application.add_handler(CommandHandler("tum_hisseler", smxm_report_handlers.cmd_tum_hisseler))
@@ -1336,6 +1339,76 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
             max_instances=1,
         )
         logger.info("5g sanal islem ve sinyal sonuc takip isi scheduler'a eklendi.")
+
+    if getattr(settings, "mechanical_setup_schedule_enabled", False):
+        async def _mechanical_setup_job(slot: str) -> None:
+            """Send only closed-candle ACTIVE plans from the configured BIST list."""
+
+            def _scan() -> list[dict]:
+                from app.analysis.mechanical_bist_engine import analyze_mechanical_bist_setup
+                from app.config.instruments import parse_instruments_env
+                from app.data.provider_factory import build_market_data_provider
+
+                excluded = {"EURUSD", "XAUUSD", "XAGUSD", "US100", "USDTRY", "EURTRY"}
+                symbols = [item for item in parse_instruments_env(getattr(settings, "instruments", "")) if item not in excluded]
+                symbols = symbols[:int(getattr(settings, "mechanical_setup_schedule_symbols_limit", 10))]
+                provider = build_market_data_provider(settings)
+                results: list[dict] = []
+                for symbol in symbols:
+                    try:
+                        payload = analyze_mechanical_bist_setup(symbol, provider=provider, settings=settings)
+                    except Exception as exc:  # no guessed replacement if one symbol is unavailable
+                        logger.info("Mekanik scheduler sembol atlandı symbol=%s error=%s", symbol, type(exc).__name__)
+                        continue
+                    if payload.get("status") == "ACTIVE":
+                        results.append(payload)
+                return results[:3]
+
+            payloads = await asyncio.to_thread(_scan)
+            if not payloads or application is None:
+                return
+            from app.models.database import get_session_factory
+            from app.services.scheduled_delivery_dedup import claim_scheduled_delivery
+            import json
+
+            local_day = datetime.now(ZoneInfo(settings.timezone_name)).strftime("%Y%m%d")
+            db = get_session_factory()()
+            try:
+                for chat_id in _scheduled_recipients(db):
+                    for payload in payloads:
+                        key = f"mechanical:{slot}:{local_day}:{payload['symbol']}"
+                        if not claim_scheduled_delivery(db, dedup_key=key, chat_id=chat_id):
+                            continue
+                        rendered = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+                        if len(rendered) > 3700:
+                            # Do not split a JSON object into invalid fragments in an
+                            # automatic alert. The complete coordinate-rich version
+                            # remains available on demand via /mekanik SYMBOL.
+                            rendered = json.dumps(
+                                {
+                                    "symbol": payload["symbol"], "status": payload["status"],
+                                    "current_price": payload["current_price"], "signal": payload["signal"],
+                                    "full_json_command": f"/mekanik {payload['symbol']}",
+                                }, ensure_ascii=False, separators=(",", ":")
+                            )
+                        text = "⚙️ MEKANİK BIST SETUP\n<pre>" + rendered + "</pre>"
+                        await application.bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML")
+            finally:
+                db.close()
+
+        for job_id, hour, minute, slot in (
+            ("mechanical_preopen", 9, 15, "preopen"),
+            ("mechanical_open", 9, 35, "open"),
+            ("mechanical_low_liquidity", 11, 5, "low_liquidity"),
+            ("mechanical_afternoon", 15, 5, "afternoon"),
+            ("mechanical_close", 17, 25, "close"),
+        ):
+            scheduler.add_job(
+                _mechanical_setup_job,
+                CronTrigger(day_of_week="mon-fri", hour=hour, minute=minute, timezone="Europe/Istanbul"),
+                kwargs={"slot": slot}, id=job_id, coalesce=True, max_instances=1, replace_existing=True,
+            )
+        logger.info("Mekanik BIST setup scheduler işleri eklendi.")
 
     return scheduler
 

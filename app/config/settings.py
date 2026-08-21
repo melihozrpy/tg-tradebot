@@ -237,6 +237,15 @@ class Settings(BaseSettings):
     baby_stock_require_fundamental: bool = Field(default=False)
     baby_stock_minimum_fundamental_score: int = Field(default=65, ge=0, le=100)
 
+    # ---- Kapanmış mumlarla mekanik BIST setup motoru ----
+    # Daily → 4H → 1H/15dk hiyerarşisini JSON olarak verir; otomatik emir
+    # göndermez. Likidite eşiği altındaki paylarda ACTIVE sinyal üretilmez.
+    mechanical_setup_enabled: bool = Field(default=True)
+    mechanical_setup_minimum_liquidity_score: float = Field(default=65.0, ge=0, le=100)
+    mechanical_setup_risk_per_trade_percent: float = Field(default=0.25, gt=0, le=2)
+    mechanical_setup_schedule_enabled: bool = Field(default=True)
+    mechanical_setup_schedule_symbols_limit: int = Field(default=10, ge=1, le=25)
+
     # ---- Zamanlanmış iki aday / doğrulanmış performans takibi ----
     # Bu yayınlar otomatik emir veya getiri taahhüdü değildir. Adaylar yalnız
     # mevcut teknik kapıları geçen, retest teyidi bekleyen izleme planlarıdır.
