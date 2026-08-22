@@ -1,0 +1,16 @@
+# Coolify accidentally selected Nixpacks for this repository in the past.
+# Keep that fallback lean and deterministic; the preferred Coolify build pack
+# remains the repository Dockerfile.
+providers = ["python"]
+
+[phases.setup]
+# Do not pull the default compiler-heavy Nix environment.  All production
+# Python dependencies used here publish wheels for this runtime.
+nixPkgs = ["python311"]
+
+[phases.install]
+cmds = ["python -m pip install --upgrade build setuptools", "python -m pip install ."]
+cacheDirectories = ["/root/.cache/pip"]
+
+[start]
+cmd = "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"
