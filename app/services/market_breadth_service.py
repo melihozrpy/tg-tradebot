@@ -13,7 +13,7 @@ from typing import Callable, Optional
 
 import pandas as pd
 
-from app.analysis.indicator_engine import ema, rsi
+from app.analysis.indicator_engine import ema
 from app.data.base_provider import BaseMarketDataProvider, DataUnavailableError
 
 
@@ -29,8 +29,6 @@ class BreadthCandidate:
     confirmation_level: float | None = None
     technical_target: float | None = None
     target_basis: str = ""
-    rsi14: float | None = None
-    atr_percent: float | None = None
 
 
 @dataclass
@@ -84,10 +82,7 @@ class _Snapshot:
     new_low: bool
     prior_high: float
     prior_low: float
-    structural_high: float
-    structural_low: float
     atr14: float
-    rsi14: float
     long_score: int
     short_score: int
     long_reasons: tuple[str, ...]
@@ -139,8 +134,8 @@ def _finite(value: float, default: float = 0.0) -> float:
 
 def _score_snapshot(symbol: str, frame) -> _Snapshot:
     frame = frame.sort_values("timestamp").reset_index(drop=True)
-    if len(frame) < 61:
-        raise DataUnavailableError("En az 61 tamamlanmış günlük bar gerekli.")
+    if len(frame) < 51:
+        raise DataUnavailableError("En az 51 tamamlanmış günlük bar gerekli.")
     close = frame["close"].astype(float)
     last = _finite(close.iloc[-1])
     previous = _finite(close.iloc[-2])
@@ -162,9 +157,6 @@ def _score_snapshot(symbol: str, frame) -> _Snapshot:
     prior_window = frame.iloc[-21:-1]
     prior_high = _finite(prior_window["high"].max())
     prior_low = _finite(prior_window["low"].min())
-    structural_window = frame.iloc[-61:-1]
-    structural_high = _finite(structural_window["high"].max())
-    structural_low = _finite(structural_window["low"].min())
     new_high = last >= prior_high
     new_low = last <= prior_low
     true_range = pd.concat(
@@ -176,7 +168,6 @@ def _score_snapshot(symbol: str, frame) -> _Snapshot:
         axis=1,
     ).max(axis=1)
     atr14 = _finite(true_range.ewm(alpha=1 / 14, min_periods=14, adjust=False).mean().iloc[-1])
-    rsi14 = _finite(rsi(close, 14).iloc[-1], 50.0)
     momentum20 = (last / _finite(close.iloc[-21]) - 1.0) * 100.0
     previous_volume = _finite(frame["volume"].astype(float).iloc[-21:-1].mean())
     current_volume = max(0.0, _finite(frame["volume"].iloc[-1]))
@@ -235,10 +226,6 @@ def _score_snapshot(symbol: str, frame) -> _Snapshot:
         else:
             short_score += 5
             short_reasons.append(f"hacim {relative_volume:.1f}x")
-    if 48 <= rsi14 <= 68 and above20:
-        long_reasons.append(f"RSI {rsi14:.0f} dengeli")
-    elif 32 <= rsi14 <= 52 and not above20:
-        short_reasons.append(f"RSI {rsi14:.0f} zayıf")
 
     return _Snapshot(
         symbol=symbol,
@@ -255,10 +242,7 @@ def _score_snapshot(symbol: str, frame) -> _Snapshot:
         new_low=new_low,
         prior_high=round(prior_high, 4),
         prior_low=round(prior_low, 4),
-        structural_high=round(structural_high, 4),
-        structural_low=round(structural_low, 4),
         atr14=round(atr14, 4),
-        rsi14=round(rsi14, 1),
         long_score=min(100, long_score),
         short_score=min(100, short_score),
         long_reasons=tuple(long_reasons),
@@ -268,20 +252,23 @@ def _score_snapshot(symbol: str, frame) -> _Snapshot:
 
 def _candidate(snapshot: _Snapshot, direction: str) -> BreadthCandidate:
     is_long = direction == "LONG"
-    # Rapor hedefi yalnızca gözlemlenen karşı swing seviyesinden alınır.
-    # Geçmiş direncin üstünde kalan fiyat için yapay ATR uzama hedefi üretmeyiz.
+    # A report target must come from an observed opposing swing first.  When a
+    # stock has already closed beyond that swing, label the ATR extension
+    # explicitly instead of disguising a projection as a historical level.
     if is_long:
         confirmation_level = snapshot.prior_high
-        if snapshot.structural_high > snapshot.prior_high > snapshot.close:
-            technical_target, target_basis = snapshot.structural_high, "önceki 60g direnç"
+        if snapshot.prior_high > snapshot.close:
+            technical_target, target_basis = snapshot.prior_high, "önceki 20g direnç"
         else:
-            technical_target, target_basis = None, ""
+            technical_target = snapshot.close + snapshot.atr14 * 1.5
+            target_basis = "1.5× ATR uzama bandı"
     else:
         confirmation_level = snapshot.prior_low
-        if 0 < snapshot.structural_low < snapshot.prior_low < snapshot.close:
-            technical_target, target_basis = snapshot.structural_low, "önceki 60g destek"
+        if 0 < snapshot.prior_low < snapshot.close:
+            technical_target, target_basis = snapshot.prior_low, "önceki 20g destek"
         else:
-            technical_target, target_basis = None, ""
+            technical_target = max(0.0, snapshot.close - snapshot.atr14 * 1.5)
+            target_basis = "1.5× ATR aşağı uzama bandı"
     return BreadthCandidate(
         symbol=snapshot.symbol,
         direction=direction,
@@ -291,69 +278,9 @@ def _candidate(snapshot: _Snapshot, direction: str) -> BreadthCandidate:
         relative_volume=snapshot.relative_volume,
         reasons=(snapshot.long_reasons if is_long else snapshot.short_reasons)[:4],
         confirmation_level=round(confirmation_level, 4) if confirmation_level > 0 else None,
-        technical_target=round(technical_target, 4) if technical_target is not None and technical_target > 0 else None,
+        technical_target=round(technical_target, 4) if technical_target > 0 else None,
         target_basis=target_basis,
-        rsi14=snapshot.rsi14,
-        atr_percent=round((snapshot.atr14 / snapshot.close) * 100.0, 2) if snapshot.close else None,
     )
-
-
-def _select_next_session_candidates(
-    rows: list[_Snapshot],
-    *,
-    direction: str,
-    minimum_signal_score: int,
-    limit: int = 3,
-) -> list[_Snapshot]:
-    """Prefer clean pullback/breakout *candidates*, never already-extended moves.
-
-    A breadth report is an overnight watchlist, not a winner/loser table.  The
-    filter deliberately excludes BIST limit-style moves and requires an
-    observed opposing 20-day level so the displayed target is auditable.
-    """
-
-    bullish = direction == "LONG"
-    selected: list[_Snapshot] = []
-    for row in rows:
-        score = row.long_score if bullish else row.short_score
-        if score < minimum_signal_score:
-            continue
-        if bullish:
-            target_distance = ((row.structural_high / row.close) - 1.0) * 100.0 if row.close else 0.0
-            eligible = (
-                row.long_score >= row.short_score + 6
-                and 0.0 <= row.change <= 5.5
-                and 48.0 <= row.rsi14 <= 68.0
-                and row.relative_volume >= 0.80
-                and row.prior_high > row.close
-                and row.structural_high > row.prior_high
-                and 1.0 <= target_distance <= 12.0
-            )
-        else:
-            target_distance = ((row.structural_low / row.close) - 1.0) * 100.0 if row.close else 0.0
-            eligible = (
-                row.short_score >= row.long_score + 6
-                and -5.5 <= row.change <= 0.0
-                and 32.0 <= row.rsi14 <= 52.0
-                and row.relative_volume >= 0.80
-                and 0.0 < row.prior_low < row.close
-                and 0.0 < row.structural_low < row.prior_low
-                and -12.0 <= target_distance <= -1.0
-            )
-        if eligible:
-            selected.append(row)
-
-    # Strong technical alignment is primary; a smaller daily move wins ties so
-    # a late/rallied name does not displace a fresh setup.
-    selected.sort(
-        key=lambda row: (
-            -(row.long_score if bullish else row.short_score),
-            abs(row.change - (1.5 if bullish else -1.5)),
-            -row.relative_volume,
-            row.symbol,
-        )
-    )
-    return selected[:limit]
 
 
 def compute_market_breadth(
@@ -475,12 +402,6 @@ def compute_market_breadth(
     ]
     long_rows.sort(key=lambda row: (row.long_score, row.change, row.relative_volume), reverse=True)
     short_rows.sort(key=lambda row: (row.short_score, -row.change, row.relative_volume), reverse=True)
-    report_longs = _select_next_session_candidates(
-        snapshots, direction="LONG", minimum_signal_score=minimum_signal_score, limit=3
-    )
-    report_shorts = _select_next_session_candidates(
-        snapshots, direction="SHORT/RİSK", minimum_signal_score=minimum_signal_score, limit=3
-    )
     gainers = sorted(snapshots, key=lambda row: row.change, reverse=True)[:top_n]
     losers = sorted(snapshots, key=lambda row: row.change)[:top_n]
     coverage = round(scanned / len(symbols) * 100, 1)
@@ -518,8 +439,8 @@ def compute_market_breadth(
         neutral_count=scanned - len(long_rows) - len(short_rows),
         top_gainers=tuple(_candidate(row, "LONG") for row in gainers),
         top_losers=tuple(_candidate(row, "SHORT/RİSK") for row in losers),
-        long_candidates=tuple(_candidate(row, "LONG") for row in report_longs),
-        short_candidates=tuple(_candidate(row, "SHORT/RİSK") for row in report_shorts),
+        long_candidates=tuple(_candidate(row, "LONG") for row in long_rows),
+        short_candidates=tuple(_candidate(row, "SHORT/RİSK") for row in short_rows),
     )
     if cache_minutes > 0:
         with _CACHE_LOCK:
