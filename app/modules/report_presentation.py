@@ -11,34 +11,28 @@ def _price(value: float | None) -> str:
     return f"{value:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
 
 
-def _candidate_lines(candidate: BreadthCandidate, *, bullish: bool) -> list[str]:
-    reasons = " • ".join(candidate.reasons[:3])
-    target_line: str | None = None
-    if candidate.technical_target is not None and candidate.technical_target > 0:
-        distance = ((candidate.technical_target / candidate.last_close) - 1.0) * 100.0
-        target_label = "Potansiyel hedef" if bullish else "Düşüş potansiyeli"
-        target_line = (
-            f"   {target_label}: {_price(candidate.technical_target)} "
-            f"({candidate.target_basis}; %{distance:+.1f})"
-        )
-    if bullish:
-        reason_label = "Neden güçlü"
-        risk = "Genel piyasa çerçevesi değişirse bireysel güç de zayıflayabilir."
-    else:
-        reason_label = "Neden zayıf"
-        risk = "Spot BIST'te bu bir açığa satış çağrısı değil; hacim teyitsiz işlem alınmamalı."
-    lines = [
-        f"▸ {candidate.symbol}  (Skor: {candidate.score}/100 • Günlük: %{candidate.change_percent:+.1f})",
-        f"   {reason_label}: {reasons or 'Yeterli sayısal teknik gerekçe üretilemedi.'}",
-    ]
-    if target_line:
-        lines.append(target_line)
-    if candidate.confirmation_level is not None and candidate.confirmation_level > 0:
+def _candidate_lines(candidate: BreadthCandidate, *, bullish: bool, rank: int) -> list[str]:
+    """Keep the overnight watchlist compact and mechanically verifiable."""
+
+    reasons = " • ".join(candidate.reasons[:3]) or "Teknik veri yetersiz"
+    quality = f"Kalite {candidate.score}/100"
+    if candidate.rsi14 is not None:
+        quality += f" • RSI {candidate.rsi14:.0f}"
+    lines = [f"{rank}) *{candidate.symbol}* • {quality}", f"   Neden: {reasons}"]
+    if candidate.confirmation_level is not None and candidate.technical_target is not None:
+        target_distance = ((candidate.technical_target / candidate.last_close) - 1.0) * 100.0
         if bullish:
-            lines.append(f"   Teyit seviyesi: {_price(candidate.confirmation_level)} üstünde günlük kapanış")
+            lines.append(
+                f"   Tetik: {_price(candidate.confirmation_level)} üstü kapanış → "
+                f"Direnç: {_price(candidate.technical_target)} (%{target_distance:+.1f})"
+            )
         else:
-            lines.append(f"   Düşüş teyidi: {_price(candidate.confirmation_level)} altında günlük kapanış sürerse")
-    lines.append(f"   Risk notu: {risk}")
+            lines.append(
+                f"   Tetik: {_price(candidate.confirmation_level)} altı kapanış → "
+                f"Destek: {_price(candidate.technical_target)} (%{target_distance:+.1f})"
+            )
+    else:
+        lines.append("   Seviye: doğrulanmış karşı swing yok; izleme dışı bırakılmalı.")
     return lines
 
 
@@ -57,21 +51,22 @@ def format_breadth_panel(breadth: MarketBreadthResult, *, report_kind: str) -> l
     lines = [
         "",
         f"🌐 {breadth.universe_size} HİSSE • PİYASA İÇ YAPISI ({phase})",
-        f"• Kapsam: {scope}",
-        f"• Puan: {breadth.breadth_score}/100 • {breadth.regime}",
-        f"• Yükselen/Düşen/Yatay: {breadth.advancers}/{breadth.decliners}/{breadth.unchanged} • Net genişlik: {breadth.net_breadth:+d}",
-        f"• EMA20/50/200 üstü: %{breadth.above_ema20_ratio:.1f} / %{breadth.above_ema50_ratio:.1f} / {ema200}",
-        f"• Yeni 20g zirve/dip: {breadth.new_20d_highs}/{breadth.new_20d_lows} • Hacim artışı: %{breadth.rising_volume_ratio:.1f}",
-        f"• Long {breadth.long_count} • Short/Risk {breadth.short_count} • Nötr {breadth.neutral_count}",
-        f"🔮 Açılış çerçevesi: {breadth.tomorrow_bias}",
+        f"• Kapsam {scope} • Piyasa puanı {breadth.breadth_score}/100 ({breadth.regime})",
+        f"• Yükselen/Düşen: {breadth.advancers}/{breadth.decliners} • Net: {breadth.net_breadth:+d}",
+        f"• EMA50/200 üstü: %{breadth.above_ema50_ratio:.1f} / {ema200} • Hacim: %{breadth.rising_volume_ratio:.1f}",
+        f"🧭 Sonraki seans çerçevesi: {breadth.tomorrow_bias}",
     ]
 
     if breadth.long_candidates:
-        lines.extend(["", "🟢 GÜÇLÜ LONG İZLEME"])
-        for candidate in breadth.long_candidates[:6]:
-            lines.extend(_candidate_lines(candidate, bullish=True))
+        lines.extend(["", "🟢 SONRAKİ SEANS İÇİN 3 TEMİZ YÜKSELİŞ ADAYI"])
+        for rank, candidate in enumerate(breadth.long_candidates[:3], start=1):
+            lines.extend(_candidate_lines(candidate, bullish=True, rank=rank))
+    else:
+        lines.extend(["", "🟢 Yükseliş adayı: aşırı uzamamış ve yeterli teyitli aday bulunamadı."])
     if breadth.short_candidates:
-        lines.extend(["", "🔴 ZAYIF / SHORT-RİSK İZLEME"])
-        for candidate in breadth.short_candidates[:6]:
-            lines.extend(_candidate_lines(candidate, bullish=False))
+        lines.extend(["", "🔴 ZAYIFLAYABİLECEK 3 HİSSE • SPOTTA SHORT ÇAĞRISI DEĞİL"])
+        for rank, candidate in enumerate(breadth.short_candidates[:3], start=1):
+            lines.extend(_candidate_lines(candidate, bullish=False, rank=rank))
+    else:
+        lines.extend(["", "🔴 Zayıflık adayı: aşırı uzamamış ve yeterli teyitli aday bulunamadı."])
     return lines

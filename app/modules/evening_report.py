@@ -352,13 +352,10 @@ def format_evening_report(report: EveningReport) -> str:
         lines.extend(["", "🌐 BIST genişlik paneli bu raporda üretilemedi."])
     lines.extend(format_report_news_impact(report.news_impact, timezone_name="Europe/Istanbul"))
     important = [event for event in report.calendar_events if event.impact in {"high", "medium"}]
-    lines.extend(["", "📰 GÜN İÇİ HABER / VERİ ZAMAN ÇİZELGESİ"])
-    if not important:
-        lines.append("Doğrulanmış yüksek/orta etkili etkinlik alınamadı.")
-    for event in important[:6]:
-        stamp = event.event_time.strftime("%H:%M") if event.event_time else "--:--"
-        actual = event.actual or "-"
-        lines.append(
-            f"• {stamp} {event.country} {event.title} • Açıklanan {actual} / Beklenti {event.forecast or '-'} / Önceki {event.previous or '-'}"
-        )
+    if important:
+        lines.extend(["", "🗓️ ÖNEMLİ GÜN İÇİ VERİLER"])
+        for event in important[:3]:
+            stamp = event.event_time.strftime("%H:%M") if event.event_time else "--:--"
+            actual = event.actual or "-"
+            lines.append(f"• {stamp} {event.country} {event.title} • {actual} / bek. {event.forecast or '-'}")
     return "\n".join(lines)[:4096]

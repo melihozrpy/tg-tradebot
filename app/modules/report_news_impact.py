@@ -220,27 +220,17 @@ def format_report_news_impact(impact: ReportNewsImpact | None, *, timezone_name:
         return []
     from zoneinfo import ZoneInfo
 
-    lines = [""]
+    lines = ["", "📰 KAP ETKİSİ • yalnızca yüksek önem"]
     if impact.negative:
-        lines.append("📰 HABER ETKİSİ — NEGATİF")
-        for item in impact.negative:
-            local = item.published_at.astimezone(ZoneInfo(timezone_name))
-            affected = item.sector_name or item.symbol
-            lines.append(f"- {item.title} ({local:%d.%m %H:%M})")
-            lines.append(f"- Etkilenen: {affected}")
-            lines.append(f"- Neden önemli: {item.rationale}")
-            lines.append(f"- Kaynak: KAP • {item.source_url}")
+        item = impact.negative[0]
+        local = item.published_at.astimezone(ZoneInfo(timezone_name))
+        affected = item.sector_name or item.symbol
+        lines.append(f"🔴 {item.symbol}: {item.title} ({local:%d.%m %H:%M})")
+        lines.append(f"   Etki: {affected} üzerinde baskı riski; teknik teyit olmadan nedensellik kurulmaz.")
     if impact.positive:
-        if impact.negative:
-            lines.append("")
-        lines.append("📰 HABER ETKİSİ — POZİTİF")
-        for item in impact.positive:
-            local = item.published_at.astimezone(ZoneInfo(timezone_name))
-            sector = item.sector_name or "Şirket"
-            watched = ", ".join(item.watch_symbols)
-            lines.append(f"- {item.title} ({local:%d.%m %H:%M})")
-            lines.append(f"- Beslenen sektör: {sector}")
-            lines.append(f"- İzlenecek hisseler: {watched}")
-            lines.append(f"- Neden: {item.rationale}")
-            lines.append(f"- Kaynak: KAP • {item.source_url}")
+        item = impact.positive[0]
+        local = item.published_at.astimezone(ZoneInfo(timezone_name))
+        watched = ", ".join(item.watch_symbols)
+        lines.append(f"🟢 {item.symbol}: {item.title} ({local:%d.%m %H:%M})")
+        lines.append(f"   İzleme: {watched} • teknik teyit gelirse katalizör olabilir.")
     return lines

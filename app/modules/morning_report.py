@@ -733,8 +733,6 @@ def format_morning_report(report: MorningReport) -> str:
     lines.extend(format_report_news_impact(report.news_impact, timezone_name="Europe/Istanbul"))
     lines.extend(["", "🗓️ BUGÜNÜN ÖNEMLİ TAKVİMİ"])
     important = [event for event in report.calendar_events if event.impact in {"high", "medium"}]
-    if not important:
-        lines.append("Doğrulanmış yüksek/orta etkili etkinlik alınamadı.")
     for event in important[:6]:
         icon = "🔴" if event.impact == "high" else "🟠"
         stamp = event.event_time.strftime("%H:%M") if event.event_time else "--:--"
