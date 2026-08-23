@@ -65,8 +65,11 @@ def test_json_universe_is_scanned_completely_and_classified(tmp_path):
     assert result.coverage_ratio == 100.0
     assert result.advancers == 2
     assert result.decliners == 2
-    assert {item.symbol for item in result.long_candidates} == {"AAA", "BBB"}
-    assert {item.symbol for item in result.short_candidates} == {"CCC", "DDD"}
+    # A monotonic synthetic series has no confirmed classical pattern, so it
+    # remains valid for breadth classification but not for the strict 9/10
+    # next-session watchlist.
+    assert result.long_candidates == ()
+    assert result.short_candidates == ()
     assert result.above_ema200_ratio == 50.0
     assert "spot satış emri değil" in result.note
 
@@ -96,8 +99,9 @@ def test_breadth_panel_explains_each_selected_candidate_with_condition_and_targe
 
     text = "\n".join(format_breadth_panel(breadth, report_kind="evening"))
 
-    assert "GÜÇLÜ LONG İZLEME" in text
-    assert "Neden güçlü: EMA20 üstü" in text
-    assert "Potansiyel hedef: 308,00" in text
-    assert "ZAYIF / SHORT-RİSK İZLEME" in text
-    assert "3,90 altında günlük kapanış sürerse" in text
+    assert "KAPANIŞ PUSULASI" in text
+    assert "EN TEMİZ 2 YÜKSELİŞ SENARYOSU" in text
+    assert "Neden: EMA20 üstü" in text
+    assert "Formasyon hedefi: 308,00" in text
+    assert "2 ZAYIFLIK / RİSK SENARYOSU" in text
+    assert "Tetik: 3,90 altında günlük kapanış" in text

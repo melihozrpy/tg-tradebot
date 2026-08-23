@@ -13,7 +13,13 @@ from typing import Callable, Optional
 
 import pandas as pd
 
-from app.analysis.indicator_engine import ema
+from app.analysis.indicator_engine import (
+    compute_indicator_bundle,
+    ema,
+    evaluate_ten_indicator_confluence,
+)
+from app.analysis.liquidity_engine import compute_liquidity
+from app.analysis.pattern_engine import detect_chart_patterns
 from app.data.base_provider import BaseMarketDataProvider, DataUnavailableError
 
 
@@ -29,6 +35,11 @@ class BreadthCandidate:
     confirmation_level: float | None = None
     technical_target: float | None = None
     target_basis: str = ""
+    confluence_count: int = 0
+    pattern_name: str | None = None
+    entry_low: float | None = None
+    entry_high: float | None = None
+    liquidity_score: float | None = None
 
 
 @dataclass
@@ -83,6 +94,16 @@ class _Snapshot:
     prior_high: float
     prior_low: float
     atr14: float
+    rsi14: float
+    bullish_ten_confluence: int
+    bearish_ten_confluence: int
+    liquidity_score: float | None
+    manipulation_risk: bool
+    bullish_pattern_name: str | None
+    bearish_pattern_name: str | None
+    bullish_pattern_target: float | None
+    bearish_pattern_target: float | None
+    entry_reference: float
     long_score: int
     short_score: int
     long_reasons: tuple[str, ...]
@@ -134,8 +155,8 @@ def _finite(value: float, default: float = 0.0) -> float:
 
 def _score_snapshot(symbol: str, frame) -> _Snapshot:
     frame = frame.sort_values("timestamp").reset_index(drop=True)
-    if len(frame) < 51:
-        raise DataUnavailableError("En az 51 tamamlanmış günlük bar gerekli.")
+    if len(frame) < 60:
+        raise DataUnavailableError("En az 60 tamamlanmış günlük bar gerekli.")
     close = frame["close"].astype(float)
     last = _finite(close.iloc[-1])
     previous = _finite(close.iloc[-2])
@@ -143,6 +164,9 @@ def _score_snapshot(symbol: str, frame) -> _Snapshot:
         raise DataUnavailableError("Geçersiz kapanış fiyatı.")
 
     change = (last / previous - 1.0) * 100.0
+    bundle = compute_indicator_bundle(frame, symbol=symbol, timeframe="1d")
+    indicator_frame = bundle.frame
+    indicator_last = indicator_frame.iloc[-1]
     ema20_series = ema(close, 20)
     ema50_series = ema(close, 50)
     ema20_value = _finite(ema20_series.iloc[-1])
@@ -168,6 +192,25 @@ def _score_snapshot(symbol: str, frame) -> _Snapshot:
         axis=1,
     ).max(axis=1)
     atr14 = _finite(true_range.ewm(alpha=1 / 14, min_periods=14, adjust=False).mean().iloc[-1])
+    rsi14 = _finite(indicator_last["rsi14"], 50.0)
+    bullish_ten = evaluate_ten_indicator_confluence(bundle, "bullish", minimum_required=1)
+    bearish_ten = evaluate_ten_indicator_confluence(bundle, "bearish", minimum_required=1)
+    liquidity = compute_liquidity(frame)
+    patterns = detect_chart_patterns(frame)
+    bullish_pattern = next(
+        (
+            item for item in patterns
+            if item.confirmed and item.direction == "bullish" and item.target is not None and item.target > last
+        ),
+        None,
+    )
+    bearish_pattern = next(
+        (
+            item for item in patterns
+            if item.confirmed and item.direction == "bearish" and item.target is not None and 0 < item.target < last
+        ),
+        None,
+    )
     momentum20 = (last / _finite(close.iloc[-21]) - 1.0) * 100.0
     previous_volume = _finite(frame["volume"].astype(float).iloc[-21:-1].mean())
     current_volume = max(0.0, _finite(frame["volume"].iloc[-1]))
@@ -243,6 +286,16 @@ def _score_snapshot(symbol: str, frame) -> _Snapshot:
         prior_high=round(prior_high, 4),
         prior_low=round(prior_low, 4),
         atr14=round(atr14, 4),
+        rsi14=round(rsi14, 1),
+        bullish_ten_confluence=len(bullish_ten.confirmations),
+        bearish_ten_confluence=len(bearish_ten.confirmations),
+        liquidity_score=liquidity.score if liquidity.available else None,
+        manipulation_risk=bool(liquidity.manipulation_risk) if liquidity.available else True,
+        bullish_pattern_name=bullish_pattern.name if bullish_pattern else None,
+        bearish_pattern_name=bearish_pattern.name if bearish_pattern else None,
+        bullish_pattern_target=round(float(bullish_pattern.target), 4) if bullish_pattern else None,
+        bearish_pattern_target=round(float(bearish_pattern.target), 4) if bearish_pattern else None,
+        entry_reference=round(_finite(indicator_last["ema20"]), 4),
         long_score=min(100, long_score),
         short_score=min(100, short_score),
         long_reasons=tuple(long_reasons),
@@ -252,23 +305,17 @@ def _score_snapshot(symbol: str, frame) -> _Snapshot:
 
 def _candidate(snapshot: _Snapshot, direction: str) -> BreadthCandidate:
     is_long = direction == "LONG"
-    # A report target must come from an observed opposing swing first.  When a
-    # stock has already closed beyond that swing, label the ATR extension
-    # explicitly instead of disguising a projection as a historical level.
+    entry_padding = max(snapshot.atr14 * 0.15, snapshot.close * 0.001)
     if is_long:
-        confirmation_level = snapshot.prior_high
-        if snapshot.prior_high > snapshot.close:
-            technical_target, target_basis = snapshot.prior_high, "önceki 20g direnç"
-        else:
-            technical_target = snapshot.close + snapshot.atr14 * 1.5
-            target_basis = "1.5× ATR uzama bandı"
+        confirmation_level = snapshot.entry_reference + entry_padding
+        technical_target, target_basis = snapshot.bullish_pattern_target, "doğrulanmış formasyon hedefi"
+        confluence = snapshot.bullish_ten_confluence
+        pattern_name = snapshot.bullish_pattern_name
     else:
         confirmation_level = snapshot.prior_low
-        if 0 < snapshot.prior_low < snapshot.close:
-            technical_target, target_basis = snapshot.prior_low, "önceki 20g destek"
-        else:
-            technical_target = max(0.0, snapshot.close - snapshot.atr14 * 1.5)
-            target_basis = "1.5× ATR aşağı uzama bandı"
+        technical_target, target_basis = snapshot.bearish_pattern_target, "doğrulanmış formasyon hedefi"
+        confluence = snapshot.bearish_ten_confluence
+        pattern_name = snapshot.bearish_pattern_name
     return BreadthCandidate(
         symbol=snapshot.symbol,
         direction=direction,
@@ -278,9 +325,72 @@ def _candidate(snapshot: _Snapshot, direction: str) -> BreadthCandidate:
         relative_volume=snapshot.relative_volume,
         reasons=(snapshot.long_reasons if is_long else snapshot.short_reasons)[:4],
         confirmation_level=round(confirmation_level, 4) if confirmation_level > 0 else None,
-        technical_target=round(technical_target, 4) if technical_target > 0 else None,
+        technical_target=round(technical_target, 4) if technical_target is not None and technical_target > 0 else None,
         target_basis=target_basis,
+        confluence_count=confluence,
+        pattern_name=pattern_name,
+        entry_low=round(max(0.0001, snapshot.entry_reference - entry_padding), 4),
+        entry_high=round(snapshot.entry_reference + entry_padding, 4),
+        liquidity_score=snapshot.liquidity_score,
     )
+
+
+def _select_report_candidates(
+    rows: list[_Snapshot],
+    *,
+    direction: str,
+    minimum_signal_score: int,
+    limit: int = 2,
+) -> list[_Snapshot]:
+    """Select only fresh, liquid, pattern-confirmed 9/10 confluence watches.
+
+    The list intentionally rejects price-limit moves, thin/erratic names and
+    unfinished patterns.  It is a next-session watchlist, not a prediction or
+    a forced recommendation quota.
+    """
+
+    bullish = direction == "LONG"
+    selected: list[_Snapshot] = []
+    for row in rows:
+        score = row.long_score if bullish else row.short_score
+        if score < minimum_signal_score or row.manipulation_risk:
+            continue
+        if row.liquidity_score is None or row.liquidity_score < 70:
+            continue
+        if bullish:
+            eligible = (
+                row.long_score >= row.short_score + 6
+                and 0.0 <= row.change <= 4.5
+                and 50.0 <= row.rsi14 <= 68.0
+                and row.bullish_ten_confluence >= 9
+                and row.bullish_pattern_name is not None
+                and row.bullish_pattern_target is not None
+                and row.entry_reference > 0
+                and row.close <= row.entry_reference + row.atr14 * 0.75
+            )
+        else:
+            eligible = (
+                row.short_score >= row.long_score + 6
+                and -4.5 <= row.change <= 0.0
+                and 32.0 <= row.rsi14 <= 50.0
+                and row.bearish_ten_confluence >= 9
+                and row.bearish_pattern_name is not None
+                and row.bearish_pattern_target is not None
+                and row.entry_reference > 0
+                and row.close >= row.entry_reference - row.atr14 * 0.75
+            )
+        if eligible:
+            selected.append(row)
+    selected.sort(
+        key=lambda row: (
+            -(row.bullish_ten_confluence if bullish else row.bearish_ten_confluence),
+            -(row.long_score if bullish else row.short_score),
+            -(row.liquidity_score or 0.0),
+            abs(row.change - (1.5 if bullish else -1.5)),
+            row.symbol,
+        )
+    )
+    return selected[:limit]
 
 
 def compute_market_breadth(
@@ -402,6 +512,12 @@ def compute_market_breadth(
     ]
     long_rows.sort(key=lambda row: (row.long_score, row.change, row.relative_volume), reverse=True)
     short_rows.sort(key=lambda row: (row.short_score, -row.change, row.relative_volume), reverse=True)
+    report_longs = _select_report_candidates(
+        snapshots, direction="LONG", minimum_signal_score=minimum_signal_score
+    )
+    report_shorts = _select_report_candidates(
+        snapshots, direction="SHORT/RİSK", minimum_signal_score=minimum_signal_score
+    )
     gainers = sorted(snapshots, key=lambda row: row.change, reverse=True)[:top_n]
     losers = sorted(snapshots, key=lambda row: row.change)[:top_n]
     coverage = round(scanned / len(symbols) * 100, 1)
@@ -439,8 +555,8 @@ def compute_market_breadth(
         neutral_count=scanned - len(long_rows) - len(short_rows),
         top_gainers=tuple(_candidate(row, "LONG") for row in gainers),
         top_losers=tuple(_candidate(row, "SHORT/RİSK") for row in losers),
-        long_candidates=tuple(_candidate(row, "LONG") for row in long_rows),
-        short_candidates=tuple(_candidate(row, "SHORT/RİSK") for row in short_rows),
+        long_candidates=tuple(_candidate(row, "LONG") for row in report_longs),
+        short_candidates=tuple(_candidate(row, "SHORT/RİSK") for row in report_shorts),
     )
     if cache_minutes > 0:
         with _CACHE_LOCK:
