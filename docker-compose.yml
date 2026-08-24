@@ -1,6 +1,9 @@
 services:
   api:
     build: .
+    # Build the Python runtime once; the polling bot below reuses this exact
+    # local image instead of Coolify exporting the same large image twice.
+    image: mergen-quant-runtime:latest
     restart: unless-stopped
     environment:
       DATABASE_URL: sqlite:////app/data/mergen_quant.db
@@ -162,7 +165,9 @@ services:
       retries: 3
 
   bot:
-    build: .
+    # The API service owns the build.  Reusing its image avoids duplicate
+    # BuildKit exports, which can fail on small Coolify servers.
+    image: mergen-quant-runtime:latest
     restart: unless-stopped
     environment:
       DATABASE_URL: sqlite:////app/data/mergen_quant.db
