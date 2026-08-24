@@ -55,14 +55,14 @@ async def cmd_oneriler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     try:
         report = await asyncio.to_thread(scan_and_save)
-        await update.message.reply_text(
-            format_scheduled_ideas_report(
-                report,
-                slot="afternoon",
-                timezone_name=settings.timezone_name,
-                maximum=settings.scheduled_ideas_max_results,
-            )
+        text = format_scheduled_ideas_report(
+            report,
+            slot="afternoon",
+            timezone_name=settings.timezone_name,
+            maximum=settings.scheduled_ideas_max_results,
         )
+        if text:
+            await update.message.reply_text(text)
     except Exception:
         await update.message.reply_text(
             "⚠️ İki aday radarı şu an tamamlanamadı. Veri doğrulanamadığı için aday üretilmedi."

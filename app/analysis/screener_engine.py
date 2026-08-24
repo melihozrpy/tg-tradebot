@@ -1192,9 +1192,16 @@ def format_daily_top_picks_report(
     *,
     timezone_name: str = "Europe/Istanbul",
 ) -> str:
-    """Render the hourly daily-long report without claiming a guaranteed return."""
+    """Render a daily-long card, or nothing when the strict screen finds no trade.
+
+    A no-candidate state is useful in logs, but it must not create a Telegram
+    notification.  Callers deliberately treat an empty result as "do not send".
+    """
 
     from zoneinfo import ZoneInfo
+
+    if not report.picks:
+        return ""
 
     local = report.created_at.astimezone(ZoneInfo(timezone_name))
     lines = [
@@ -1209,16 +1216,6 @@ def format_daily_top_picks_report(
         "⛔ Koşmuş, düşük likit veya manipülasyon riski taşıyan isimler otomatik elenir.",
         "📌 Giriş yalnız retest bölgesinden; güncel fiyattan otomatik AL yok.",
     ]
-    if not report.picks:
-        lines.extend(
-            [
-                "",
-                "🟡 Bugün bu standartları birlikte geçen doğrulanmış aday yok.",
-                "Zorla 5 hisse üretmem: teknik/formasyon veya temel doğrulama eksikse sonraki saat beklenir.",
-            ]
-        )
-        return "\n".join(lines)
-
     for rank, pick in enumerate(report.picks, start=1):
         reasons = " • ".join(pick.reasons[:5])
         fundamental = (

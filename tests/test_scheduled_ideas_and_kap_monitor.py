@@ -55,6 +55,19 @@ def test_scheduled_idea_card_is_retest_first_and_never_promises_return() -> None
     assert "getiri ya da yön garantisi değildir" in text
 
 
+def test_scheduled_idea_card_is_empty_when_no_plan_passes() -> None:
+    report = DailyTopPicksRunResult(
+        scanned=571,
+        failed=0,
+        picks=(),
+        fundamental_checked=0,
+        fundamental_verified=0,
+        created_at=datetime(2026, 8, 20, 6, 30, tzinfo=timezone.utc),
+    )
+
+    assert format_scheduled_ideas_report(report, slot="morning") == ""
+
+
 def test_performance_does_not_count_untouched_entry_zone(db_session) -> None:
     issued = datetime.now(timezone.utc) - timedelta(days=3)
     row = ScheduledTradeIdea(

@@ -55,10 +55,9 @@ async def cmd_basitalsat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     try:
         report = await asyncio.to_thread(scan)
-        await update.message.reply_text(
-            format_daily_top_picks_report(report, timezone_name=settings.timezone_name),
-            disable_web_page_preview=True,
-        )
+        text = format_daily_top_picks_report(report, timezone_name=settings.timezone_name)
+        if text:
+            await update.message.reply_text(text, disable_web_page_preview=True)
     except Exception as exc:  # noqa: BLE001
         logger.exception("Basit al-sat taraması tamamlanamadı: %s", exc)
         await update.message.reply_text(

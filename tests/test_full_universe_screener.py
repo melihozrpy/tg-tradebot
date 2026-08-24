@@ -213,6 +213,21 @@ def test_daily_top_pick_requires_real_pattern_target_and_retest_entry() -> None:
     assert "%3 kâr garantisi değildir" in card
 
 
+def test_daily_top_pick_card_is_empty_when_no_verified_trade_exists() -> None:
+    from app.analysis.screener_engine import format_daily_top_picks_report
+
+    report = DailyTopPicksRunResult(
+        scanned=541,
+        failed=30,
+        picks=(),
+        fundamental_checked=0,
+        fundamental_verified=0,
+        created_at=pd.Timestamp("2026-08-24T08:03:00Z").to_pydatetime(),
+    )
+
+    assert format_daily_top_picks_report(report) == ""
+
+
 def test_daily_top_pick_rejects_extended_or_low_liquidity_name() -> None:
     pattern = ChartPattern(
         name="Yükselen Üçgen",

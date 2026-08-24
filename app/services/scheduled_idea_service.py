@@ -11,7 +11,7 @@ counted as a gain or a loss.
 import json
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Callable, Iterable
+from typing import Iterable
 from zoneinfo import ZoneInfo
 
 import pandas as pd
@@ -95,11 +95,13 @@ def format_scheduled_ideas_report(
     timezone_name: str = "Europe/Istanbul",
     maximum: int = 2,
 ) -> str:
-    """Render the requested compact card with explicit, conditional language."""
+    """Render the requested compact card; empty means no notification is due."""
 
     local = report.created_at.astimezone(ZoneInfo(timezone_name))
     slot_title = "AÇILIŞ ÖNCESİ" if slot == "morning" else "KAPANIŞ ÖNCESİ"
     picks = select_scheduled_ideas(report, maximum)
+    if not picks:
+        return ""
     lines = [
         f"┏━━ 📍 {slot_title} • 2 HİSSE PLANI ━━┓",
         f"🕒 {local:%d.%m.%Y %H:%M} TSİ  •  {report.scanned} hisse tarandı",
@@ -107,16 +109,6 @@ def format_scheduled_ideas_report(
         "⛔ Koşmuş, düşük likit veya manipülasyon riski taşıyan isimler elenir.",
         "⛔ Son fiyattan giriş yok; plan yalnız bölgeye dönüş ve kapanış/hacim teyidiyle aktiftir.",
     ]
-    if not picks:
-        lines.extend(
-            [
-                "",
-                "🟡 Bu standartları birlikte geçen aday çıkmadı.",
-                "Zorla iki isim yazılmadı; yeni kapanışlar oluştuğunda tarama yeniden yapılır.",
-            ]
-        )
-        return "\n".join(lines)
-
     for rank, pick in enumerate(picks, start=1):
         reasons = " • ".join(pick.reasons[:5]) or "Doğrulanmış teknik gerekçe yetersiz"
         fundamental = (

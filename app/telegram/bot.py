@@ -430,6 +430,9 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
             timezone_name=settings.timezone_name,
             maximum=settings.scheduled_ideas_max_results,
         )
+        if not text:
+            logger.info("Zamanlanmış iki aday kartı gönderilmedi: doğrulanmış aday yok slot=%s", slot)
+            return
         local = result.created_at.astimezone(ZoneInfo(settings.timezone_name))
         delivery_key = f"scheduled:two-ideas:{slot}:{local:%Y%m%d}"
         db = get_session_factory()()
@@ -910,6 +913,9 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
                     }
                     recipients.update(int(value) for value in getattr(settings, "admin_ids", ()))
                     text = format_daily_top_picks_report(result, timezone_name=settings.timezone_name)
+                    if not text:
+                        logger.info("Saatlik günlük ilk 5 kartı gönderilmedi: doğrulanmış aday yok")
+                        return
                     local = result.created_at.astimezone(ZoneInfo(settings.timezone_name))
                     delivery_key = f"scheduled:daily-top-picks:{local:%Y%m%d%H}"
                     for chat_id in recipients:
