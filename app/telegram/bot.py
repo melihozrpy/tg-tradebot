@@ -1375,7 +1375,7 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
                 return
             from app.models.database import get_session_factory
             from app.services.scheduled_delivery_dedup import claim_scheduled_delivery
-            import json
+            from app.analysis.mechanical_bist_engine import format_mechanical_bist_report
 
             local_day = datetime.now(ZoneInfo(settings.timezone_name)).strftime("%Y%m%d")
             db = get_session_factory()()
@@ -1385,19 +1385,7 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
                         key = f"mechanical:{slot}:{local_day}:{payload['symbol']}"
                         if not claim_scheduled_delivery(db, dedup_key=key, chat_id=chat_id):
                             continue
-                        rendered = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
-                        if len(rendered) > 3700:
-                            # Do not split a JSON object into invalid fragments in an
-                            # automatic alert. The complete coordinate-rich version
-                            # remains available on demand via /mekanik SYMBOL.
-                            rendered = json.dumps(
-                                {
-                                    "symbol": payload["symbol"], "status": payload["status"],
-                                    "current_price": payload["current_price"], "signal": payload["signal"],
-                                    "full_json_command": f"/mekanik {payload['symbol']}",
-                                }, ensure_ascii=False, separators=(",", ":")
-                            )
-                        text = "⚙️ MEKANİK BIST SETUP\n<pre>" + rendered + "</pre>"
+                        text = format_mechanical_bist_report(payload, timezone_name=settings.timezone_name)
                         await application.bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML")
             finally:
                 db.close()

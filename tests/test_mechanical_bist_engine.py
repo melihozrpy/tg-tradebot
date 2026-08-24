@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import numpy as np
 import pandas as pd
 
-from app.analysis.mechanical_bist_engine import analyze_mechanical_bist_setup
+from app.analysis.mechanical_bist_engine import analyze_mechanical_bist_setup, format_mechanical_bist_report
 
 
 def _frame(periods: int, frequency: str, *, base: float, slope: float) -> pd.DataFrame:
@@ -69,3 +69,19 @@ def test_mechanical_engine_blocks_when_liquidity_threshold_is_unmet() -> None:
     assert result["status"] == "WAIT"
     assert result["signal"] is None
     assert result["liquidity"]["gate"] == "BLOCKED"
+
+
+def test_mechanical_telegram_card_hides_internal_json_and_explains_wait() -> None:
+    result = analyze_mechanical_bist_setup(
+        "THYAO",
+        provider=_Provider(),
+        settings=SimpleNamespace(mechanical_setup_minimum_liquidity_score=101.0, mechanical_setup_risk_per_trade_percent=0.25),
+    )
+
+    card = format_mechanical_bist_report(result)
+
+    assert "MEKANİK İŞLEM PLANI" in card
+    assert "ŞU AN İŞLEM YOK" in card
+    assert "<pre>" not in card
+    assert '"schema_version"' not in card
+    assert "BEKLENECEK TEYİT" in card

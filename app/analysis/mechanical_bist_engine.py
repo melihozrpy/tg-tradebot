@@ -9,7 +9,9 @@ liquidity gate, or a usable structural target is absent.
 
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
+from html import escape
 from typing import Any, Literal
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 
@@ -17,6 +19,135 @@ from app.analysis.liquidity_engine import compute_liquidity
 from app.data.base_provider import BaseMarketDataProvider
 
 Bias = Literal["UP", "DOWN", "NEUTRAL"]
+
+
+_BIAS_LABELS = {"UP": "YÜKSELİŞ", "DOWN": "DÜŞÜŞ", "NEUTRAL": "YATAY / KARARSIZ"}
+_LEVEL_LABELS = {
+    "daily_open": "Gün açılışı",
+    "previous_day_high": "Dünkü tepe",
+    "previous_day_low": "Dünkü dip",
+    "previous_day_close": "Dünkü kapanış",
+    "weekly_open": "Haftalık açılış",
+    "monthly_open": "Aylık açılış",
+    "twenty_day_high": "20 günlük tepe",
+    "five_day_low": "5 günlük dip",
+    "previous_week_high": "Geçen hafta tepe",
+    "previous_week_low": "Geçen hafta dip",
+    "previous_month_high": "Geçen ay tepe",
+    "previous_month_low": "Geçen ay dip",
+}
+
+
+def _price_text(value: float | int | None) -> str:
+    """Render prices consistently for Telegram without exposing raw JSON values."""
+
+    if value is None:
+        return "—"
+    return f"{float(value):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def _bias_card(label: str, bias: str) -> str:
+    icon = "🟢" if bias == "UP" else "🔴" if bias == "DOWN" else "🟡"
+    return f"{icon} <b>{label}</b>: {_BIAS_LABELS.get(bias, 'BELİRSİZ')}"
+
+
+def format_mechanical_bist_report(payload: dict[str, Any], *, timezone_name: str = "Europe/Istanbul") -> str:
+    """Turn the coordinate-rich engine result into a compact Telegram trading card.
+
+    The raw JSON remains an internal contract for tests and other modules.  End
+    users receive a readable, closed-candle plan instead of developer output.
+    """
+
+    symbol = escape(str(payload.get("symbol", "BIST")))
+    current = float(payload.get("current_price") or 0.0)
+    generated = pd.Timestamp(payload.get("generated_at", datetime.now(timezone.utc)))
+    if generated.tzinfo is None:
+        generated = generated.tz_localize("UTC")
+    local = generated.tz_convert(ZoneInfo(timezone_name))
+    hierarchy = payload.get("timeframe_hierarchy") or {}
+    daily = hierarchy.get("1D") or {}
+    four_hour = hierarchy.get("4H") or {}
+    weekly = hierarchy.get("1W") or {}
+    monthly = hierarchy.get("1M") or {}
+    levels = [row for row in (payload.get("structural_levels") or []) if isinstance(row, dict) and row.get("y") is not None]
+    below = sorted((row for row in levels if float(row["y"]) < current), key=lambda row: float(row["y"]), reverse=True)[:2]
+    above = sorted((row for row in levels if float(row["y"]) > current), key=lambda row: float(row["y"]))[:2]
+    liquidity = payload.get("liquidity") or {}
+    gate_passed = liquidity.get("gate") == "PASS"
+    status_active = payload.get("status") == "ACTIVE" and isinstance(payload.get("signal"), dict)
+
+    lines = [
+        f"┏━━ ⚙️ <b>MEKANİK İŞLEM PLANI • {symbol}</b> ━━┓",
+        f"🕒 {local:%d.%m.%Y • %H:%M} TSİ  •  Kapanmış mum analizi",
+        "",
+        ("🟢 <b>SETUP AKTİF</b>  •  Mekanik teyit tamamlandı" if status_active else "🟡 <b>ŞU AN İŞLEM YOK</b>  •  Teyit bekleniyor"),
+        f"💰 <b>GÜNCEL FİYAT:</b> {_price_text(current)} TL",
+        "",
+        "<b>🧭 ÇOKLU ZAMAN DİLİMİ</b>",
+        _bias_card("Aylık", str(monthly.get("bias", "NEUTRAL"))),
+        _bias_card("Haftalık", str(weekly.get("bias", "NEUTRAL"))),
+        _bias_card("Günlük", str(daily.get("bias", "NEUTRAL"))),
+        _bias_card("4 Saat", str(four_hour.get("bias", "NEUTRAL"))),
+        f"▫️ 4S aralığı: {_price_text(four_hour.get('swing_low'))} – {_price_text(four_hour.get('swing_high'))} TL",
+    ]
+
+    if below or above:
+        lines.extend(["", "<b>📍 KRİTİK FİYAT BÖLGELERİ</b>"])
+        if below:
+            lines.append("🟩 <b>Destek:</b> " + "  •  ".join(
+                f"{_price_text(row['y'])} ({_LEVEL_LABELS.get(str(row.get('label')), 'Yapısal seviye')})" for row in below
+            ))
+        if above:
+            lines.append("🟥 <b>Direnç:</b> " + "  •  ".join(
+                f"{_price_text(row['y'])} ({_LEVEL_LABELS.get(str(row.get('label')), 'Yapısal seviye')})" for row in above
+            ))
+
+    zones = [row for row in (payload.get("zones") or []) if isinstance(row, dict) and row.get("low") is not None and row.get("high") is not None]
+    zones.sort(key=lambda row: abs(((float(row["low"]) + float(row["high"])) / 2) - current))
+    if zones:
+        lines.extend(["", "<b>🔶 YAKIN OB / FVG BÖLGELERİ</b>"])
+        for zone in zones[:3]:
+            direction = "Talep" if zone.get("direction") == "BULLISH" else "Arz"
+            icon = "🟢" if direction == "Talep" else "🔴"
+            lines.append(f"{icon} {zone.get('kind', 'Bölge')} • {direction}: {_price_text(zone['low'])} – {_price_text(zone['high'])} TL")
+
+    if status_active:
+        signal = payload["signal"]
+        direction = "LONG / AL" if signal.get("direction") == "BUY" else "SAT / KORUMA"
+        lines.extend([
+            "",
+            "<b>🎯 TEYİTLİ İŞLEM PLANI</b>",
+            f"{('🟢' if signal.get('direction') == 'BUY' else '🔴')} <b>Yön:</b> {direction}  •  {signal.get('entry_type', 'MEKANİK')} teyidi",
+            f"📥 <b>Giriş:</b> {_price_text(signal.get('entry_price'))} TL",
+            f"🛑 <b>Geçersizlik / Stop:</b> {_price_text(signal.get('stop_loss'))} TL",
+            f"🎯 <b>Hedefler:</b> {_price_text(signal.get('target_1'))}  •  {_price_text(signal.get('target_2'))}  •  {_price_text(signal.get('target_3'))} TL",
+            f"⚖️ <b>Risk / Getiri:</b> {signal.get('risk_reward', '—')}  •  Risk: %{float(signal.get('position_risk_percent') or 0):.2f}",
+            f"✅ <b>Teyit:</b> {escape(str(signal.get('reason', 'Kapanmış mumlarla doğrulandı.')))}",
+        ])
+    else:
+        wait_notes: list[str] = []
+        if not gate_passed:
+            wait_notes.append("Likidite kalite kapısı geçmedi; yeni plan oluşturulmadı.")
+        if daily.get("bias") == "NEUTRAL" or daily.get("bias") != four_hour.get("bias"):
+            wait_notes.append("Günlük ve 4 saatlik yön henüz aynı tarafta değil.")
+        if not wait_notes:
+            wait_notes.append("15dk sweep veya 1 saatlik kırılım-retest kapanışı henüz oluşmadı.")
+        lines.extend([
+            "",
+            "<b>⏳ BEKLENECEK TEYİT</b>",
+            *[f"• {escape(note)}" for note in wait_notes],
+            "📌 Güncel fiyat giriş emri değildir; yalnız seviye retesti ve 15dk kapanışından sonra plan aktifleşir.",
+        ])
+
+    liquidity_value = liquidity.get("score")
+    liquidity_text = f"{float(liquidity_value):.0f}/100" if liquidity_value is not None else "doğrulanamadı"
+    liquidity_state = "UYGUN" if gate_passed else "BLOKE"
+    lines.extend([
+        "",
+        f"💧 <b>Likidite:</b> {liquidity_text}  •  <b>Kalite kapısı:</b> {liquidity_state}",
+        "<i>Bu teknik senaryo yatırım tavsiyesi değildir; emirden önce KAP/haber ve güncel derinlik kontrol edilmelidir.</i>",
+    ])
+    return "\n".join(lines)[:4096]
 
 
 @dataclass(frozen=True)

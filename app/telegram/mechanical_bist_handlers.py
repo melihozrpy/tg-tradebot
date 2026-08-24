@@ -3,13 +3,12 @@ from __future__ import annotations
 """Telegram endpoints for the closed-candle mechanical BIST setup engine."""
 
 import asyncio
-import json
 import logging
 
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from app.analysis.mechanical_bist_engine import analyze_mechanical_bist_setup
+from app.analysis.mechanical_bist_engine import analyze_mechanical_bist_setup, format_mechanical_bist_report
 from app.config.instruments import normalize_instrument
 from app.config.settings import get_settings
 from app.data.provider_factory import build_market_data_provider
@@ -19,12 +18,12 @@ logger = logging.getLogger("mergen_quant.telegram.mechanical_bist")
 
 
 async def cmd_mekanik_setup(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Return strict JSON for one BIST share: `/mekanik THYAO`."""
+    """Return a readable closed-candle plan for one BIST share."""
 
     if await _reject_unauthorized(update) or update.message is None:
         return
     if not context.args:
-        await update.message.reply_text("Kullanım: /mekanik THYAO\nÇıktı: Daily→4H→1H/15dk mekanik JSON setup raporu.")
+        await update.message.reply_text("Kullanım: /mekanik THYAO\nÇıktı: Daily→4H→1H/15dk, net seviye ve koşullu işlem planı.")
         return
     try:
         symbol = normalize_instrument(context.args[0])
@@ -43,12 +42,8 @@ async def cmd_mekanik_setup(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             provider=build_market_data_provider(settings),
             settings=settings,
         )
-        rendered = json.dumps(payload, ensure_ascii=False, indent=2, default=str)
-        # Telegram has a message cap. Split only on line boundaries while
-        # preserving a machine-readable first response when it fits.
-        for start in range(0, len(rendered), 3800):
-            chunk = rendered[start:start + 3800]
-            await update.message.reply_text(f"<pre>{chunk}</pre>", parse_mode="HTML")
+        rendered = format_mechanical_bist_report(payload, timezone_name=settings.timezone_name)
+        await update.message.reply_text(rendered, parse_mode="HTML", disable_web_page_preview=True)
     except Exception as exc:  # one unavailable timeframe must not crash polling
         logger.info("Mekanik setup üretilemedi symbol=%s error=%s", symbol, type(exc).__name__)
         await update.message.reply_text(
