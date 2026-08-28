@@ -922,7 +922,7 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
                             logger.info("Tekrarlanan günlük üçlü plan atlandı chat=%s key=%s", chat_id, delivery_key)
                             continue
                         try:
-                            await application.bot.send_message(chat_id=chat_id, text=text)
+                            await application.bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML")
                         except Exception as exc:  # noqa: BLE001 - one recipient cannot stop the scheduler
                             logger.warning("Günlük üçlü plan gönderilemedi chat=%s: %s", chat_id, exc)
                 finally:
