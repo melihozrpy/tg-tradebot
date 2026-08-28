@@ -191,19 +191,23 @@ class Settings(BaseSettings):
 
     # ---- Çoklu gösterge fırsat radarı ----
     # RSI remains an input only; it never generates a stand-alone notification.
+    # The scanner remains available to commands, but its old three-hour
+    # broadcast is opt-in.  Daily quality plans are the default notification.
     trade_scenario_scan_enabled: bool = Field(default=True)
+    trade_scenario_schedule_enabled: bool = Field(default=False)
     trade_scenario_scan_minutes: int = Field(default=180, ge=15, le=240)
     trade_scenario_max_results: int = Field(default=5, ge=3, le=12)
     trade_scenario_minimum_core_confirmations: int = Field(default=3, ge=3, le=5)
     trade_scenario_minimum_ten_confirmations: int = Field(default=8, ge=3, le=10)
-    # ---- Saatlik günlük ilk 5 teknik + temel doğrulama listesi ----
+    # ---- Günlük üç teknik + temel doğrulama planı ----
     daily_top_picks_enabled: bool = Field(default=True)
-    daily_top_picks_max_results: int = Field(default=5, ge=1, le=10)
-    daily_top_picks_minimum_confirmations: int = Field(default=7, ge=5, le=8)
+    daily_top_picks_time: str = Field(default="17:25")
+    daily_top_picks_max_results: int = Field(default=3, ge=1, le=10)
+    daily_top_picks_minimum_confirmations: int = Field(default=8, ge=5, le=8)
     # The scheduled two-name card is intentionally stricter than the general
     # radar: it filters extended candles, thin/erratic names and weak
     # financial snapshots instead of filling two slots at any cost.
-    daily_top_picks_minimum_ten_confirmations: int = Field(default=7, ge=5, le=10)
+    daily_top_picks_minimum_ten_confirmations: int = Field(default=9, ge=5, le=10)
     daily_top_picks_min_relative_volume: float = Field(default=1.0, gt=0, le=5)
     daily_top_picks_min_adx: float = Field(default=22.0, ge=5, le=80)
     daily_top_picks_max_atr_percent: float = Field(default=6.0, gt=0, le=20)
@@ -243,13 +247,13 @@ class Settings(BaseSettings):
     mechanical_setup_enabled: bool = Field(default=True)
     mechanical_setup_minimum_liquidity_score: float = Field(default=65.0, ge=0, le=100)
     mechanical_setup_risk_per_trade_percent: float = Field(default=0.25, gt=0, le=2)
-    mechanical_setup_schedule_enabled: bool = Field(default=True)
+    mechanical_setup_schedule_enabled: bool = Field(default=False)
     mechanical_setup_schedule_symbols_limit: int = Field(default=10, ge=1, le=25)
 
     # ---- Zamanlanmış iki aday / doğrulanmış performans takibi ----
     # Bu yayınlar otomatik emir veya getiri taahhüdü değildir. Adaylar yalnız
     # mevcut teknik kapıları geçen, retest teyidi bekleyen izleme planlarıdır.
-    scheduled_ideas_enabled: bool = Field(default=True)
+    scheduled_ideas_enabled: bool = Field(default=False)
     scheduled_ideas_morning_time: str = Field(default="09:30")
     scheduled_ideas_afternoon_time: str = Field(default="16:30")
     scheduled_ideas_max_results: int = Field(default=2, ge=1, le=2)

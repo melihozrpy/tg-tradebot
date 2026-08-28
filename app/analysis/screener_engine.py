@@ -1191,28 +1191,43 @@ def format_daily_top_picks_report(
     report: DailyTopPicksRunResult,
     *,
     timezone_name: str = "Europe/Istanbul",
+    always_render: bool = False,
 ) -> str:
-    """Render a daily-long card, or nothing when the strict screen finds no trade.
+    """Render the daily quality card, without inventing an entry when none exists.
 
-    A no-candidate state is useful in logs, but it must not create a Telegram
-    notification.  Callers deliberately treat an empty result as "do not send".
+    Interactive and legacy notification callers can keep the empty result. The
+    once-daily closing plan passes ``always_render=True`` so users receive a
+    clear market-stand-aside decision rather than a fabricated stock idea.
     """
 
     from zoneinfo import ZoneInfo
 
-    if not report.picks:
-        return ""
-
     local = report.created_at.astimezone(ZoneInfo(timezone_name))
+    if not report.picks:
+        if not always_render:
+            return ""
+        return "\n".join(
+            [
+                "┏━━ 🏆 GÜNLÜK 3 KALİTELİ İŞLEM PLANI ━━┓",
+                f"🕒 {local:%d.%m.%Y • %H:%M} TSİ  •  {report.scanned} hisse tarandı",
+                "",
+                "🟡 <b>BUGÜN YENİ POZİSYON YOK</b>",
+                "A+ giriş filtresi; teknik uyum, likidite, formasyon veya temel doğrulamada yeterli aday bulmadı.",
+                "🛡 Zorla hisse eklenmedi: uygun retest ve RR ≥ 1:2 oluşmadan giriş planı açılmaz.",
+                "📌 Yarın açılışta seviyeler yeniden değerlendirilecek; güncel fiyattan otomatik AL yapılmaz.",
+                "<i>Bu bir piyasa disiplini kararıdır; kesin yön veya getiri garantisi değildir.</i>",
+            ]
+        )
+
     lines = [
-        "┏━━ 🏆 GÜNLÜK İLK 5 KALİTELİ LONG RADARI ━━┓",
-        f"🕒 {local:%H:%M}  •  {report.scanned} hisse tarandı  •  {report.failed} veri yetersiz",
+        "┏━━ 🏆 <b>GÜNLÜK 3 KALİTELİ İŞLEM PLANI</b> ━━┓",
+        f"🕒 {local:%d.%m.%Y • %H:%M} TSİ  •  {report.scanned} hisse tarandı  •  {report.failed} veri yetersiz",
         (
             f"🧾 Temel doğrulama: {report.fundamental_verified}/{report.fundamental_checked} teknik aday geçti"
             if report.fundamental_checked
             else "🧾 Temel doğrulama: kaynak sonucu bekleniyor"
         ),
-        "🛡 Şart: 7/8 teknik + 7/10 gösterge, likidite/temel kalite, teyitli formasyon, ≥%4 hedef alanı ve RR ≥1:2.",
+        "🛡 A+ filtre: çoklu teknik teyit, 9/10 gösterge uyumu, likidite/temel kalite, formasyon ve RR ≥1:2.",
         "⛔ Koşmuş, düşük likit veya manipülasyon riski taşıyan isimler otomatik elenir.",
         "📌 Giriş yalnız retest bölgesinden; güncel fiyattan otomatik AL yok.",
     ]
@@ -1226,7 +1241,7 @@ def format_daily_top_picks_report(
         lines.extend(
             [
                 "",
-                f"{rank}. 🟢 {pick.symbol}  •  KALİTE {pick.score}/100  •  {pick.technical_confirmations}/8 teknik teyit",
+                f"{rank}. 🟢 <b>{pick.symbol}</b>  •  KALİTE {pick.score}/100  •  {pick.technical_confirmations}/8 teknik teyit",
                 f"📐 Formasyon: {pick.pattern.name} ✅ — {pick.pattern.detail}",
                 f"🏢 Temel görünüm: {fundamental}",
                 *(
@@ -1237,6 +1252,7 @@ def format_daily_top_picks_report(
                 f"📍 Fiyat: {_format_price(pick.price)}  →  Giriş bölgesi: {_format_price(pick.entry_low)}–{_format_price(pick.entry_high)}",
                 f"🛑 Geçersizlik/Stop: {_format_price(pick.stop)}",
                 f"🎯 TP1: {_format_price(pick.tp1)}  •  TP2: {_format_price(pick.tp2)}  •  Potansiyel: %{pick.target_potential_percent:.1f}",
+                "🟡 Kâr koruma: TP1 yaklaşınca kademeli azaltma değerlendir; TP2 sonrası stop seviyesini fiyat yapısına göre güncelle.",
                 f"⚖️ RR 1:{pick.rr:.1f}  •  Neden: {reasons}",
                 f"⏳ Teyit: {pick.confirmation_instruction}",
             ]
@@ -1244,8 +1260,8 @@ def format_daily_top_picks_report(
     lines.extend(
         [
             "",
-            "ℹ️ ‘Potansiyel’ geçmiş destek/direnç ve formasyon hedefinden hesaplanır; %3 kâr garantisi değildir.",
-            "⚠️ Bu koşullu teknik izleme listesidir; bilanço/KAP, likidite ve piyasa riski ayrıca kontrol edilmelidir.",
+            "ℹ️ Hedefler geçmiş destek/direnç ve formasyon yapısından hesaplanır; kesin yön veya getiri garantisi değildir.",
+            "⚠️ Bu koşullu teknik plandır; emirden önce KAP, likidite ve piyasa riski tekrar kontrol edilmelidir.",
         ]
     )
     return "\n".join(lines)[:4096]

@@ -790,7 +790,7 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
 
     # The compact card is sent only for setups that pass a full ten-indicator
     # confluence gate. RSI remains an input, never a stand-alone alert.
-    if getattr(settings, "trade_scenario_scan_enabled", True):
+    if getattr(settings, "trade_scenario_scan_enabled", True) and getattr(settings, "trade_scenario_schedule_enabled", False):
         async def _trade_scenario_scan_job() -> None:
             def _scan():
                 from app.analysis.screener_engine import run_intraday_trade_scenario_scan
@@ -869,10 +869,8 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
         )
         logger.info("10 gostergeli firsat radari %s dakikada bir hazirlandi.", scenario_step)
 
-    # Saat baslarinda, gunluk grafikte teknik olarak uyumlu ve temel verisi
-    # dogrulanmis en fazla bes LONG adayi gonderilir.  Bir saat icinde ayni
-    # sembolun tekrar gelmesi bilincli bir davranistir: yeni veri o sembolu
-    # yine en ust siraya tasiyorsa yapay cesitlilik ugruna gizlenmez.
+    # Kapanisa yakin, gunluk grafikte teknik olarak uyumlu ve temel verisi
+    # dogrulanmis en fazla uc adaydan olusan tek bir plan gonderilir.
     if getattr(settings, "daily_top_picks_enabled", False):
         async def _daily_top_picks_job() -> None:
             def _scan():
@@ -891,7 +889,7 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
             try:
                 result = await asyncio.to_thread(_scan)
                 logger.info(
-                    "Saatlik gunluk ilk 5 taramasi tamamlandi scanned=%s failed=%s picks=%s fundamentals=%s/%s",
+                    "Gunluk uc aday taramasi tamamlandi scanned=%s failed=%s picks=%s fundamentals=%s/%s",
                     result.scanned,
                     result.failed,
                     len(result.picks),
@@ -912,40 +910,45 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
                         for user in db.query(User).filter(User.is_admin.is_(True)).all()
                     }
                     recipients.update(int(value) for value in getattr(settings, "admin_ids", ()))
-                    text = format_daily_top_picks_report(result, timezone_name=settings.timezone_name)
-                    if not text:
-                        logger.info("Saatlik günlük ilk 5 kartı gönderilmedi: doğrulanmış aday yok")
-                        return
+                    text = format_daily_top_picks_report(
+                        result,
+                        timezone_name=settings.timezone_name,
+                        always_render=True,
+                    )
                     local = result.created_at.astimezone(ZoneInfo(settings.timezone_name))
-                    delivery_key = f"scheduled:daily-top-picks:{local:%Y%m%d%H}"
+                    delivery_key = f"scheduled:daily-quality-plan:{local:%Y%m%d}"
                     for chat_id in recipients:
                         if not claim_scheduled_delivery(db, dedup_key=delivery_key, chat_id=chat_id):
-                            logger.info("Tekrarlanan günlük ilk 5 atlandı chat=%s key=%s", chat_id, delivery_key)
+                            logger.info("Tekrarlanan günlük üçlü plan atlandı chat=%s key=%s", chat_id, delivery_key)
                             continue
                         try:
                             await application.bot.send_message(chat_id=chat_id, text=text)
                         except Exception as exc:  # noqa: BLE001 - one recipient cannot stop the scheduler
-                            logger.warning("Saatlik ilk 5 karti gonderilemedi chat=%s: %s", chat_id, exc)
+                            logger.warning("Günlük üçlü plan gönderilemedi chat=%s: %s", chat_id, exc)
                 finally:
                     db.close()
             except Exception as exc:  # noqa: BLE001 - scheduled jobs must survive
-                logger.exception("Saatlik gunluk ilk 5 taramasi hata verdi: %s", exc)
-                await _notify_report_error("saatlik günlük ilk 5 radarı", exc)
+                logger.exception("Gunluk uc aday taramasi hata verdi: %s", exc)
+                await _notify_report_error("günlük 3 kaliteli işlem planı", exc)
 
-        scheduler.add_job(
-            _daily_top_picks_job,
-            CronTrigger(
-                day_of_week="mon-fri",
-                hour="10-17",
-                minute=0,
-                timezone="Europe/Istanbul",
-            ),
-            id="daily_top_five_long_scan",
-            coalesce=True,
-            max_instances=1,
-            replace_existing=True,
-        )
-        logger.info("Gunluk ilk 5 kaliteli LONG radari her saat basi (10:00-17:00 Istanbul) hazirlandi.")
+        try:
+            plan_hour, plan_minute = str(getattr(settings, "daily_top_picks_time", "17:25")).split(":", maxsplit=1)
+            scheduler.add_job(
+                _daily_top_picks_job,
+                CronTrigger(
+                    day_of_week="mon-fri",
+                    hour=int(plan_hour),
+                    minute=int(plan_minute),
+                    timezone="Europe/Istanbul",
+                ),
+                id="daily_top_three_quality_plan",
+                coalesce=True,
+                max_instances=1,
+                replace_existing=True,
+            )
+            logger.info("Günlük üç kaliteli işlem planı %s TSİ için hazırlandı.", getattr(settings, "daily_top_picks_time", "17:25"))
+        except (TypeError, ValueError):
+            logger.warning("Günlük kaliteli plan saati geçersiz: %s", getattr(settings, "daily_top_picks_time", None))
 
     # Compatibility mode only.  The previous EMA/RSI event stream remains
     # available when the new scenario radar is explicitly disabled, but it is

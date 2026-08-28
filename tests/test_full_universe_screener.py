@@ -208,9 +208,9 @@ def test_daily_top_pick_requires_real_pattern_target_and_retest_entry() -> None:
     from app.analysis.screener_engine import format_daily_top_picks_report
 
     card = format_daily_top_picks_report(report)
-    assert "GÜNLÜK İLK 5" in card
+    assert "GÜNLÜK 3 KALİTELİ İŞLEM PLANI" in card
     assert "Ters Omuz Baş Omuz" in card
-    assert "%3 kâr garantisi değildir" in card
+    assert "kesin yön veya getiri garantisi değildir" in card
 
 
 def test_daily_top_pick_card_is_empty_when_no_verified_trade_exists() -> None:
@@ -226,6 +226,7 @@ def test_daily_top_pick_card_is_empty_when_no_verified_trade_exists() -> None:
     )
 
     assert format_daily_top_picks_report(report) == ""
+    assert "BUGÜN YENİ POZİSYON YOK" in format_daily_top_picks_report(report, always_render=True)
 
 
 def test_daily_top_pick_rejects_extended_or_low_liquidity_name() -> None:
@@ -306,6 +307,7 @@ def test_new_scanner_jobs_use_istanbul_market_hours() -> None:
         intraday_vwap_scan_enabled=True,
         intraday_vwap_scan_minute_step=30,
         trade_scenario_scan_enabled=True,
+        trade_scenario_schedule_enabled=False,
         trade_scenario_scan_minutes=15,
         trade_scenario_max_results=6,
         daily_top_picks_enabled=True,
@@ -315,12 +317,11 @@ def test_new_scanner_jobs_use_istanbul_market_hours() -> None:
     )
     scheduler = _build_evening_scan_scheduler(settings)
     scenario_job = scheduler.get_job("full_universe_trade_scenario_scan")
-    assert scenario_job is not None
-    daily_job = scheduler.get_job("daily_top_five_long_scan")
+    assert scenario_job is None
+    daily_job = scheduler.get_job("daily_top_three_quality_plan")
     assert daily_job is not None
     assert scheduler.get_job("full_universe_ema_rsi_scan") is None
     assert scheduler.get_job("full_universe_vwap_volume_profile_scan") is None
-    assert str(scenario_job.trigger.timezone) == "Europe/Istanbul"
     assert str(daily_job.trigger.timezone) == "Europe/Istanbul"
-    assert str(scenario_job.trigger.fields[5]) == "10-18/3"
-    assert str(scenario_job.trigger.fields[6]) == "0"
+    assert str(daily_job.trigger.fields[5]) == "17"
+    assert str(daily_job.trigger.fields[6]) == "25"
