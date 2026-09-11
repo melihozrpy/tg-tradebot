@@ -854,7 +854,7 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
                 finally:
                     db.close()
             except Exception as exc:  # noqa: BLE001 - scheduled jobs must survive
-                logger.exception("Gunluk uc aday taramasi hata verdi: %s", exc)
+                logger.exception("Gunluk iki aday taramasi hata verdi: %s", exc)
                 await _notify_report_error("günlük 2 kaliteli işlem planı", exc)
 
         try:
