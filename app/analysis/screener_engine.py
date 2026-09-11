@@ -882,7 +882,7 @@ def run_daily_top_picks_scan(
     settings,
     fundamental_provider_factory: Callable[[], object] | None = None,
 ) -> DailyTopPicksRunResult:
-    """Scan the BIST universe for up to five verified daily-long candidates.
+    """Scan the BIST universe for up to two verified daily-long candidates.
 
     Technical screening runs on every configured symbol.  The optional
     fundamental provider is queried only for the best technical short-list,
@@ -942,7 +942,10 @@ def run_daily_top_picks_scan(
                     verified.append(verified_pick)
     selected = verified if require_fundamental else (verified or shortlist)
     selected.sort(key=lambda item: (-item.score, -item.target_potential_percent, item.symbol))
-    maximum = max(1, min(10, int(getattr(settings, "daily_top_picks_max_results", 5))))
+    # This broadcast is deliberately capped at two.  More names dilute the
+    # review process; old ENV values cannot re-enable the former five-name
+    # radar.
+    maximum = max(1, min(2, int(getattr(settings, "daily_top_picks_max_results", 2))))
     return DailyTopPicksRunResult(
         scanned=len(states),
         failed=failed,
@@ -1203,12 +1206,15 @@ def format_daily_top_picks_report(
     from zoneinfo import ZoneInfo
 
     local = report.created_at.astimezone(ZoneInfo(timezone_name))
-    if not report.picks:
+    # Formatting is also capped: a legacy cache/result must never turn this
+    # daily review back into a long watchlist.
+    picks = report.picks[:2]
+    if not picks:
         if not always_render:
             return ""
         return "\n".join(
             [
-                "┏━━ 🏆 GÜNLÜK 3 KALİTELİ İŞLEM PLANI ━━┓",
+                "┏━━ 🏆 GÜNLÜK 2 KALİTELİ İŞLEM PLANI ━━┓",
                 f"🕒 {local:%d.%m.%Y • %H:%M} TSİ  •  {report.scanned} hisse tarandı",
                 "",
                 "🟡 <b>BUGÜN YENİ POZİSYON YOK</b>",
@@ -1220,18 +1226,18 @@ def format_daily_top_picks_report(
         )
 
     lines = [
-        "┏━━ 🏆 <b>GÜNLÜK 3 KALİTELİ İŞLEM PLANI</b> ━━┓",
+        "┏━━ 🏆 <b>GÜNLÜK 2 KALİTELİ İŞLEM PLANI</b> ━━┓",
         f"🕒 {local:%d.%m.%Y • %H:%M} TSİ  •  {report.scanned} hisse tarandı  •  {report.failed} veri yetersiz",
         (
             f"🧾 Temel doğrulama: {report.fundamental_verified}/{report.fundamental_checked} teknik aday geçti"
             if report.fundamental_checked
             else "🧾 Temel doğrulama: kaynak sonucu bekleniyor"
         ),
-        "🛡 A+ filtre: çoklu teknik teyit, 9/10 gösterge uyumu, likidite/temel kalite, formasyon ve RR ≥1:2.",
+        "🛡 A+ filtre: günlük trend, 9/10 gösterge uyumu, likidite/temel kalite, teyitli formasyon ve RR ≥1:2.",
         "⛔ Koşmuş, düşük likit veya manipülasyon riski taşıyan isimler otomatik elenir.",
         "📌 Giriş yalnız retest bölgesinden; güncel fiyattan otomatik AL yok.",
     ]
-    for rank, pick in enumerate(report.picks, start=1):
+    for rank, pick in enumerate(picks, start=1):
         reasons = " • ".join(pick.reasons[:5])
         fundamental = (
             f"{pick.fundamental_status} {pick.fundamental_score}/100"
@@ -1252,7 +1258,8 @@ def format_daily_top_picks_report(
                 f"📍 Fiyat: {_format_price(pick.price)}  →  Giriş bölgesi: {_format_price(pick.entry_low)}–{_format_price(pick.entry_high)}",
                 f"🛑 Geçersizlik/Stop: {_format_price(pick.stop)}",
                 f"🎯 TP1: {_format_price(pick.tp1)}  •  TP2: {_format_price(pick.tp2)}  •  Potansiyel: %{pick.target_potential_percent:.1f}",
-                "🟡 Kâr koruma: TP1 yaklaşınca kademeli azaltma değerlendir; TP2 sonrası stop seviyesini fiyat yapısına göre güncelle.",
+                "📆 Plan: Günlük işlem için TP1'de kısmi kâr koruma; haftalık taşıma ancak TP1 üstünde günlük kapanış ve stop güncellemesiyle değerlendirilir.",
+                "🟡 Satış hazırlığı: TP1'de hacim zayıflar veya kırılım geri alınırsa azaltmayı değerlendir; TP2 kârın kalan kısmı için teknik hedeftir.",
                 f"⚖️ RR 1:{pick.rr:.1f}  •  Neden: {reasons}",
                 f"⏳ Teyit: {pick.confirmation_instruction}",
             ]

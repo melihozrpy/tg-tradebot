@@ -97,7 +97,7 @@ def build_telegram_application() -> Application:
     application.add_handler(CommandHandler("tara", handlers_v3.cmd_tara))
     application.add_handler(CommandHandler("tara_liste", handlers_v3.cmd_tara_liste))
     application.add_handler(CommandHandler("tarama_durumu", handlers_v3.cmd_tarama_durumu))
-    from app.telegram.market_opportunity_handlers import cmd_firsatlar, cmd_gunluk5
+    from app.telegram.market_opportunity_handlers import cmd_firsatlar, cmd_gunluk2
     from app.telegram.baby_stock_handlers import cmd_bebekhisse, cmd_bebekhisse_ayar, cmd_bebekhisse_kontrol
     from app.telegram.basic_viop_handlers import cmd_basitalsat, cmd_viop, cmd_viopislem
     from app.telegram.borsa_copilot_handlers import cmd_borsa_copilot, cmd_varant, cmd_viop_copilot
@@ -105,8 +105,11 @@ def build_telegram_application() -> Application:
     from app.telegram.mechanical_bist_handlers import cmd_mekanik_kurallar, cmd_mekanik_setup
     application.add_handler(CommandHandler("firsatlar", cmd_firsatlar))
     application.add_handler(CommandHandler("firsat", cmd_firsatlar))
-    application.add_handler(CommandHandler("gunluk5", cmd_gunluk5))
-    application.add_handler(CommandHandler("gunluk_ilk5", cmd_gunluk5))
+    application.add_handler(CommandHandler("gunluk2", cmd_gunluk2))
+    application.add_handler(CommandHandler("gunluk_plan", cmd_gunluk2))
+    # Eski komutlar mevcut kullanıcılar için iki adaylık yeni plana yönlenir.
+    application.add_handler(CommandHandler("gunluk5", cmd_gunluk2))
+    application.add_handler(CommandHandler("gunluk_ilk5", cmd_gunluk2))
     application.add_handler(CommandHandler("bebekhisse", cmd_bebekhisse))
     application.add_handler(CommandHandler("bebekhisse_kontrol", cmd_bebekhisse_kontrol))
     application.add_handler(CommandHandler("bebekhisse_ayar", cmd_bebekhisse_ayar))
@@ -788,89 +791,12 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
         )
         logger.info("Gun ici otomatik anomali taramasi hazirlandi (Pzt-Cuma 10:00-18:00, 30dk).")
 
-    # The compact card is sent only for setups that pass a full ten-indicator
-    # confluence gate. RSI remains an input, never a stand-alone alert.
-    if getattr(settings, "trade_scenario_scan_enabled", True) and getattr(settings, "trade_scenario_schedule_enabled", False):
-        async def _trade_scenario_scan_job() -> None:
-            def _scan():
-                from app.analysis.screener_engine import run_intraday_trade_scenario_scan
-                from app.config.instruments import universe_symbols
-                from app.data.provider_factory import build_market_data_provider
-
-                return run_intraday_trade_scenario_scan(
-                    symbols=universe_symbols(settings.bist_universe_json_path),
-                    provider_factory=lambda: build_market_data_provider(settings),
-                    settings=settings,
-                )
-
-            try:
-                result = await asyncio.to_thread(_scan)
-                logger.info(
-                    "Coklu-gosterge firsat radari tamamlandi scanned=%s failed=%s selected=%s",
-                    result.scanned,
-                    result.failed,
-                    len(result.scenarios),
-                )
-                if application is None or not result.scenarios:
-                    return
-                from app.analysis.screener_engine import format_trade_scenario_report
-                from app.models.database import User, get_session_factory
-                from app.services.scheduled_delivery_dedup import claim_scheduled_delivery
-
-                db = get_session_factory()()
-                try:
-                    configured = getattr(settings, "technical_screener_chat_id", None)
-                    recipients = {int(configured)} if configured else {
-                        int(user.telegram_user_id)
-                        for user in db.query(User).filter(User.is_admin.is_(True)).all()
-                    }
-                    recipients.update(int(value) for value in getattr(settings, "admin_ids", ()))
-                    text = format_trade_scenario_report(result, timezone_name=settings.timezone_name)
-                    local = result.created_at.astimezone(ZoneInfo(settings.timezone_name))
-                    delivery_key = f"scheduled:trade-scenario:{local:%Y%m%d%H%M}"
-                    for chat_id in recipients:
-                        if not claim_scheduled_delivery(db, dedup_key=delivery_key, chat_id=chat_id):
-                            logger.info("Tekrarlanan fırsat radarı atlandı chat=%s key=%s", chat_id, delivery_key)
-                            continue
-                        try:
-                            await application.bot.send_message(chat_id=chat_id, text=text)
-                        except Exception as exc:  # noqa: BLE001 - one recipient cannot stop the scheduler
-                            logger.warning("Firsat radari karti gonderilemedi chat=%s: %s", chat_id, exc)
-                finally:
-                    db.close()
-            except Exception as exc:  # noqa: BLE001 - scheduled jobs must survive
-                logger.exception("Firsat radari hata verdi: %s", exc)
-                await _notify_report_error("10 göstergeli fırsat radarı", exc)
-
-        # This is the heavy full-universe scan.  It deliberately runs at
-        # 10:00, 13:00 and 16:00 Istanbul time instead of every 15 minutes.
-        scenario_step = 180
-        if scenario_step >= 60 and scenario_step % 60 == 0:
-            scenario_trigger = CronTrigger(
-                day_of_week="mon-fri",
-                hour=f"10-18/{scenario_step // 60}",
-                minute=0,
-                timezone="Europe/Istanbul",
-            )
-        else:
-            scenario_trigger = CronTrigger(
-                day_of_week="mon-fri",
-                hour="10-18",
-                minute=f"*/{scenario_step}",
-                timezone="Europe/Istanbul",
-            )
-        scheduler.add_job(
-            _trade_scenario_scan_job,
-            scenario_trigger,
-            id="full_universe_trade_scenario_scan",
-            coalesce=True,
-            max_instances=1,
-            replace_existing=True,
-        )
-        logger.info("10 gostergeli firsat radari %s dakikada bir hazirlandi.", scenario_step)
+    # The former 3-hour 10-indicator broadcast is intentionally removed.
+    # Full-universe analysis remains available only on demand through commands;
+    # scheduled delivery is the concise end-of-day two-candidate plan below.
 
     # Kapanisa yakin, gunluk grafikte teknik olarak uyumlu ve temel verisi
-    # dogrulanmis en fazla uc adaydan olusan tek bir plan gonderilir.
+    # dogrulanmis en fazla iki adaydan olusan tek bir plan gonderilir.
     if getattr(settings, "daily_top_picks_enabled", False):
         async def _daily_top_picks_job() -> None:
             def _scan():
@@ -889,7 +815,7 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
             try:
                 result = await asyncio.to_thread(_scan)
                 logger.info(
-                    "Gunluk uc aday taramasi tamamlandi scanned=%s failed=%s picks=%s fundamentals=%s/%s",
+                    "Gunluk iki aday taramasi tamamlandi scanned=%s failed=%s picks=%s fundamentals=%s/%s",
                     result.scanned,
                     result.failed,
                     len(result.picks),
@@ -919,7 +845,7 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
                     delivery_key = f"scheduled:daily-quality-plan:{local:%Y%m%d}"
                     for chat_id in recipients:
                         if not claim_scheduled_delivery(db, dedup_key=delivery_key, chat_id=chat_id):
-                            logger.info("Tekrarlanan günlük üçlü plan atlandı chat=%s key=%s", chat_id, delivery_key)
+                            logger.info("Tekrarlanan günlük ikili plan atlandı chat=%s key=%s", chat_id, delivery_key)
                             continue
                         try:
                             await application.bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML")
@@ -929,7 +855,7 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
                     db.close()
             except Exception as exc:  # noqa: BLE001 - scheduled jobs must survive
                 logger.exception("Gunluk uc aday taramasi hata verdi: %s", exc)
-                await _notify_report_error("günlük 3 kaliteli işlem planı", exc)
+                await _notify_report_error("günlük 2 kaliteli işlem planı", exc)
 
         try:
             plan_hour, plan_minute = str(getattr(settings, "daily_top_picks_time", "17:25")).split(":", maxsplit=1)
@@ -941,12 +867,12 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
                     minute=int(plan_minute),
                     timezone="Europe/Istanbul",
                 ),
-                id="daily_top_three_quality_plan",
+                id="daily_top_two_quality_plan",
                 coalesce=True,
                 max_instances=1,
                 replace_existing=True,
             )
-            logger.info("Günlük üç kaliteli işlem planı %s TSİ için hazırlandı.", getattr(settings, "daily_top_picks_time", "17:25"))
+            logger.info("Günlük iki kaliteli işlem planı %s TSİ için hazırlandı.", getattr(settings, "daily_top_picks_time", "17:25"))
         except (TypeError, ValueError):
             logger.warning("Günlük kaliteli plan saati geçersiz: %s", getattr(settings, "daily_top_picks_time", None))
 

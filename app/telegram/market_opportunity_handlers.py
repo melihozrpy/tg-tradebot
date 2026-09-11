@@ -90,15 +90,15 @@ async def cmd_firsatlar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         )
 
 
-async def cmd_gunluk5(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Run the same hourly daily top-five screen on demand."""
+async def cmd_gunluk2(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Run the strict daily/weekly two-candidate screen on demand."""
 
     if await _reject_unauthorized(update) or update.message is None:
         return
     settings = get_settings()
     await update.message.reply_text(
-        "🏆 Günlük İlk 5 radarı tüm BIST evrenini tarıyor.\n"
-        "Sadece doğrulanmış formasyon, teknik teyit, ≥%3 hedef potansiyeli ve temel kalite koşullarını birlikte geçenler dönecek; zorla 5 hisse yazılmaz."
+        "🏆 Günlük 2 kaliteli plan tüm BIST evrenini tarıyor.\n"
+        "Yalnız günlük trend, 9/10 gösterge, teyitli formasyon, likidite, temel kalite ve RR ≥1:2 şartlarını birlikte geçen en fazla 2 aday dönecek."
     )
 
     def scan():
@@ -113,9 +113,13 @@ async def cmd_gunluk5(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         report = await asyncio.to_thread(scan)
         text = format_daily_top_picks_report(report, timezone_name=settings.timezone_name)
         if text:
-            await update.message.reply_text(text, disable_web_page_preview=True)
+            await update.message.reply_text(text, disable_web_page_preview=True, parse_mode="HTML")
     except Exception as exc:  # noqa: BLE001 - a command failure cannot crash the bot
-        logger.exception("Gunluk5 komutu taramasi hata verdi: %s", exc)
+        logger.exception("Gunluk2 komutu taramasi hata verdi: %s", exc)
         await update.message.reply_text(
-            "⚠️ Günlük İlk 5 taraması tamamlanamadı. Veri kaynağı tekrar denenecek; boş veya tahmini liste gönderilmedi."
+            "⚠️ Günlük 2 kaliteli plan taraması tamamlanamadı. Veri kaynağı tekrar denenecek; tahmini liste gönderilmedi."
         )
+
+
+# Eski komut bağlantıları kırılmasın; çıktı artık her durumda iki adayla sınırlıdır.
+cmd_gunluk5 = cmd_gunluk2

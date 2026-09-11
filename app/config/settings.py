@@ -199,10 +199,12 @@ class Settings(BaseSettings):
     trade_scenario_max_results: int = Field(default=5, ge=3, le=12)
     trade_scenario_minimum_core_confirmations: int = Field(default=3, ge=3, le=5)
     trade_scenario_minimum_ten_confirmations: int = Field(default=8, ge=3, le=10)
-    # ---- Günlük üç teknik + temel doğrulama planı ----
+    # ---- Günlük iki teknik + temel doğrulama planı ----
     daily_top_picks_enabled: bool = Field(default=True)
     daily_top_picks_time: str = Field(default="17:25")
-    daily_top_picks_max_results: int = Field(default=3, ge=1, le=10)
+    # Runtime also clamps this to two so an old Coolify value cannot restore
+    # the former three/five-stock broadcast.
+    daily_top_picks_max_results: int = Field(default=2, ge=1, le=10)
     daily_top_picks_minimum_confirmations: int = Field(default=8, ge=5, le=8)
     # The scheduled two-name card is intentionally stricter than the general
     # radar: it filters extended candles, thin/erratic names and weak

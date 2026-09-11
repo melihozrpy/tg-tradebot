@@ -208,7 +208,7 @@ def test_daily_top_pick_requires_real_pattern_target_and_retest_entry() -> None:
     from app.analysis.screener_engine import format_daily_top_picks_report
 
     card = format_daily_top_picks_report(report)
-    assert "GÜNLÜK 3 KALİTELİ İŞLEM PLANI" in card
+    assert "GÜNLÜK 2 KALİTELİ İŞLEM PLANI" in card
     assert "Ters Omuz Baş Omuz" in card
     assert "kesin yön veya getiri garantisi değildir" in card
 
@@ -318,7 +318,7 @@ def test_new_scanner_jobs_use_istanbul_market_hours() -> None:
     scheduler = _build_evening_scan_scheduler(settings)
     scenario_job = scheduler.get_job("full_universe_trade_scenario_scan")
     assert scenario_job is None
-    daily_job = scheduler.get_job("daily_top_three_quality_plan")
+    daily_job = scheduler.get_job("daily_top_two_quality_plan")
     assert daily_job is not None
     assert scheduler.get_job("full_universe_ema_rsi_scan") is None
     assert scheduler.get_job("full_universe_vwap_volume_profile_scan") is None

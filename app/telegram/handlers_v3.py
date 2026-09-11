@@ -3332,7 +3332,7 @@ async def cmd_komutlar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "/bebekhisse 200000 — çoklu teyitli en fazla 2 spot LONG aday\n"
         "/bebekhisse_kontrol THYAO 200000 — tek hisse denetimi • /bebekhisse_ayar — risk çerçevesi\n"
         "/firsatlar 5dk|1s|4s — seçtiğin zaman diliminde 10 gösterge filtresiyle fırsatları tarar (varsayılan: 1s)\n"
-        "/gunluk5 — formasyon + teknik teyit + temel kalite filtresiyle günlük ilk 5 LONG adayını tarar\n"
+        "/gunluk2 — günlük/haftalık plan için en fazla 2 A+ LONG adayını tarar\n"
         "/oneriler — 09:30/16:30 iki aday planını şimdi üretir; giriş yalnız retest bölgesinde geçerlidir\n"
         "/oneri_performans — iki gün yaşı gelen planların yalnız tetiklenen sonuçlarını gösterir\n"
         "/basitalsat — günlük teknik + doğrulanabilir temel kalite filtresiyle güçlü adayları tarar\n"
