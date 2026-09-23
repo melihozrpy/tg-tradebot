@@ -704,19 +704,14 @@ def format_morning_report(report: MorningReport) -> str:
         f"🛡️ Piyasa güveni: {report.confidence.score:.0f}/100 • {report.confidence.label}",
         f"🧭 Bugünün koşullu yönü: {direction_map.get(item.predicted_direction, item.predicted_direction.upper())}",
         "",
-        "📊 XU100 • DÜNÜN KANITI",
-        f"• Kapanış {summary.close:.2f} • %{summary.change_percent:+.2f}",
-        f"• Açılış/Yüksek/Düşük: {summary.open:.2f} / {summary.high:.2f} / {summary.low:.2f}",
-        f"• ATR {summary.atr:.2f} • ADR {summary.adr:.2f} • Yapı: {summary.trend}",
-        "",
-        f"🧩 SMXM CHECKLIST • {item.checklist_score}/6 • {item.setup_label}",
+        f"📊 Dün: {summary.close:.2f} (%{summary.change_percent:+.2f}) • ATR {summary.atr:.0f} • Yapı {summary.trend}",
+        f"🧩 Checklist: {item.checklist_score}/6 • {item.setup_label}",
     ]
-    lines.extend(
-        f"{'✅' if check.passed else '❌'} {check.label}: {check.detail[:110]}"
-        for check in item.checklist
-    )
+    missing = [check.label for check in item.checklist if not check.passed]
+    if missing:
+        lines.append(f"⚠️ Eksik teyit: {', '.join(missing[:2])}")
     if quality_zone is not None:
-        lines.extend(["", format_quality_zone_scenario(quality_zone)])
+        lines.extend(["", format_quality_zone_scenario(quality_zone, compact=True)])
     else:
         lines.extend(
             [
@@ -727,19 +722,15 @@ def format_morning_report(report: MorningReport) -> str:
         )
     breadth = report.breadth
     if breadth and breadth.available:
-        lines.extend(format_breadth_panel(breadth, report_kind="morning"))
+        lines.extend(format_breadth_panel(breadth, report_kind="morning", compact=True))
     elif breadth is not None:
         lines.extend(["", "🌐 BIST genişlik paneli bu raporda üretilemedi."])
     lines.extend(format_report_news_impact(report.news_impact, timezone_name="Europe/Istanbul"))
-    lines.extend(["", "🗓️ BUGÜNÜN ÖNEMLİ TAKVİMİ"])
     important = [event for event in report.calendar_events if event.impact in {"high", "medium"}]
-    if not important:
-        lines.append("Doğrulanmış yüksek/orta etkili etkinlik alınamadı.")
-    for event in important[:6]:
+    if important:
+        lines.extend(["", "🗓️ TAKVİM"])
+    for event in important[:2]:
         icon = "🔴" if event.impact == "high" else "🟠"
         stamp = event.event_time.strftime("%H:%M") if event.event_time else "--:--"
-        affected = ", ".join(event.affected_instruments[:5]) or "eşleme yok"
-        lines.append(f"{icon} {stamp} {event.country} • {event.title}\n   Etki: {affected}")
-        if event.probable_effect:
-            lines.append(f"   🧠 {event.probable_effect[:240]}")
+        lines.append(f"{icon} {stamp} {event.country} • {event.title[:120]}")
     return "\n".join(lines)[:4096]

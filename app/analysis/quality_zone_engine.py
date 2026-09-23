@@ -284,8 +284,26 @@ def _price(value: float | None, decimals: int) -> str:
     return "hesaplanamadı" if value is None else f"{value:.{decimals}f}"
 
 
-def format_quality_zone_scenario(scenario: QualityZoneScenario, *, decimals: int = 2) -> str:
+def format_quality_zone_scenario(
+    scenario: QualityZoneScenario, *, decimals: int = 2, compact: bool = False
+) -> str:
     direction_word = "yukarı yön" if scenario.direction == "LONG" else "aşağı yön"
+    if compact:
+        rr_values = [value for value in (scenario.rr_1, scenario.rr_2) if value is not None]
+        rr_text = f"1:{max(rr_values):.1f}" if rr_values else "—"
+        retest = (
+            "Bölgede kapanış + MSS/BOS teyidi bekle."
+            if scenario.zone_low <= scenario.current_price <= scenario.zone_high
+            else f"Retest bekle; fiyat {scenario.current_price:.{decimals}f}, giriş {scenario.entry:.{decimals}f}."
+        )
+        return "\n".join(
+            [
+                f"🎯 {scenario.direction} • {scenario.zone_kind} {scenario.zone_low:.{decimals}f}-{scenario.zone_high:.{decimals}f}",
+                f"📍 Giriş {scenario.entry:.{decimals}f}  •  Stop {scenario.invalidation:.{decimals}f}  •  RR {rr_text}",
+                f"🎯 TP1 {_price(scenario.target_1, decimals)}  •  TP2 {_price(scenario.target_2, decimals)}",
+                f"⏳ {retest}",
+            ]
+        )
     lines = [
         f"🎯 EN YAKIN KALİTELİ BÖLGE: {scenario.zone_kind} "
         f"{scenario.zone_low:.{decimals}f}-{scenario.zone_high:.{decimals}f}",

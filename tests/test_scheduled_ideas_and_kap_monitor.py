@@ -113,7 +113,7 @@ def test_persisted_ideas_are_idempotent_per_slot_day(db_session) -> None:
     assert db_session.query(ScheduledTradeIdea).count() == 1
 
 
-def test_kap_monitor_card_keeps_source_and_requires_official_check() -> None:
+def test_kap_monitor_card_is_short_and_hides_source_url() -> None:
     text = format_kap_alert(
         KapHeadline(
             title="Örnek şirket yeni sözleşme imzaladığını duyurdu.",
@@ -124,5 +124,6 @@ def test_kap_monitor_card_keeps_source_and_requires_official_check() -> None:
             category="Yeni iş / ihale",
         )
     )
-    assert "Midas KAP başlık akışı" in text
-    assert "resmî KAP açıklamasını doğrula" in text
+    assert "KAP • POZİTİF • ETKİ +30/100" in text
+    assert "Midas KAP başlık akışı" not in text
+    assert "getmidas.com" not in text

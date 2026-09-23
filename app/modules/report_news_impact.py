@@ -214,33 +214,19 @@ def build_report_news_impact(
 
 
 def format_report_news_impact(impact: ReportNewsImpact | None, *, timezone_name: str) -> list[str]:
-    """Render no block at all when there is no material verified KAP item."""
+    """Render only short, material KAP impact notes; never expose source URLs."""
 
     if impact is None or not impact.has_items:
         return []
-    from zoneinfo import ZoneInfo
-
-    lines = [""]
+    lines = ["", "📰 KAP ETKİSİ"]
     if impact.negative:
-        lines.append("📰 HABER ETKİSİ — NEGATİF")
         for item in impact.negative:
-            local = item.published_at.astimezone(ZoneInfo(timezone_name))
             affected = item.sector_name or item.symbol
-            lines.append(f"- {item.title} ({local:%d.%m %H:%M})")
-            lines.append(f"- Etkilenen: {affected}")
-            lines.append(f"- Neden önemli: {item.rationale}")
-            lines.append(f"- Kaynak: KAP • {item.source_url}")
+            lines.append(f"🔴 {affected}: {item.title[:135]} • Etki: {item.rationale[:100]}")
     if impact.positive:
-        if impact.negative:
-            lines.append("")
-        lines.append("📰 HABER ETKİSİ — POZİTİF")
         for item in impact.positive:
-            local = item.published_at.astimezone(ZoneInfo(timezone_name))
             sector = item.sector_name or "Şirket"
             watched = ", ".join(item.watch_symbols)
-            lines.append(f"- {item.title} ({local:%d.%m %H:%M})")
-            lines.append(f"- Beslenen sektör: {sector}")
-            lines.append(f"- İzlenecek hisseler: {watched}")
-            lines.append(f"- Neden: {item.rationale}")
-            lines.append(f"- Kaynak: KAP • {item.source_url}")
+            symbols = f" ({watched})" if watched else ""
+            lines.append(f"🟢 {sector}{symbols}: {item.title[:135]} • Etki: {item.rationale[:100]}")
     return lines

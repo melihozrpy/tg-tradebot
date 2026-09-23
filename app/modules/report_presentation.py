@@ -36,7 +36,9 @@ def _candidate_lines(candidate: BreadthCandidate, *, bullish: bool, rank: int) -
     return lines
 
 
-def format_breadth_panel(breadth: MarketBreadthResult, *, report_kind: str) -> list[str]:
+def format_breadth_panel(
+    breadth: MarketBreadthResult, *, report_kind: str, compact: bool = False
+) -> list[str]:
     """Render broad market data as a readable panel, not a symbol wall.
 
     The levels are observation-based technical reference levels.  They are
@@ -58,6 +60,13 @@ def format_breadth_panel(breadth: MarketBreadthResult, *, report_kind: str) -> l
         f"🧭 Sonraki seans: {breadth.tomorrow_bias}  •  Veri kapsamı {scope}",
         "┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛",
     ]
+    if compact:
+        return [
+            "",
+            f"🌐 {breadth.universe_size} HİSSE • {breadth.regime} • {breadth.breadth_score}/100",
+            f"📈 {breadth.advancers} yükselen  |  📉 {breadth.decliners} düşen  |  Net {breadth.net_breadth:+d}",
+            f"🧭 Sonraki seans: {breadth.tomorrow_bias}  •  Kapsam {scope}",
+        ]
 
     if breadth.long_candidates:
         lines.extend(["", "🚀 YARIN İÇİN EN TEMİZ 2 YÜKSELİŞ SENARYOSU"])
