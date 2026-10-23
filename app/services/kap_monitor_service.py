@@ -123,12 +123,8 @@ def claim_new_impacting_headlines(
 
 
 def format_kap_alert(item: KapHeadline) -> str:
-    """Render a compact decision card; source URLs stay out of Telegram."""
+    """Render a two-line KAP alert; source metadata stays out of Telegram."""
 
     direction = "POZİTİF" if item.impact_score > 0 else "NEGATİF"
     sign = "+" if item.impact_score > 0 else ""
-    return (
-        f"🔔 KAP • {direction} • ETKİ {sign}{item.impact_score:.0f}/100\n"
-        f"📰 {item.title}\n"
-        f"🏷️ {item.category}"
-    )[:4096]
+    return f"🔔 KAP • {direction} • {sign}{item.impact_score:.0f}/100\n📰 {item.title}"[:4096]

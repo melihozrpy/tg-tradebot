@@ -714,6 +714,68 @@ def run_intraday_trade_scenario_scan(
     )
 
 
+def run_intraday_long_scan(
+    *,
+    symbols: Iterable[str],
+    provider_factory: Callable[[], BaseMarketDataProvider],
+    settings,
+) -> TradeScenarioRunResult:
+    """Run the conservative, long-only 15-minute BIST filter.
+
+    This is intentionally separate from the older two-sided scenario explorer.
+    A candidate must be liquid by the available OHLCV proxy, non-erratic,
+    above VWAP with EMA20/50/100 alignment, and have at least four independent
+    intraday confirmations.  Missing market-cap, spread or regulatory flags
+    are never invented; those checks are handled only when the data provider
+    exposes them elsewhere.
+    """
+
+    limited = list(symbols)[: settings.technical_screener_max_symbols_per_run]
+    states, failed = _fetch_states(
+        limited,
+        provider_factory=provider_factory,
+        workers=settings.technical_screener_workers,
+        timeframe="15m",
+        settings=settings,
+    )
+    candidates: list[TradeScenario] = []
+    for state in states:
+        # Quality / anti-chase gates calculated from actual OHLCV only.
+        if (
+            state.price < 5
+            or state.manipulation_risk
+            or (state.liquidity_score is not None and state.liquidity_score < 65)
+            or state.relative_volume < 1.5
+            or not (50 <= state.rsi <= 68)
+            or state.price <= state.vwap
+            or not (state.ema20 > state.ema50 > state.ema100)
+        ):
+            continue
+        scenario = build_trade_scenario(
+            state,
+            minimum_core_confirmations=4,
+            minimum_ten_confirmations=4,
+        )
+        if scenario is None or scenario.direction != "bullish" or scenario.score < 70 or scenario.rr < 1.5:
+            continue
+        # Do not promote a move that is already too far from its retest zone.
+        if state.price > scenario.entry_high + state.atr * 0.75:
+            continue
+        candidates.append(scenario)
+
+    candidates.sort(
+        key=lambda item: (item.action != "AL", -item.score, -item.ten_confirmation_count, item.symbol)
+    )
+    maximum = max(1, min(3, int(getattr(settings, "intraday_long_max_results", 3))))
+    return TradeScenarioRunResult(
+        scanned=len(states),
+        failed=failed,
+        scenarios=tuple(candidates[:maximum]),
+        created_at=datetime.now(timezone.utc),
+        interval_minutes=15,
+    )
+
+
 def _daily_top_pick_checks(
     state: SymbolTechnicalState,
     *,
@@ -1187,6 +1249,49 @@ def format_trade_scenario_report(
             "⚠️ SAT, BIST spotta açığa satış çağrısı değil; eldeki pozisyon için azaltma/koruma çerçevesidir.",
         ]
     )
+    return "\n".join(lines)[:4096]
+
+
+def format_intraday_long_scan(
+    report: TradeScenarioRunResult,
+    *,
+    timezone_name: str = "Europe/Istanbul",
+) -> str:
+    """Short long-only card for the 15-minute quality scan.
+
+    The entry remains a retest range derived from indicators, never the last
+    price.  It deliberately avoids short labels and price promises.
+    """
+
+    from zoneinfo import ZoneInfo
+
+    local = report.created_at.astimezone(ZoneInfo(timezone_name))
+    lines = [
+        f"🔎 15DK LONG TARAMA — {local:%H:%M}",
+        f"{report.scanned} hisse tarandı • {report.failed} veri yetersiz",
+    ]
+    if not report.scenarios:
+        lines += [
+            "Sonuç: Uygun setup yok.",
+            "⚠️ Yatırım tavsiyesi değildir.",
+        ]
+        return "\n".join(lines)
+
+    lines.append(f"Sonuç: {len(report.scenarios)} kaliteli LONG adayı")
+    for scenario in report.scenarios:
+        strategy = "VWAP / EMA retest"
+        state_label = "GİRİŞ TEYİDİ" if scenario.action == "AL" else "BEKLE"
+        reasons = " • ".join(scenario.reasons[:3]) or "Veriye dayalı çoklu teyit"
+        lines += [
+            "",
+            f"📈 {scenario.symbol} — Skor {scenario.score}/100 • {state_label}",
+            f"Strateji: {strategy}",
+            f"Giriş: {_format_price(scenario.entry_low)}–{_format_price(scenario.entry_high)} | Stop: {_format_price(scenario.stop)}",
+            f"H1: {_format_price(scenario.tp1)} | H2: {_format_price(scenario.tp2)} | R:R 1:{scenario.rr:.1f}",
+            f"Neden: {reasons}.",
+            "Risk: 15dk mum kapanışı ve hacim teyidi olmadan giriş yok; işlem başı risk %0,5–1 ile sınırlı.",
+        ]
+    lines.append("⚠️ Yatırım tavsiyesi değildir; seviyeler koşullu teknik senaryodur.")
     return "\n".join(lines)[:4096]
 
 

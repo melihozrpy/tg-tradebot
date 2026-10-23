@@ -97,19 +97,13 @@ def build_telegram_application() -> Application:
     application.add_handler(CommandHandler("tara", handlers_v3.cmd_tara))
     application.add_handler(CommandHandler("tara_liste", handlers_v3.cmd_tara_liste))
     application.add_handler(CommandHandler("tarama_durumu", handlers_v3.cmd_tarama_durumu))
-    from app.telegram.market_opportunity_handlers import cmd_firsatlar, cmd_gunluk2
+    from app.telegram.market_opportunity_handlers import cmd_firsatlar
     from app.telegram.baby_stock_handlers import cmd_bebekhisse, cmd_bebekhisse_ayar, cmd_bebekhisse_kontrol
     from app.telegram.basic_viop_handlers import cmd_basitalsat, cmd_viop, cmd_viopislem
     from app.telegram.borsa_copilot_handlers import cmd_borsa_copilot, cmd_varant, cmd_viop_copilot
-    from app.telegram.scheduled_idea_handlers import cmd_oneriler, cmd_oneri_performans
     from app.telegram.mechanical_bist_handlers import cmd_mekanik_kurallar, cmd_mekanik_setup
     application.add_handler(CommandHandler("firsatlar", cmd_firsatlar))
     application.add_handler(CommandHandler("firsat", cmd_firsatlar))
-    application.add_handler(CommandHandler("gunluk2", cmd_gunluk2))
-    application.add_handler(CommandHandler("gunluk_plan", cmd_gunluk2))
-    # Eski komutlar mevcut kullanıcılar için iki adaylık yeni plana yönlenir.
-    application.add_handler(CommandHandler("gunluk5", cmd_gunluk2))
-    application.add_handler(CommandHandler("gunluk_ilk5", cmd_gunluk2))
     application.add_handler(CommandHandler("bebekhisse", cmd_bebekhisse))
     application.add_handler(CommandHandler("bebekhisse_kontrol", cmd_bebekhisse_kontrol))
     application.add_handler(CommandHandler("bebekhisse_ayar", cmd_bebekhisse_ayar))
@@ -119,8 +113,6 @@ def build_telegram_application() -> Application:
     application.add_handler(CommandHandler("borsacopilot", cmd_borsa_copilot))
     application.add_handler(CommandHandler("viopcopilot", cmd_viop_copilot))
     application.add_handler(CommandHandler("varant", cmd_varant))
-    application.add_handler(CommandHandler("oneriler", cmd_oneriler))
-    application.add_handler(CommandHandler("oneri_performans", cmd_oneri_performans))
     application.add_handler(CommandHandler("mekanik", cmd_mekanik_setup))
     application.add_handler(CommandHandler("mekanik_kurallar", cmd_mekanik_kurallar))
     application.add_handler(CommandHandler("aksam_raporu", smxm_report_handlers.cmd_smxm_aksam_raporu))
@@ -225,7 +217,7 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
     async def _job() -> None:
         from app.data.provider_factory import build_market_data_provider
         from app.models.database import get_session_factory
-        from app.services.notification_service import notify_daily_top_candidates, scan_and_notify_anomalies
+        from app.services.notification_service import scan_and_notify_anomalies
         from app.services.scan_service import ScanBlockedByKillSwitchError, get_distinct_watchlist_symbols, run_evening_scan
         from app.services.signal_lifecycle_service import update_open_signals
 
@@ -239,13 +231,8 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
                 from app.services.health_service import mark_runtime_health
                 mark_runtime_health("close_scan", "ok")
                 logger.info("Otomatik aksam taramasi tamamlandi: %s sembol.", len(symbols))
-                # V3.2 (Asama 3, bolum 7-8): gunluk otomatik grafik bildirimleri.
-                try:
-                    sent = await notify_daily_top_candidates(application, db, provider, summary)
-                    if sent:
-                        logger.info("Gunluk otomatik grafik bildirimi gonderildi: %s kullanici.", sent)
-                except Exception as exc:  # noqa: BLE001 - bildirim hatasi taramayi geçersiz kilmamali
-                    logger.error("Gunluk otomatik bildirim hata verdi: %s", exc)
+                # Automatic daily-plan cards were retired. The scan still
+                # updates signals and monitoring state without a broadcast.
                 # V3.2 (Asama 3): anormal hareket taramasi + alarm bildirimleri.
                 try:
                     notified = await scan_and_notify_anomalies(application, db, provider, symbols, timeframe="1d")
@@ -452,7 +439,8 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
 
     # Default false for legacy/test settings objects that predate this additive
     # feature; real Settings declares the feature enabled by default.
-    if getattr(settings, "scheduled_ideas_enabled", False):
+    # Retired: stale Coolify settings must not revive two-stock plan cards.
+    if False:  # pragma: no cover - migration-only code below
         def _add_idea_job(slot: str, at_time: str, job_id: str) -> None:
             try:
                 hour_text, minute_text = at_time.split(":")
@@ -479,7 +467,7 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
         _add_idea_job("morning", settings.scheduled_ideas_morning_time, "scheduled_two_ideas_morning")
         _add_idea_job("afternoon", settings.scheduled_ideas_afternoon_time, "scheduled_two_ideas_afternoon")
 
-    if getattr(settings, "scheduled_idea_performance_enabled", False):
+    if False:  # pragma: no cover - depends on retired plan cards
         async def _scheduled_idea_performance_job() -> None:
             def _evaluate():
                 from app.data.provider_factory import build_market_data_provider
@@ -797,7 +785,8 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
 
     # Kapanisa yakin, gunluk grafikte teknik olarak uyumlu ve temel verisi
     # dogrulanmis en fazla iki adaydan olusan tek bir plan gonderilir.
-    if getattr(settings, "daily_top_picks_enabled", False):
+    # Retired: no daily "işlem planı" card is ever automatically delivered.
+    if False:  # pragma: no cover - migration-only code below
         async def _daily_top_picks_job() -> None:
             def _scan():
                 from app.analysis.screener_engine import run_daily_top_picks_scan
@@ -875,6 +864,53 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
             logger.info("Günlük iki kaliteli işlem planı %s TSİ için hazırlandı.", getattr(settings, "daily_top_picks_time", "17:25"))
         except (TypeError, ValueError):
             logger.warning("Günlük kaliteli plan saati geçersiz: %s", getattr(settings, "daily_top_picks_time", None))
+
+    if getattr(settings, "intraday_long_scan_enabled", True):
+        async def _intraday_long_scan_job() -> None:
+            """Broadcast only the long-only, retest-first 15-minute scanner."""
+
+            def _scan():
+                from app.analysis.screener_engine import run_intraday_long_scan
+                from app.config.instruments import universe_symbols
+                from app.data.provider_factory import build_market_data_provider
+
+                return run_intraday_long_scan(
+                    symbols=universe_symbols(settings.bist_universe_json_path),
+                    provider_factory=lambda: build_market_data_provider(settings),
+                    settings=settings,
+                )
+
+            try:
+                report = await asyncio.to_thread(_scan)
+                if application is None:
+                    return
+                from app.analysis.screener_engine import format_intraday_long_scan
+                from app.models.database import get_session_factory
+
+                db = get_session_factory()()
+                try:
+                    text = format_intraday_long_scan(report, timezone_name=settings.timezone_name)
+                    chat_id = getattr(settings, "technical_screener_chat_id", None)
+                    for recipient in _scheduled_recipients(db, configured_chat_id=chat_id):
+                        try:
+                            await application.bot.send_message(chat_id=recipient, text=text)
+                        except Exception as exc:  # noqa: BLE001
+                            logger.warning("15dk long tarama gönderilemedi chat=%s: %s", recipient, exc)
+                finally:
+                    db.close()
+            except Exception as exc:  # noqa: BLE001 - scheduled scans cannot crash the bot
+                logger.exception("15dk long tarama hata verdi: %s", exc)
+
+        step = max(15, min(60, int(getattr(settings, "intraday_long_scan_minutes", 15))))
+        scheduler.add_job(
+            _intraday_long_scan_job,
+            CronTrigger(day_of_week="mon-fri", hour="10-17", minute=f"*/{step}", timezone="Europe/Istanbul"),
+            id="intraday_long_quality_scan",
+            coalesce=True,
+            max_instances=1,
+            replace_existing=True,
+        )
+        logger.info("15dk long kalite taraması hazırlandı (Pzt-Cuma 10:00-17:59 TSİ).")
 
     # Compatibility mode only.  The previous EMA/RSI event stream remains
     # available when the new scenario radar is explicitly disabled, but it is

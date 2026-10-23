@@ -199,8 +199,14 @@ class Settings(BaseSettings):
     trade_scenario_max_results: int = Field(default=5, ge=3, le=12)
     trade_scenario_minimum_core_confirmations: int = Field(default=3, ge=3, le=5)
     trade_scenario_minimum_ten_confirmations: int = Field(default=8, ge=3, le=10)
+    # Long-only 15-minute quality scan.  It uses only OHLCV-derived data and
+    # never turns a last price into an entry price.
+    intraday_long_scan_enabled: bool = Field(default=True)
+    intraday_long_scan_minutes: int = Field(default=15, ge=15, le=60)
+    intraday_long_max_results: int = Field(default=3, ge=1, le=3)
     # ---- Günlük iki teknik + temel doğrulama planı ----
-    daily_top_picks_enabled: bool = Field(default=True)
+    # Deprecated automatic plan card. Kept only to parse an old environment.
+    daily_top_picks_enabled: bool = Field(default=False)
     daily_top_picks_time: str = Field(default="17:25")
     # Runtime also clamps this to two so an old Coolify value cannot restore
     # the former three/five-stock broadcast.
@@ -260,7 +266,7 @@ class Settings(BaseSettings):
     scheduled_ideas_afternoon_time: str = Field(default="16:30")
     scheduled_ideas_max_results: int = Field(default=2, ge=1, le=2)
     scheduled_ideas_require_fundamental: bool = Field(default=True)
-    scheduled_idea_performance_enabled: bool = Field(default=True)
+    scheduled_idea_performance_enabled: bool = Field(default=False)
     scheduled_idea_performance_time: str = Field(default="18:15")
     scheduled_idea_performance_days: int = Field(default=2, ge=1, le=10)
 

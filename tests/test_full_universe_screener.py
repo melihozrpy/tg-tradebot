@@ -310,7 +310,7 @@ def test_new_scanner_jobs_use_istanbul_market_hours() -> None:
         trade_scenario_schedule_enabled=False,
         trade_scenario_scan_minutes=15,
         trade_scenario_max_results=6,
-        daily_top_picks_enabled=True,
+        daily_top_picks_enabled=True,  # stale setting must not revive retired cards
         user_price_alerts_enabled=False,
         enhanced_alarm_scan_enabled=False,
         signal_monitor_enabled=False,
@@ -319,9 +319,6 @@ def test_new_scanner_jobs_use_istanbul_market_hours() -> None:
     scenario_job = scheduler.get_job("full_universe_trade_scenario_scan")
     assert scenario_job is None
     daily_job = scheduler.get_job("daily_top_two_quality_plan")
-    assert daily_job is not None
+    assert daily_job is None
     assert scheduler.get_job("full_universe_ema_rsi_scan") is None
     assert scheduler.get_job("full_universe_vwap_volume_profile_scan") is None
-    assert str(daily_job.trigger.timezone) == "Europe/Istanbul"
-    assert str(daily_job.trigger.fields[5]) == "17"
-    assert str(daily_job.trigger.fields[6]) == "25"
