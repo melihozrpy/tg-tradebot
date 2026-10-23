@@ -1271,11 +1271,8 @@ def format_intraday_long_scan(
         f"{report.scanned} hisse tarandı • {report.failed} veri yetersiz",
     ]
     if not report.scenarios:
-        lines += [
-            "Sonuç: Uygun setup yok.",
-            "⚠️ Yatırım tavsiyesi değildir.",
-        ]
-        return "\n".join(lines)
+        # Automatic scheduler stays quiet when there is no qualifying trade.
+        return ""
 
     lines.append(f"Sonuç: {len(report.scenarios)} kaliteli LONG adayı")
     for scenario in report.scenarios:

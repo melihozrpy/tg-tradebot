@@ -123,8 +123,12 @@ def claim_new_impacting_headlines(
 
 
 def format_kap_alert(item: KapHeadline) -> str:
-    """Render a two-line KAP alert; source metadata stays out of Telegram."""
+    """Render a short, colorful KAP alert without source metadata."""
 
-    direction = "POZİTİF" if item.impact_score > 0 else "NEGATİF"
-    sign = "+" if item.impact_score > 0 else ""
-    return f"🔔 KAP • {direction} • {sign}{item.impact_score:.0f}/100\n📰 {item.title}"[:4096]
+    if item.impact_score > 0:
+        header = f"🟢 KAP • POZİTİF ✨ +{item.impact_score:.0f}/100"
+    elif item.impact_score < 0:
+        header = f"🔴 KAP • NEGATİF ⚠️ {item.impact_score:.0f}/100"
+    else:
+        header = "🟡 KAP • NÖTR • 0/100"
+    return f"{header}\n📰 {item.title}"[:4096]

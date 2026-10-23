@@ -884,12 +884,17 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
                 report = await asyncio.to_thread(_scan)
                 if application is None:
                     return
+                if not report.scenarios:
+                    logger.info("15dk long tarama sessiz tamamlandı: uygun setup yok.")
+                    return
                 from app.analysis.screener_engine import format_intraday_long_scan
                 from app.models.database import get_session_factory
 
                 db = get_session_factory()()
                 try:
                     text = format_intraday_long_scan(report, timezone_name=settings.timezone_name)
+                    if not text:
+                        return
                     chat_id = getattr(settings, "technical_screener_chat_id", None)
                     for recipient in _scheduled_recipients(db, configured_chat_id=chat_id):
                         try:

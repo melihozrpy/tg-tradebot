@@ -124,7 +124,7 @@ def test_kap_monitor_card_is_short_and_hides_source_url() -> None:
             category="Yeni iş / ihale",
         )
     )
-    assert "KAP • POZİTİF • +30/100" in text
+    assert "🟢 KAP • POZİTİF ✨ +30/100" in text
     assert "Yeni iş / ihale" not in text
     assert "Midas KAP başlık akışı" not in text
     assert "getmidas.com" not in text
