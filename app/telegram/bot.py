@@ -97,6 +97,7 @@ def build_telegram_application() -> Application:
     application.add_handler(CommandHandler("tara", handlers_v3.cmd_tara))
     application.add_handler(CommandHandler("tara_liste", handlers_v3.cmd_tara_liste))
     application.add_handler(CommandHandler("tarama_durumu", handlers_v3.cmd_tarama_durumu))
+    from app.telegram.bist_analysis_handlers import cmd_gunluk, cmd_haftalik, cmd_ogren, cmd_risk, cmd_uzun, cmd_vbts
     from app.telegram.market_opportunity_handlers import cmd_firsatlar
     from app.telegram.baby_stock_handlers import cmd_bebekhisse, cmd_bebekhisse_ayar, cmd_bebekhisse_kontrol
     from app.telegram.basic_viop_handlers import cmd_basitalsat, cmd_viop, cmd_viopislem
@@ -104,6 +105,12 @@ def build_telegram_application() -> Application:
     from app.telegram.mechanical_bist_handlers import cmd_mekanik_kurallar, cmd_mekanik_setup
     application.add_handler(CommandHandler("firsatlar", cmd_firsatlar))
     application.add_handler(CommandHandler("firsat", cmd_firsatlar))
+    application.add_handler(CommandHandler("gunluk", cmd_gunluk))
+    application.add_handler(CommandHandler("haftalik", cmd_haftalik))
+    application.add_handler(CommandHandler("uzun", cmd_uzun))
+    application.add_handler(CommandHandler("risk", cmd_risk))
+    application.add_handler(CommandHandler("vbts", cmd_vbts))
+    application.add_handler(CommandHandler("ogren", cmd_ogren))
     application.add_handler(CommandHandler("bebekhisse", cmd_bebekhisse))
     application.add_handler(CommandHandler("bebekhisse_kontrol", cmd_bebekhisse_kontrol))
     application.add_handler(CommandHandler("bebekhisse_ayar", cmd_bebekhisse_ayar))

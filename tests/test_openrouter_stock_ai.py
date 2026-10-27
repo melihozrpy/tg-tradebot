@@ -45,11 +45,12 @@ def _reset_openrouter_usage():
 def test_approved_prompt_is_versioned_without_silent_changes():
     prompt = load_stock_analysis_prompt()
     assert hashlib.sha256(prompt.encode("utf-8")).hexdigest() == (
-        "276e17c233f08f926dfe219decdaa6870c5853ddeff19975e15953cfccaffedd"
+        "cf7add417fbd123779f44a1554a92e31760074146c8368a78a5135df1a3ffe51"
     )
-    assert prompt.startswith("Sen; teknik analiz, temel analiz, risk yönetimi")
+    assert prompt.startswith("SENİN ROLÜN VE DEĞİŞMEZ GÜVENLİK SÖZLEŞMEN")
     assert "11. SONUÇ TABLOSU" in prompt
-    assert '"Ben olsam [X] seviyesinden girerim, çünkü [neden]."' in prompt
+    assert '"Koşullu giriş bölgesi [X], çünkü [neden]."' in prompt
+    assert "Yalnızca kullanıcı mesajındaki grafik kanıtını" in prompt
     assert "Son kapanışı veya güncel mum fiyatını entry olarak kopyalama" in prompt
 
 
