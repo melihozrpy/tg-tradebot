@@ -26,8 +26,10 @@ from app.services.vivid_chart_style import (
     add_checklist as add_vivid_checklist,
     add_price_card,
     add_score_bar,
+    add_volume_panel,
     add_watermark,
     draw_zone_rail,
+    save_terminal_png,
     style_axes,
 )
 
@@ -308,8 +310,8 @@ def render_report_chart(
     arrow = "▲" if bullish else "▼" if bearish else "◆"
 
     fig = plt.figure(figsize=(16, 9), facecolor=BG)
-    ax = fig.add_axes([0.055, 0.19, 0.60, 0.64], facecolor=VIVID.panel)
-    ax_rail = fig.add_axes([0.685, 0.19, 0.26, 0.64], facecolor=VIVID.panel)
+    ax = fig.add_axes([0.055, 0.255, 0.60, 0.575], facecolor=VIVID.panel)
+    ax_rail = fig.add_axes([0.685, 0.255, 0.26, 0.575], facecolor=VIVID.panel)
     style_axes(ax)
     _draw_candles(ax, data)
     zone_rail_items: list[ZoneRailItem] = []
@@ -367,6 +369,7 @@ def render_report_chart(
     for spine in ax.spines.values():
         spine.set_color(GRID)
     draw_zone_rail(ax, ax_rail, zone_rail_items, current_price=current, decimals=decimals)
+    add_volume_panel(fig, data, left=0.055, bottom=0.145, width=0.60, height=0.075)
 
     title_date = spec.date_label or datetime.now().strftime("%d.%m.%Y")
     fig.text(
@@ -402,7 +405,7 @@ def render_report_chart(
     target_dir.mkdir(parents=True, exist_ok=True)
     filename = f"{_safe_filename(spec.report_kind)}_{_safe_filename(spec.instrument)}_{uuid.uuid4().hex[:10]}.png"
     output_path = target_dir / filename
-    fig.savefig(output_path, facecolor=BG, dpi=max(100, int(dpi)), bbox_inches="tight")
+    save_terminal_png(fig, output_path)
     plt.close(fig)
     return str(output_path)
 

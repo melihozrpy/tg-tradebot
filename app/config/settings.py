@@ -201,7 +201,10 @@ class Settings(BaseSettings):
     trade_scenario_minimum_ten_confirmations: int = Field(default=8, ge=3, le=10)
     # Long-only 15-minute quality scan.  It uses only OHLCV-derived data and
     # never turns a last price into an entry price.
-    intraday_long_scan_enabled: bool = Field(default=True)
+    # Gün içi LONG motoru komutla kullanılabilir; yeni haftalık iş akışında
+    # eski 15 dakikalık toplu yayın varsayılan olarak kapalıdır.
+    intraday_long_scan_enabled: bool = Field(default=False)
+    intraday_long_scan_schedule_enabled: bool = Field(default=False)
     intraday_long_scan_minutes: int = Field(default=15, ge=15, le=60)
     intraday_long_max_results: int = Field(default=3, ge=1, le=3)
     # ---- Günlük iki teknik + temel doğrulama planı ----
@@ -269,6 +272,19 @@ class Settings(BaseSettings):
     scheduled_idea_performance_enabled: bool = Field(default=False)
     scheduled_idea_performance_time: str = Field(default="18:15")
     scheduled_idea_performance_days: int = Field(default=2, ge=1, le=10)
+
+    # ---- Haftanın en fazla iki doğrulanmış adayı ----
+    # Eski günlük iki-aday kartının yerine yalnız Pazartesi seans öncesinde
+    # çalışır. Aday yoksa sadece haftalık "aday yok" mesajı gönderilir.
+    weekly_candidates_enabled: bool = Field(default=True)
+    weekly_candidates_time: str = Field(default="09:15")
+    weekly_candidates_max_results: int = Field(default=2, ge=1, le=2)
+    weekly_candidates_minimum_score: int = Field(default=75, ge=0, le=100)
+    weekly_candidates_minimum_confirmations: int = Field(default=7, ge=5, le=8)
+    weekly_candidates_minimum_ten_confirmations: int = Field(default=7, ge=5, le=10)
+    weekly_candidates_require_fundamental: bool = Field(default=True)
+    weekly_candidates_friday_report_enabled: bool = Field(default=True)
+    weekly_candidates_friday_report_time: str = Field(default="18:15")
 
     # ---- KAP başlık monitörü ----
     # Midas sayfası yalnız robots.txt izin verirse başlık düzeyinde okunur;

@@ -205,17 +205,19 @@ def evaluate_due_ideas(
     *,
     provider: BaseMarketDataProvider,
     minimum_age_days: int = 2,
+    slot: str | None = None,
 ) -> tuple[IdeaPerformance, ...]:
     """Evaluate due plans conservatively and persist the exact outcome status."""
 
     cutoff = datetime.now(timezone.utc) - timedelta(days=max(1, int(minimum_age_days)))
-    rows = (
+    query = (
         db.query(ScheduledTradeIdea)
         .filter(ScheduledTradeIdea.issued_at <= cutoff)
         .filter(ScheduledTradeIdea.evaluation_status.in_(("PENDING", "ACIK", "VERI_YOK", "BELIRSIZ")))
-        .order_by(ScheduledTradeIdea.issued_at.asc())
-        .all()
     )
+    if slot:
+        query = query.filter(ScheduledTradeIdea.slot == slot)
+    rows = query.order_by(ScheduledTradeIdea.issued_at.asc()).all()
     results: list[IdeaPerformance] = []
     for row in rows:
         try:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -872,7 +873,157 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
         except (TypeError, ValueError):
             logger.warning("Günlük kaliteli plan saati geçersiz: %s", getattr(settings, "daily_top_picks_time", None))
 
-    if getattr(settings, "intraday_long_scan_enabled", True):
+    # New master workflow: Monday emits the at-most-two weekly candidates;
+    # Friday emits only their factual evaluation.  The old daily plan card is
+    # retired above and cannot be revived by stale Coolify variables.
+    if getattr(settings, "weekly_candidates_enabled", False):
+        async def _weekly_candidates_job() -> None:
+            def _scan_and_store():
+                from app.models.database import get_session_factory
+                from app.services.scheduled_idea_service import persist_scheduled_ideas
+                from app.services.weekly_candidates_service import (
+                    render_weekly_candidates_card,
+                    scan_weekly_candidates,
+                )
+
+                report = scan_weekly_candidates(settings)
+                db = get_session_factory()()
+                try:
+                    persist_scheduled_ideas(db, report=report, slot="weekly", maximum=2)
+                finally:
+                    db.close()
+                try:
+                    chart_path = render_weekly_candidates_card(report, settings)
+                except Exception as exc:  # noqa: BLE001 - a chart cannot cancel the weekly plan
+                    logger.warning("Haftalık aday kartı çizilemedi: %s", exc)
+                    chart_path = None
+                return report, chart_path
+
+            try:
+                report, chart_path = await asyncio.to_thread(_scan_and_store)
+                if application is None:
+                    if chart_path:
+                        Path(chart_path).unlink(missing_ok=True)
+                    return
+                from app.models.database import get_session_factory
+                from app.services.scheduled_delivery_dedup import claim_scheduled_delivery
+                from app.services.weekly_candidates_service import (
+                    format_weekly_candidates_report,
+                    weekly_delivery_key,
+                )
+
+                text = format_weekly_candidates_report(report, timezone_name=settings.timezone_name)
+                db = get_session_factory()()
+                try:
+                    configured = getattr(settings, "technical_screener_chat_id", None)
+                    delivery_key = weekly_delivery_key(report, settings.timezone_name)
+                    for chat_id in _scheduled_recipients(db, configured_chat_id=configured):
+                        if not claim_scheduled_delivery(db, dedup_key=delivery_key, chat_id=chat_id):
+                            continue
+                        if chart_path:
+                            with open(chart_path, "rb") as image:
+                                await application.bot.send_photo(
+                                    chat_id=chat_id,
+                                    photo=image,
+                                    caption="📌 Haftanın aday kartı · seviyeler koşulludur.",
+                                )
+                        await application.bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML")
+                finally:
+                    db.close()
+                    if chart_path:
+                        Path(chart_path).unlink(missing_ok=True)
+            except Exception as exc:  # noqa: BLE001 - scheduled jobs must survive
+                logger.exception("Haftanin adaylari taramasi hata verdi: %s", exc)
+                await _notify_report_error("haftanın adayları", exc)
+
+        try:
+            weekly_hour, weekly_minute = str(getattr(settings, "weekly_candidates_time", "09:15")).split(":", maxsplit=1)
+            scheduler.add_job(
+                _weekly_candidates_job,
+                CronTrigger(
+                    day_of_week="mon",
+                    hour=int(weekly_hour),
+                    minute=int(weekly_minute),
+                    timezone="Europe/Istanbul",
+                ),
+                id="weekly_two_candidates",
+                coalesce=True,
+                max_instances=1,
+                replace_existing=True,
+            )
+            logger.info("Haftanın adayları Pazartesi %s TSİ için hazırlandı.", getattr(settings, "weekly_candidates_time", "09:15"))
+        except (TypeError, ValueError):
+            logger.warning("WEEKLY_CANDIDATES_TIME geçersiz: %s", getattr(settings, "weekly_candidates_time", None))
+
+        if getattr(settings, "weekly_candidates_friday_report_enabled", True):
+            async def _weekly_candidates_results_job() -> None:
+                def _evaluate():
+                    from app.data.provider_factory import build_market_data_provider
+                    from app.models.database import get_session_factory
+                    from app.services.scheduled_idea_service import evaluate_due_ideas
+
+                    db = get_session_factory()()
+                    try:
+                        return evaluate_due_ideas(
+                            db,
+                            provider=build_market_data_provider(settings),
+                            minimum_age_days=3,
+                            slot="weekly",
+                        )
+                    finally:
+                        db.close()
+
+                try:
+                    outcomes = await asyncio.to_thread(_evaluate)
+                    if application is None:
+                        return
+                    from app.models.database import get_session_factory
+                    from app.services.scheduled_delivery_dedup import claim_scheduled_delivery
+                    from app.services.weekly_candidates_service import format_weekly_results_report
+
+                    text = format_weekly_results_report(outcomes, timezone_name=settings.timezone_name)
+                    local = datetime.now(timezone.utc).astimezone(ZoneInfo(settings.timezone_name))
+                    db = get_session_factory()()
+                    try:
+                        configured = getattr(settings, "technical_screener_chat_id", None)
+                        key = f"weekly-candidates-result:{local:%G-W%V}"
+                        for chat_id in _scheduled_recipients(db, configured_chat_id=configured):
+                            if not claim_scheduled_delivery(db, dedup_key=key, chat_id=chat_id):
+                                continue
+                            await application.bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML")
+                    finally:
+                        db.close()
+                except Exception as exc:  # noqa: BLE001 - scheduler must never stop the bot
+                    logger.exception("Haftalık aday sonuç raporu hata verdi: %s", exc)
+                    await _notify_report_error("haftalık aday sonuç raporu", exc)
+
+            try:
+                friday_hour, friday_minute = str(settings.weekly_candidates_friday_report_time).split(":", maxsplit=1)
+                scheduler.add_job(
+                    _weekly_candidates_results_job,
+                    CronTrigger(
+                        day_of_week="fri",
+                        hour=int(friday_hour),
+                        minute=int(friday_minute),
+                        timezone="Europe/Istanbul",
+                    ),
+                    id="weekly_two_candidates_results",
+                    coalesce=True,
+                    max_instances=1,
+                    replace_existing=True,
+                )
+            except (TypeError, ValueError):
+                logger.warning(
+                    "WEEKLY_CANDIDATES_FRIDAY_REPORT_TIME geçersiz: %s",
+                    getattr(settings, "weekly_candidates_friday_report_time", None),
+                )
+
+    # The intraday scanner remains usable on demand.  Broadcasts are disabled
+    # unless the explicit schedule switch is enabled after review.
+    if (
+        getattr(settings, "intraday_long_scan_enabled", False)
+        and getattr(settings, "intraday_long_scan_schedule_enabled", False)
+    ):
         async def _intraday_long_scan_job() -> None:
             """Broadcast only the long-only, retest-first 15-minute scanner."""
 

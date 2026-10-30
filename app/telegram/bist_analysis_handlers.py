@@ -112,9 +112,28 @@ async def cmd_gunluk(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
 
 async def cmd_haftalik(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Return a daily-data weekly frame without inventing a candidate list."""
+    """Run the verified, at-most-two weekly candidate workflow."""
 
-    await _send_index_report(update, timeframe="1d", module="Modül B / Haftalık", mode="3–15 işlem günü")
+    if await _reject_unauthorized(update) or update.message is None:
+        return
+    settings = get_settings()
+    try:
+        from app.services.weekly_candidates_service import (
+            format_weekly_candidates_report,
+            scan_weekly_candidates,
+        )
+
+        await update.message.reply_text("<i>Haftalık yapı, likidite ve doğrulanmış temel veri taranıyor…</i>", parse_mode="HTML")
+        report = await asyncio.to_thread(scan_weekly_candidates, settings)
+        await update.message.reply_text(
+            format_weekly_candidates_report(report, timezone_name=settings.timezone_name),
+            parse_mode="HTML",
+        )
+    except Exception:  # noqa: BLE001 - provider failures must fail closed
+        await update.message.reply_text(
+            "<b>HAFTANIN ADAYLARI</b>\nVeri alınamadı/tutarsız, analiz üretmiyorum.\n" + _DISCLAIMER,
+            parse_mode="HTML",
+        )
 
 
 async def cmd_uzun(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

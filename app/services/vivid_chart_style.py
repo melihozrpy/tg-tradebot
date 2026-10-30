@@ -8,6 +8,7 @@ yerleşimini buradan alır.
 """
 
 from dataclasses import dataclass
+from pathlib import Path
 
 from matplotlib.patches import ConnectionPatch, FancyBboxPatch, Rectangle
 from matplotlib.transforms import blended_transform_factory
@@ -157,6 +158,77 @@ def add_checklist(
             "alpha": 0.97,
         },
     )
+
+
+def add_volume_panel(
+    fig,
+    data,
+    *,
+    left: float = 0.055,
+    bottom: float = 0.115,
+    width: float = 0.60,
+    height: float = 0.095,
+):
+    """Add the compact, separate volume/RVOL panel required by the terminal.
+
+    It deliberately contains no text labels over the price panel.  A missing
+    or all-zero volume series is represented as an empty low-key panel instead
+    of inferring volume from price action.
+    """
+
+    axis = fig.add_axes([left, bottom, width, height], facecolor=VIVID.panel)
+    values = data.get("volume") if hasattr(data, "get") else None
+    closes = data.get("close") if hasattr(data, "get") else None
+    opens = data.get("open") if hasattr(data, "get") else None
+    if values is None or closes is None or opens is None:
+        axis.text(0.5, 0.5, "HACİM VERİSİ YOK", transform=axis.transAxes, ha="center", va="center", color=VIVID.faint, fontsize=7.0, fontfamily=SANS_FONT)
+        axis.set_xticks([])
+        axis.set_yticks([])
+        return axis
+    volume = values.fillna(0).astype(float).reset_index(drop=True)
+    close = closes.astype(float).reset_index(drop=True)
+    open_ = opens.astype(float).reset_index(drop=True)
+    x_values = list(range(len(volume)))
+    colors = [VIVID.bull if current >= start else VIVID.bear for current, start in zip(close, open_)]
+    bars = axis.bar(x_values, volume, width=0.70, color=colors, alpha=0.45, linewidth=0)
+    average = volume.rolling(20, min_periods=1).mean()
+    axis.plot(x_values, average, color=VIVID.muted, linewidth=0.75, alpha=0.9)
+    for bar, current, baseline in zip(bars, volume, average):
+        if baseline > 0 and current / baseline >= 1.5:
+            bar.set_edgecolor(VIVID.amber)
+            bar.set_linewidth(0.7)
+    axis.set_xlim(-1, max(1, len(volume)))
+    axis.set_xticks([])
+    axis.set_yticks([])
+    for spine in axis.spines.values():
+        spine.set_color(VIVID.border)
+        spine.set_linewidth(0.7)
+    axis.text(0.01, 0.84, "HACİM · ORT20", transform=axis.transAxes, color=VIVID.faint, fontsize=6.4, fontweight="bold", fontfamily=SANS_FONT)
+    return axis
+
+
+def save_terminal_png(fig, path: str | Path) -> str:
+    """Render a single 1600×900 Telegram PNG via 2× supersampling.
+
+    A rendering fallback keeps the chart path usable on lean Docker images
+    where Pillow is unavailable, while the primary route is always 3200×1800
+    followed by LANCZOS downsampling as specified by the design contract.
+    """
+
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    intermediate = target.with_suffix(target.suffix + ".2x.png")
+    fig.savefig(intermediate, dpi=200, facecolor=VIVID.background, bbox_inches=None)
+    try:
+        from PIL import Image
+
+        with Image.open(intermediate) as image:
+            image.convert("RGB").resize((1600, 900), Image.Resampling.LANCZOS).save(target, format="PNG", optimize=True)
+    except Exception:  # noqa: BLE001 - server keeps a valid chart without Pillow
+        fig.savefig(target, dpi=100, facecolor=VIVID.background, bbox_inches=None)
+    finally:
+        intermediate.unlink(missing_ok=True)
+    return str(target)
 
 
 def draw_zone_rail(

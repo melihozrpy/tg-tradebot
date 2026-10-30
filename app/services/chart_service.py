@@ -32,8 +32,10 @@ from app.services.vivid_chart_style import (
     add_banner,
     add_price_card,
     add_score_bar,
+    add_volume_panel,
     add_watermark,
     draw_zone_rail,
+    save_terminal_png,
     style_axes as style_vivid_axes,
 )
 
@@ -732,8 +734,8 @@ def _render_professional_daily_chart(
     )
     theme = THEMES["dark"]
     fig = plt.figure(figsize=(16, 9), facecolor=VIVID.background)
-    ax_price = fig.add_axes([0.055, 0.16, 0.60, 0.67], facecolor=VIVID.panel)
-    ax_rail = fig.add_axes([0.685, 0.16, 0.26, 0.67], facecolor=VIVID.panel)
+    ax_price = fig.add_axes([0.055, 0.245, 0.60, 0.585], facecolor=VIVID.panel)
+    ax_rail = fig.add_axes([0.685, 0.245, 0.26, 0.585], facecolor=VIVID.panel)
     style_vivid_axes(ax_price)
     x = _draw_candles(ax_price, data, theme, width=0.72)
     label_items: list[tuple[float, str, str, int]] = []
@@ -845,6 +847,7 @@ def _render_professional_daily_chart(
         current_price=current_price,
         decimals=decimals,
     )
+    add_volume_panel(fig, data, left=0.055, bottom=0.125, width=0.60, height=0.085)
     _draw_indicator_ribbon(ax_price, state, detailed=detailed)
     ax_price.set_ylabel("Fiyat", fontsize=8, fontfamily=SANS_FONT)
     handles, labels = ax_price.get_legend_handles_labels()
@@ -879,7 +882,7 @@ def _render_professional_daily_chart(
     )
 
     out_path = os.path.join(tempfile.gettempdir(), f"mergen_pro_chart_{symbol}_{uuid.uuid4().hex[:8]}.png")
-    fig.savefig(out_path, dpi=max(settings.chart_dpi, 140), facecolor=VIVID.background, bbox_inches="tight")
+    save_terminal_png(fig, out_path)
     plt.close(fig)
     cache.put(key, out_path)
     return out_path
@@ -1002,8 +1005,8 @@ def generate_bist_trade_plan_chart(df: pd.DataFrame, plan) -> str:
     settings, _theme = _chart_settings()
     theme = THEMES["dark"]
     fig = plt.figure(figsize=(16, 9), facecolor=VIVID.background)
-    ax = fig.add_axes([0.055, 0.15, 0.60, 0.68], facecolor=VIVID.panel)
-    ax_rail = fig.add_axes([0.685, 0.15, 0.26, 0.68], facecolor=VIVID.panel)
+    ax = fig.add_axes([0.055, 0.245, 0.60, 0.585], facecolor=VIVID.panel)
+    ax_rail = fig.add_axes([0.685, 0.245, 0.26, 0.585], facecolor=VIVID.panel)
     style_vivid_axes(ax)
     x = _draw_candles(ax, data, theme, width=.72)
     close = data["close"].astype(float)
@@ -1108,6 +1111,7 @@ def generate_bist_trade_plan_chart(df: pd.DataFrame, plan) -> str:
         current_price=float(plan.current_price),
         decimals=2,
     )
+    add_volume_panel(fig, data, left=0.055, bottom=0.125, width=0.60, height=0.085)
     ax.yaxis.set_major_formatter(FuncFormatter(lambda value, _pos: f"{value:.2f}"))
     ax.text(
         .012, .982,
@@ -1152,7 +1156,7 @@ def generate_bist_trade_plan_chart(df: pd.DataFrame, plan) -> str:
         fontfamily=SANS_FONT,
     )
     out_path = os.path.join(tempfile.gettempdir(), f"bist_tv_{plan.symbol}_{uuid.uuid4().hex[:8]}.png")
-    fig.savefig(out_path, dpi=max(settings.chart_dpi, 150), facecolor=VIVID.background, bbox_inches="tight")
+    save_terminal_png(fig, out_path)
     plt.close(fig)
     return out_path
 

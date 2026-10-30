@@ -45,13 +45,13 @@ def _reset_openrouter_usage():
 def test_approved_prompt_is_versioned_without_silent_changes():
     prompt = load_stock_analysis_prompt()
     assert hashlib.sha256(prompt.encode("utf-8")).hexdigest() == (
-        "cf7add417fbd123779f44a1554a92e31760074146c8368a78a5135df1a3ffe51"
+        "c90ff3024f0e217f3429080e2b12c26292c360f9f8d3f88b0a5e2210a55bf11a"
     )
-    assert prompt.startswith("SENİN ROLÜN VE DEĞİŞMEZ GÜVENLİK SÖZLEŞMEN")
-    assert "11. SONUÇ TABLOSU" in prompt
-    assert '"Koşullu giriş bölgesi [X], çünkü [neden]."' in prompt
-    assert "Yalnızca kullanıcı mesajındaki grafik kanıtını" in prompt
-    assert "Son kapanışı veya güncel mum fiyatını entry olarak kopyalama" in prompt
+    assert prompt.startswith("# MONTANA FİNANS ROBOTU — BIST ANALİZ SÖZLEŞMESİ")
+    assert "MODÜL A — HAFTANIN EN FAZLA 2 ADAYI" in prompt
+    assert "Güncel fiyat otomatik giriş değildir" in prompt
+    assert "Uygun aday yoksa otomatik bildirim gönderme" in prompt
+    assert "[VERİ], [KAP], [HABER]" in prompt
 
 
 def test_legacy_free_router_is_upgraded_to_fixed_vision_model():
