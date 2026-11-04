@@ -166,6 +166,48 @@ def test_reliable_provider_uses_fresh_cache_when_both_down(tmp_path):
     assert meta["provider"] == "last_good"
 
 
+def test_reliable_provider_reads_fresh_disk_cache_before_requesting_provider(tmp_path):
+    cache = FileDataCache(tmp_path)
+    cache.save("SVGYO", "1d", _df(), "last_good")
+    primary = _Provider("primary", error=RuntimeError("HTTP 429 rate limit"))
+    fallback = _Provider("secondary", error=RuntimeError("HTTP 429 rate limit"))
+    provider = ReliableMarketDataProvider(
+        primary, fallback, cache, retry_policy=RetryPolicy(max_attempts=1)
+    )
+    end = datetime.now(timezone.utc)
+    result = provider.get_ohlcv("SVGYO", "1d", end - timedelta(days=500), end)
+    assert not result.empty
+    assert primary.calls == 0
+    assert fallback.calls == 0
+    meta = provider.metadata_for("SVGYO", "1d")
+    assert meta["cache_used"] is True
+    assert meta["stale_cache_used"] is False
+
+
+def test_reliable_provider_uses_bounded_stale_cache_after_rate_limit(tmp_path):
+    cache = FileDataCache(tmp_path)
+    cache.save("SVGYO", "1d", _df(), "last_good")
+    _, meta_path = cache._paths("SVGYO", "1d")
+    payload = json.loads(meta_path.read_text(encoding="utf-8"))
+    payload["fetched_at"] = (datetime.now(timezone.utc) - timedelta(minutes=90)).isoformat()
+    meta_path.write_text(json.dumps(payload), encoding="utf-8")
+    provider = ReliableMarketDataProvider(
+        _Provider("primary", error=RuntimeError("HTTP 429 rate limit")),
+        _Provider("secondary", error=RuntimeError("HTTP 429 rate limit")),
+        cache,
+        retry_policy=RetryPolicy(max_attempts=1),
+        cache_max_age_daily_minutes=30,
+        stale_cache_grace_daily_minutes=180,
+    )
+    end = datetime.now(timezone.utc)
+    result = provider.get_ohlcv("SVGYO", "1d", end - timedelta(days=500), end)
+    assert not result.empty
+    meta = provider.metadata_for("SVGYO", "1d")
+    assert meta["cache_used"] is True
+    assert meta["stale_cache_used"] is True
+    assert provider.get_data_freshness("SVGYO", "1d").is_fresh is False
+
+
 def test_reliable_provider_rejects_stale_cache_when_both_down(tmp_path):
     cache = FileDataCache(tmp_path)
     cache.save("SVGYO", "1d", _df(), "last_good")

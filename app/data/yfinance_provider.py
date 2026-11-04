@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import time
 from datetime import datetime, timedelta, timezone
+from threading import RLock
 from typing import Callable, Optional
 
 import pandas as pd
@@ -120,6 +121,11 @@ class YFinanceMarketDataProvider(BaseMarketDataProvider):
     """
 
     name = "yfinance"
+    # Full-universe scans construct a provider per worker. A per-instance
+    # delay therefore still produced concurrent Yahoo requests and 429s.
+    # The process-wide gate keeps every worker on one respectful cadence.
+    _request_gate_lock = RLock()
+    _request_gate_last_at: Optional[float] = None
 
     def __init__(
         self,
@@ -144,13 +150,19 @@ class YFinanceMarketDataProvider(BaseMarketDataProvider):
     def _throttle(self) -> None:
         if self.request_delay_seconds <= 0:
             return
-        now = time.monotonic()
-        if self._last_request_at is not None:
-            elapsed = now - self._last_request_at
-            remaining = self.request_delay_seconds - elapsed
-            if remaining > 0:
-                time.sleep(remaining)
-        self._last_request_at = time.monotonic()
+        # ``_last_request_at`` is retained for backwards-compatible
+        # introspection, while the class gate is the real cross-worker limit.
+        with self._request_gate_lock:
+            now = time.monotonic()
+            last = type(self)._request_gate_last_at
+            if last is not None:
+                elapsed = now - last
+                remaining = self.request_delay_seconds - elapsed
+                if remaining > 0:
+                    time.sleep(remaining)
+            dispatched_at = time.monotonic()
+            type(self)._request_gate_last_at = dispatched_at
+            self._last_request_at = dispatched_at
 
     # ------------------------------------------------------------------
     # Dusuk seviye veri cekme (test edilebilirlik icin ayri metotlar)

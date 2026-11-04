@@ -45,6 +45,7 @@ def assess_and_persist_quality(
         provider=source,
         fallback_used=bool(metadata.get("fallback_used")),
         cache_used=bool(metadata.get("cache_used")),
+        stale_cache_used=bool(metadata.get("stale_cache_used")),
         cache_age_minutes=metadata.get("cache_age_minutes"),
         price_mode=getattr(provider, "price_mode", "unadjusted"),
     )
@@ -81,7 +82,8 @@ def assess_and_persist_quality(
 def format_data_quality_status(symbol: str, result: DataQualityResult) -> str:
     fallback = "Hayır"
     if result.cache_used:
-        fallback = f"Yerel cache ({result.cache_age_minutes:.0f} dk)" if result.cache_age_minutes is not None else "Yerel cache"
+        cache_label = "Son doğrulanmış cache" if result.stale_cache_used else "Yerel cache"
+        fallback = f"{cache_label} ({result.cache_age_minutes:.0f} dk)" if result.cache_age_minutes is not None else cache_label
     elif result.fallback_used:
         fallback = "Evet"
     last_bar = result.last_bar_time.isoformat() if result.last_bar_time else "-"

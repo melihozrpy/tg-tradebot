@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import time
+import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from enum import Enum
@@ -135,8 +136,12 @@ class FileDataCache:
 
     def save(self, symbol: str, timeframe: str, df: pd.DataFrame, provider: str, metadata: Optional[dict] = None) -> None:
         data_path, meta_path = self._paths(symbol, timeframe)
-        temp_data = data_path.with_suffix(".json.tmp")
-        temp_meta = meta_path.with_suffix(".json.tmp")
+        # Bot ve API ayni kalici volume'u paylasir. Sabit ``.tmp`` adi iki
+        # istek ayni sembolu eszamanli yazdigi zaman cache'i bozabiliyordu.
+        # Her yazma kendi atomik gecici dosyasini kullanir.
+        nonce = uuid.uuid4().hex
+        temp_data = data_path.with_suffix(f".json.{nonce}.tmp")
+        temp_meta = meta_path.with_suffix(f".json.{nonce}.tmp")
         records = df.copy()
         records["timestamp"] = pd.to_datetime(records["timestamp"], utc=True).astype(str)
         temp_data.write_text(records.to_json(orient="records"), encoding="utf-8")
@@ -179,7 +184,14 @@ class FileDataCache:
 
 
 class ReliableMarketDataProvider(BaseMarketDataProvider):
-    """Primary -> fallback -> taze disk cache -> unavailable sırasını uygular."""
+    """Cache -> primary -> fallback -> bounded stale-cache sırasını uygular.
+
+    Disk cache'in normal TTL'i içinde tekrar sağlayıcı çağrılmaz. Bu hem
+    ücretsiz kaynaklardaki 429 hatalarını azaltır hem de API/bot süreçleri
+    aynı veriyi tekrar tekrar indirmez. Normal TTL aşılmışsa canlı kaynaklar
+    denenir; yalnızca geçici erişim hatasında, açıkça işaretlenmiş sınırlı
+    süreli son-doğrulanmış cache kullanılabilir.
+    """
 
     name = "reliable"
 
@@ -195,6 +207,9 @@ class ReliableMarketDataProvider(BaseMarketDataProvider):
         circuit_recovery_seconds: int = 120,
         cache_max_age_daily_minutes: int = 720,
         cache_max_age_intraday_minutes: int = 30,
+        stale_cache_fallback_enabled: bool = True,
+        stale_cache_grace_daily_minutes: int = 4320,
+        stale_cache_grace_intraday_minutes: int = 180,
         price_mode: str = "unadjusted",
     ) -> None:
         self.primary = primary
@@ -204,6 +219,9 @@ class ReliableMarketDataProvider(BaseMarketDataProvider):
         self.retry_policy = retry_policy or RetryPolicy()
         self.cache_max_age_daily_minutes = cache_max_age_daily_minutes
         self.cache_max_age_intraday_minutes = cache_max_age_intraday_minutes
+        self.stale_cache_fallback_enabled = stale_cache_fallback_enabled
+        self.stale_cache_grace_daily_minutes = max(0, stale_cache_grace_daily_minutes)
+        self.stale_cache_grace_intraday_minutes = max(0, stale_cache_grace_intraday_minutes)
         self.price_mode = price_mode
         self.circuits = {
             primary.name: CircuitBreaker(circuit_failure_threshold, circuit_recovery_seconds),
@@ -219,6 +237,64 @@ class ReliableMarketDataProvider(BaseMarketDataProvider):
 
     def _cache_max_age(self, timeframe: str) -> int:
         return self.cache_max_age_daily_minutes if timeframe in {"1d", "1wk", "1w"} else self.cache_max_age_intraday_minutes
+
+    def _stale_cache_max_age(self, timeframe: str) -> int:
+        normal_ttl = self._cache_max_age(timeframe)
+        grace = (
+            self.stale_cache_grace_daily_minutes
+            if timeframe in {"1d", "1wk", "1w"}
+            else self.stale_cache_grace_intraday_minutes
+        )
+        return max(normal_ttl, grace)
+
+    @staticmethod
+    def _normalized_range(start: datetime, end: datetime) -> tuple[pd.Timestamp, pd.Timestamp]:
+        start_ts = pd.Timestamp(start)
+        start_ts = start_ts.tz_localize("UTC") if start_ts.tzinfo is None else start_ts.tz_convert("UTC")
+        end_ts = pd.Timestamp(end)
+        end_ts = end_ts.tz_localize("UTC") if end_ts.tzinfo is None else end_ts.tz_convert("UTC")
+        return start_ts, end_ts
+
+    def _cached_result(
+        self,
+        cached: CacheRecord,
+        *,
+        symbol: str,
+        timeframe: str,
+        start: datetime,
+        end: datetime,
+        stale_cache_used: bool,
+    ) -> Optional[pd.DataFrame]:
+        quality = self.quality_engine.evaluate(
+            cached.df,
+            symbol=symbol,
+            timeframe=timeframe,
+            min_bars=self._min_bars(timeframe),
+            provider=cached.provider,
+            fallback_used=True,
+            cache_used=True,
+            stale_cache_used=stale_cache_used,
+            cache_age_minutes=cached.age_minutes,
+            price_mode=self.price_mode,
+        )
+        if not quality.usable_for_analysis:
+            return None
+        start_ts, end_ts = self._normalized_range(start, end)
+        result = cached.df.loc[
+            (cached.df["timestamp"] >= start_ts) & (cached.df["timestamp"] <= end_ts)
+        ].reset_index(drop=True)
+        if result.empty:
+            return None
+        self.last_fetch_metadata[(symbol.upper(), timeframe)] = {
+            "provider": cached.provider,
+            "fallback_used": True,
+            "cache_used": True,
+            "stale_cache_used": stale_cache_used,
+            "cache_age_minutes": cached.age_minutes,
+            "quality": quality,
+            "fetched_at": cached.fetched_at,
+        }
+        return result
 
     def _attempt_provider(self, provider: BaseMarketDataProvider, symbol: str, timeframe: str, start: datetime, end: datetime) -> tuple[pd.DataFrame, DataQualityResult]:
         circuit = self.circuits[provider.name]
@@ -249,6 +325,22 @@ class ReliableMarketDataProvider(BaseMarketDataProvider):
             raise
 
     def get_ohlcv(self, symbol: str, timeframe: str, start: datetime, end: datetime) -> pd.DataFrame:
+        # Read-through cache: cache is not only an outage fallback. A scan of
+        # hundreds of symbols should not hit Yahoo again when a verified copy
+        # was fetched moments earlier by the API or scheduler.
+        fresh_cached = self.cache.load(symbol, timeframe, self._cache_max_age(timeframe))
+        if fresh_cached is not None:
+            result = self._cached_result(
+                fresh_cached,
+                symbol=symbol,
+                timeframe=timeframe,
+                start=start,
+                end=end,
+                stale_cache_used=False,
+            )
+            if result is not None:
+                return result
+
         errors: list[str] = []
         providers = [self.primary] + ([self.fallback] if self.fallback else [])
         for index, provider in enumerate(providers):
@@ -266,10 +358,7 @@ class ReliableMarketDataProvider(BaseMarketDataProvider):
                 }
                 self.last_fetch_metadata[(symbol.upper(), timeframe)] = meta
                 self.last_successful_fetch_at = meta["fetched_at"]
-                end_ts = pd.Timestamp(end)
-                end_ts = end_ts.tz_localize("UTC") if end_ts.tzinfo is None else end_ts.tz_convert("UTC")
-                start_ts = pd.Timestamp(start)
-                start_ts = start_ts.tz_localize("UTC") if start_ts.tzinfo is None else start_ts.tz_convert("UTC")
+                start_ts, end_ts = self._normalized_range(start, end)
                 result = df.loc[(df["timestamp"] >= start_ts) & (df["timestamp"] <= end_ts)].reset_index(drop=True)
                 if result.empty:
                     raise DataUnavailableError(f"'{symbol}' için istenen aralıkta veri yok.")
@@ -278,34 +367,33 @@ class ReliableMarketDataProvider(BaseMarketDataProvider):
                 errors.append(f"{provider.name}: {exc}")
                 logger.warning("Provider başarısız symbol=%s tf=%s provider=%s: %s", symbol, timeframe, provider.name, exc)
 
-        cached = self.cache.load(symbol, timeframe, self._cache_max_age(timeframe))
-        if cached is not None:
-            quality = self.quality_engine.evaluate(
-                cached.df,
-                symbol=symbol,
-                timeframe=timeframe,
-                min_bars=self._min_bars(timeframe),
-                provider=cached.provider,
-                fallback_used=True,
-                cache_used=True,
-                cache_age_minutes=cached.age_minutes,
-                price_mode=self.price_mode,
-            )
-            if quality.usable_for_analysis:
-                self.last_fetch_metadata[(symbol.upper(), timeframe)] = {
-                    "provider": cached.provider,
-                    "fallback_used": True,
-                    "cache_used": True,
-                    "cache_age_minutes": cached.age_minutes,
-                    "quality": quality,
-                    "fetched_at": cached.fetched_at,
-                }
-                start_ts = pd.Timestamp(start)
-                start_ts = start_ts.tz_localize("UTC") if start_ts.tzinfo is None else start_ts.tz_convert("UTC")
-                end_ts = pd.Timestamp(end)
-                end_ts = end_ts.tz_localize("UTC") if end_ts.tzinfo is None else end_ts.tz_convert("UTC")
-                result = cached.df.loc[(cached.df["timestamp"] >= start_ts) & (cached.df["timestamp"] <= end_ts)].reset_index(drop=True)
-                if not result.empty:
+        # A stale cache is deliberately a *last* fallback. Do not use it for
+        # malformed/non-existent symbols; this prevents old data from hiding
+        # a permanent provider error. Rate limits, outages and open circuits
+        # are safe candidates for a labelled reference/chart fallback.
+        transient_failure = any(
+            RetryPolicy.is_transient(RuntimeError(error))
+            or "circuit breaker open" in error.casefold()
+            for error in errors
+        )
+        if self.stale_cache_fallback_enabled and transient_failure:
+            stale_cached = self.cache.load(symbol, timeframe, self._stale_cache_max_age(timeframe))
+            if stale_cached is not None:
+                result = self._cached_result(
+                    stale_cached,
+                    symbol=symbol,
+                    timeframe=timeframe,
+                    start=start,
+                    end=end,
+                    stale_cache_used=True,
+                )
+                if result is not None:
+                    logger.info(
+                        "Son doğrulanmış cache kullanıldı symbol=%s tf=%s age=%.1fdk",
+                        symbol,
+                        timeframe,
+                        stale_cached.age_minutes,
+                    )
                     return result
 
         detail = " | ".join(errors) if errors else "provider ve cache kullanılamıyor"
@@ -319,7 +407,7 @@ class ReliableMarketDataProvider(BaseMarketDataProvider):
         df = self.get_ohlcv(symbol, "1d", end - timedelta(days=90), end)
         row = df.iloc[-1]
         meta = self.metadata_for(symbol, "1d") or {}
-        return {"symbol": symbol.upper(), "price": float(row["close"]), "timestamp": row["timestamp"].to_pydatetime(), "provider": meta.get("provider", self.name), "fallback_used": meta.get("fallback_used", False), "cache_used": meta.get("cache_used", False)}
+        return {"symbol": symbol.upper(), "price": float(row["close"]), "timestamp": row["timestamp"].to_pydatetime(), "provider": meta.get("provider", self.name), "fallback_used": meta.get("fallback_used", False), "cache_used": meta.get("cache_used", False), "stale_cache_used": meta.get("stale_cache_used", False)}
 
     def get_index_data(self, index_symbol: str, timeframe: str) -> pd.DataFrame:
         end = datetime.now(timezone.utc)
@@ -345,7 +433,8 @@ class ReliableMarketDataProvider(BaseMarketDataProvider):
         meta = self.metadata_for(symbol, timeframe)
         if meta and isinstance(meta.get("quality"), DataQualityResult):
             quality = meta["quality"]
-            return DataFreshness(symbol, timeframe, quality.last_bar_time, quality.usable_for_analysis, self._cache_max_age(timeframe), meta.get("provider", self.name))
+            is_fresh = quality.usable_for_analysis and not bool(meta.get("stale_cache_used"))
+            return DataFreshness(symbol, timeframe, quality.last_bar_time, is_fresh, self._cache_max_age(timeframe), meta.get("provider", self.name))
         return self.primary.get_data_freshness(symbol, timeframe)
 
     def health_check(self) -> dict:

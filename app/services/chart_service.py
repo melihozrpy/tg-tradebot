@@ -32,7 +32,6 @@ from app.services.vivid_chart_style import (
     add_banner,
     add_price_card,
     add_score_bar,
-    add_volume_panel,
     add_watermark,
     draw_zone_rail,
     save_terminal_png,
@@ -847,7 +846,6 @@ def _render_professional_daily_chart(
         current_price=current_price,
         decimals=decimals,
     )
-    add_volume_panel(fig, data, left=0.055, bottom=0.125, width=0.60, height=0.085)
     _draw_indicator_ribbon(ax_price, state, detailed=detailed)
     ax_price.set_ylabel("Fiyat", fontsize=8, fontfamily=SANS_FONT)
     handles, labels = ax_price.get_legend_handles_labels()
@@ -1111,7 +1109,6 @@ def generate_bist_trade_plan_chart(df: pd.DataFrame, plan) -> str:
         current_price=float(plan.current_price),
         decimals=2,
     )
-    add_volume_panel(fig, data, left=0.055, bottom=0.125, width=0.60, height=0.085)
     ax.yaxis.set_major_formatter(FuncFormatter(lambda value, _pos: f"{value:.2f}"))
     ax.text(
         .012, .982,

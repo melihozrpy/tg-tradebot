@@ -255,7 +255,7 @@ def _data_quality_line(signal) -> str:
         return "Veri kalitesi: ölçülmedi"
     source_note = ""
     if getattr(quality, "cache_used", False):
-        source_note = " — cache"
+        source_note = " — gecikmeli cache" if getattr(quality, "stale_cache_used", False) else " — cache"
     elif getattr(quality, "fallback_used", False):
         source_note = " — fallback"
     status = getattr(getattr(quality, "status", None), "value", getattr(quality, "status", "-"))

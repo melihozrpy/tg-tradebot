@@ -47,7 +47,11 @@ from app.risk.position_sizing import InvalidStopError, calculate_position_size
 from app.services.alert_service import VALID_ALERT_TYPES, InvalidAlertError, create_alert, delete_alert, list_alerts
 from app.services.analysis_service_v3 import AnalysisUnavailableErrorV3, run_symbol_analysis_v3
 from app.services.current_price_service import resolve_current_price, resolve_portfolio_prices
-from app.services.data_quality_service import assess_and_persist_quality, format_data_quality_status
+from app.services.data_quality_service import (
+    assess_and_persist_quality,
+    format_data_quality_status,
+    provider_fetch_metadata,
+)
 from app.services.health_service import collect_health
 from app.services.enhanced_alert_service import (
     ALERT_LABELS,
@@ -421,8 +425,13 @@ async def _send_analysis_chart(
                 targets=[outcome_signal.target_1, outcome_signal.target_2, outcome_signal.target_3],
             )
 
+        chart_caption = (
+            f"{symbol} • son doğrulanmış veri grafiği (gecikmeli)"
+            if data_quality is not None and getattr(data_quality, "stale_cache_used", False)
+            else f"{symbol} profesyonel grafiği"
+        )
         with open(chart_path, "rb") as f:
-            await update.message.reply_photo(photo=f, caption=f"{symbol} profesyonel grafiği")
+            await update.message.reply_photo(photo=f, caption=chart_caption)
     except Exception as exc:  # noqa: BLE001 - grafik gonderilemese de analiz metni ONEMLI, akis durmamali
         logger.warning("Otomatik grafik gonderilemedi symbol=%s: %s", symbol, exc)
     finally:
@@ -2315,8 +2324,10 @@ async def cmd_grafik(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             targets=[outcome.signal.target_1, outcome.signal.target_2, outcome.signal.target_3],
             chart_mode="standard",
         )
+        metadata = provider_fetch_metadata(provider, symbol, timeframe)
+        cache_note = " • son doğrulanmış veri" if metadata.get("stale_cache_used") else ""
         with open(chart_path, "rb") as f:
-            await update.message.reply_photo(photo=f, caption=f"{symbol} fiyat grafiği ({period})")
+            await update.message.reply_photo(photo=f, caption=f"{symbol} fiyat grafiği ({period}){cache_note}")
     except AnalysisUnavailableErrorV3 as exc:
         logger.warning("Standart grafik üretilemedi symbol=%s: %s", symbol, exc)
         await update.message.reply_text(sanitize_provider_error(exc))

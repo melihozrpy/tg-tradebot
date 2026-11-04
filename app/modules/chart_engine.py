@@ -26,7 +26,6 @@ from app.services.vivid_chart_style import (
     add_checklist as add_vivid_checklist,
     add_price_card,
     add_score_bar,
-    add_volume_panel,
     add_watermark,
     draw_zone_rail,
     save_terminal_png,
@@ -369,7 +368,6 @@ def render_report_chart(
     for spine in ax.spines.values():
         spine.set_color(GRID)
     draw_zone_rail(ax, ax_rail, zone_rail_items, current_price=current, decimals=decimals)
-    add_volume_panel(fig, data, left=0.055, bottom=0.145, width=0.60, height=0.075)
 
     title_date = spec.date_label or datetime.now().strftime("%d.%m.%Y")
     fig.text(

@@ -67,6 +67,9 @@ def build_market_data_provider(settings: Settings) -> BaseMarketDataProvider:
             circuit_recovery_seconds=settings.provider_circuit_recovery_seconds,
             cache_max_age_daily_minutes=(settings.data_cache_max_age_daily_minutes if settings.cache_enabled else 0),
             cache_max_age_intraday_minutes=(settings.data_cache_max_age_intraday_minutes if settings.cache_enabled else 0),
+            stale_cache_fallback_enabled=(settings.data_cache_stale_fallback_enabled and settings.cache_enabled),
+            stale_cache_grace_daily_minutes=settings.data_cache_stale_grace_daily_minutes,
+            stale_cache_grace_intraday_minutes=settings.data_cache_stale_grace_intraday_minutes,
             price_mode=technical_price_mode,
         )
     raise ValueError(

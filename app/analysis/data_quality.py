@@ -48,6 +48,11 @@ class DataQualityResult:
     provider: str = "unknown"
     fallback_used: bool = False
     cache_used: bool = False
+    # ``True`` means the normal cache TTL elapsed and the provider was
+    # temporarily unavailable, so a bounded last-known-good copy was used.
+    # It remains usable for a labelled chart/reference analysis, but must
+    # never be represented as a live quote.
+    stale_cache_used: bool = False
     cache_age_minutes: Optional[float] = None
     usable_for_analysis: bool = True
     normalized_symbol: Optional[str] = None
@@ -78,6 +83,7 @@ class DataQualityResult:
             "provider": self.provider,
             "fallback_used": self.fallback_used,
             "cache_used": self.cache_used,
+            "stale_cache_used": self.stale_cache_used,
             "cache_age_minutes": self.cache_age_minutes,
             "warnings": list(self.warnings),
             "issues": list(self.issues),
@@ -178,6 +184,7 @@ class DataQualityEngine:
         provider: str = "unknown",
         fallback_used: bool = False,
         cache_used: bool = False,
+        stale_cache_used: bool = False,
         cache_age_minutes: Optional[float] = None,
         price_mode: str = "unadjusted",
         daily_reference: Optional[pd.DataFrame] = None,
@@ -196,6 +203,7 @@ class DataQualityEngine:
                 provider=provider,
                 fallback_used=fallback_used,
                 cache_used=cache_used,
+                stale_cache_used=stale_cache_used,
                 cache_age_minutes=cache_age_minutes,
                 usable_for_analysis=False,
                 normalized_symbol=normalized_symbol,
@@ -213,6 +221,7 @@ class DataQualityEngine:
                 provider=provider,
                 fallback_used=fallback_used,
                 cache_used=cache_used,
+                stale_cache_used=stale_cache_used,
                 cache_age_minutes=cache_age_minutes,
                 usable_for_analysis=False,
                 normalized_symbol=normalized_symbol,
@@ -341,6 +350,11 @@ class DataQualityEngine:
             score = min(score, 45)
         if stale:
             score = min(score, 40)
+        if stale_cache_used:
+            warnings.append(
+                "Canlı kaynak geçici olarak sınırlı; son doğrulanmış yerel veri kullanıldı."
+            )
+            score = min(score, 75)
         score = int(max(0, min(100, score)))
 
         if hard_invalid:
@@ -370,6 +384,7 @@ class DataQualityEngine:
             provider=provider,
             fallback_used=fallback_used,
             cache_used=cache_used,
+            stale_cache_used=stale_cache_used,
             cache_age_minutes=cache_age_minutes,
             usable_for_analysis=usable,
             normalized_symbol=normalized_symbol,

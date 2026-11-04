@@ -85,6 +85,12 @@ class Settings(BaseSettings):
     data_cache_dir: str = Field(default="./data/cache/ohlcv")
     data_cache_max_age_daily_minutes: int = Field(default=720)
     data_cache_max_age_intraday_minutes: int = Field(default=30)
+    # Primary/fallback kaynak geçici olarak sınırlanırsa, yalnız son
+    # doğrulanmış cache bu sınırlı pencerede grafik/referans için kullanılabilir.
+    # Bu veri canlı fiyat veya alarm tetikleyicisi olarak sunulmaz.
+    data_cache_stale_fallback_enabled: bool = Field(default=True)
+    data_cache_stale_grace_daily_minutes: int = Field(default=4320, ge=0, le=43200)
+    data_cache_stale_grace_intraday_minutes: int = Field(default=180, ge=0, le=1440)
     technical_price_mode: str = Field(default="unadjusted")  # unadjusted | adjusted
     # Aşama 5e: geçmiş teknik serinin fiyat düzeltme modu. Eski
     # TECHNICAL_PRICE_MODE alanı geriye uyumluluk için korunur.
