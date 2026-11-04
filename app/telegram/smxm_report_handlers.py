@@ -256,7 +256,7 @@ async def cmd_sabah_raporu(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             render_report_chart,
             frame,
             spec,
-            smart_money=primary.smart_money,
+            smart_money=None,
             output_dir=settings.report_chart_output_dir,
             dpi=settings.chart_dpi,
         )

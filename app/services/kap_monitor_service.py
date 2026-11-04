@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
 from urllib.robotparser import RobotFileParser
 
@@ -120,6 +120,35 @@ def claim_new_impacting_headlines(
             continue
     db.commit()
     return tuple(output)
+
+
+def kap_push_is_quiet(db: Session, *, quiet_minutes: int, now: datetime | None = None) -> bool:
+    """Return true when a recent KAP push already used the notification slot."""
+
+    latest = (
+        db.query(KapMonitorEvent)
+        .filter(KapMonitorEvent.delivered_at.is_not(None))
+        .order_by(KapMonitorEvent.delivered_at.desc())
+        .first()
+    )
+    if latest is None or latest.delivered_at is None:
+        return False
+    stamp = latest.delivered_at
+    stamp = stamp.replace(tzinfo=timezone.utc) if stamp.tzinfo is None else stamp.astimezone(timezone.utc)
+    reference = now or datetime.now(timezone.utc)
+    return stamp > reference - timedelta(minutes=max(1, int(quiet_minutes)))
+
+
+def mark_kap_headlines_delivered(db: Session, items: tuple[KapHeadline, ...] | list[KapHeadline]) -> None:
+    """Mark only actually-sent headlines so quiet windows remain auditable."""
+
+    delivered_at = datetime.now(timezone.utc)
+    for item in items:
+        content_hash = hashlib.sha256(f"{item.source_url}|{item.title}".encode("utf-8")).hexdigest()
+        row = db.query(KapMonitorEvent).filter(KapMonitorEvent.content_hash == content_hash).first()
+        if row is not None:
+            row.delivered_at = delivered_at
+    db.commit()
 
 
 def format_kap_alert(item: KapHeadline) -> str:

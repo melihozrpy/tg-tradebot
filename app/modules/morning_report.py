@@ -646,34 +646,6 @@ def build_morning_chart_spec(report: MorningReport, symbol: str | None = None) -
     item = next((entry for entry in report.instruments if entry.symbol == requested), None)
     if item is None:
         raise ValueError(f"{requested} raporda bulunamadı; grafik başka hisseyle üretilmedi.")
-    plan = _pick_direction_plan(item.trade_plan, item.predicted_direction)
-    quality_zone = item.trade_plan.quality_zone
-    if quality_zone is not None:
-        quality_targets = tuple(
-            value for value in (quality_zone.target_1, quality_zone.target_2) if value is not None
-        )
-        quality_rr = max(
-            (value for value in (quality_zone.rr_1, quality_zone.rr_2) if value is not None),
-            default=0.0,
-        )
-        return ReportChartSpec(
-            instrument=item.symbol,
-            timeframe="1D",
-            report_kind="morning",
-            direction=quality_zone.direction,
-            sentiment_score=report.confidence.score,
-            checklist=tuple(ChecklistVisual(entry.label, entry.passed) for entry in item.checklist),
-            entry_low=quality_zone.zone_low,
-            entry_high=quality_zone.zone_high,
-            entry_price=quality_zone.entry,
-            stop=quality_zone.invalidation,
-            targets=quality_targets,
-            rr=quality_rr,
-            liquidity_levels=item.sweep_levels,
-            date_label=report.report_date.strftime("%d.%m.%Y"),
-        )
-    rr = next((value for value in plan.risk_multiples if value >= 2), plan.risk_multiples[-1])
-    target_count = max(1, min(len(plan.targets), plan.risk_multiples.index(rr) + 1))
     return ReportChartSpec(
         instrument=item.symbol,
         timeframe="1D",
@@ -681,12 +653,6 @@ def build_morning_chart_spec(report: MorningReport, symbol: str | None = None) -
         direction=item.predicted_direction,
         sentiment_score=report.confidence.score,
         checklist=tuple(ChecklistVisual(entry.label, entry.passed) for entry in item.checklist),
-        entry_low=plan.entry_low,
-        entry_high=plan.entry_high,
-        stop=plan.stop_standard,
-        targets=plan.targets[:target_count],
-        rr=rr,
-        liquidity_levels=item.sweep_levels,
         date_label=report.report_date.strftime("%d.%m.%Y"),
     )
 
@@ -695,42 +661,28 @@ def format_morning_report(report: MorningReport) -> str:
     direction_map = {"bullish": "YUKARI", "bearish": "AŞAĞI", "range": "YATAY"}
     item = report.index_analysis
     summary = item.yesterday
-    plan = _pick_direction_plan(item.trade_plan, item.predicted_direction)
-    quality_zone = item.trade_plan.quality_zone
-    lines = [
-        "🌅 MONTANA FİNANS ROBOTU • 09:00 XU100 AÇILIŞ RAPORU",
-        f"📅 {report.report_date:%d.%m.%Y}",
-        "",
-        f"🛡️ Piyasa güveni: {report.confidence.score:.0f}/100 • {report.confidence.label}",
-        f"🧭 Bugünün koşullu yönü: {direction_map.get(item.predicted_direction, item.predicted_direction.upper())}",
-        "",
-        f"📊 Dün: {summary.close:.2f} (%{summary.change_percent:+.2f}) • ATR {summary.atr:.0f} • Yapı {summary.trend}",
-        f"🧩 Checklist: {item.checklist_score}/6 • {item.setup_label}",
-    ]
+    direction = direction_map.get(item.predicted_direction, item.predicted_direction.upper())
     missing = [check.label for check in item.checklist if not check.passed]
+    reason = f"Dünkü yapı {summary.trend}; teknik kontrol listesi {item.checklist_score}/6."
     if missing:
-        lines.append(f"⚠️ Eksik teyit: {', '.join(missing[:2])}")
-    if quality_zone is not None:
-        lines.extend(["", format_quality_zone_scenario(quality_zone, compact=True)])
-    else:
-        lines.extend(
-            [
-                "",
-                f"🎯 {plan.direction} PLANI • kalite {plan.score}/100 • {plan.status}",
-                "• Doğrulanmış OB/FVG yok; güncel fiyattan işlem açılmaz ve yeni bölge beklenir.",
-            ]
-        )
-    breadth = report.breadth
-    if breadth and breadth.available:
-        lines.extend(format_breadth_panel(breadth, report_kind="morning", compact=True))
-    elif breadth is not None:
-        lines.extend(["", "🌐 BIST genişlik paneli bu raporda üretilemedi."])
-    lines.extend(format_report_news_impact(report.news_impact, timezone_name="Europe/Istanbul"))
+        reason += f" İzlenecek teyit: {', '.join(missing[:2])}."
+    lines = [
+        "<b>🌅 MONTANA FİNANS ROBOTU • SABAH PİYASA YÖNÜ</b>",
+        f"<i>{report.report_date:%d.%m.%Y} • XU100 günlük görünüm</i>",
+        "",
+        f"🧭 <b>Bugünün yönü: {direction}</b> • Güven {report.confidence.score:.0f}/100 ({report.confidence.label})",
+        f"📊 Dün: {summary.close:.2f} (%{summary.change_percent:+.2f}) • {summary.trend} yapı",
+        f"🧠 Gün özeti: {reason}",
+        "",
+        "Bugün: İlk 15-30 dakikadaki açılış yapısı ve hacim, bu koşullu görünümü değiştirebilir.",
+    ]
     important = [event for event in report.calendar_events if event.impact in {"high", "medium"}]
     if important:
-        lines.extend(["", "🗓️ TAKVİM"])
-    for event in important[:2]:
+        event = important[0]
         icon = "🔴" if event.impact == "high" else "🟠"
         stamp = event.event_time.strftime("%H:%M") if event.event_time else "--:--"
-        lines.append(f"{icon} {stamp} {event.country} • {event.title[:120]}")
-    return "\n".join(lines)[:4096]
+        lines.append(f"{icon} Takvim: {stamp} {event.country} • {event.title[:100]}")
+    news_lines = format_report_news_impact(report.news_impact, timezone_name="Europe/Istanbul")
+    if news_lines:
+        lines.append(news_lines[-1][:220])
+    return "\n".join(lines)[:1200]

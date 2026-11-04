@@ -532,7 +532,9 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
         except (AttributeError, TypeError, ValueError):
             logger.warning("SCHEDULED_IDEA_PERFORMANCE_TIME geçersiz: %s", settings.scheduled_idea_performance_time)
 
-    if getattr(settings, "kap_monitor_enabled", False):
+    # KAP stays available in the verified report workflow, but live headline
+    # pushes are opt-in so a busy disclosure day cannot flood Telegram.
+    if getattr(settings, "kap_monitor_enabled", False) and getattr(settings, "kap_monitor_push_enabled", False):
         async def _kap_monitor_job() -> None:
             def _claim():
                 from app.models.database import get_session_factory
@@ -559,11 +561,21 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
             if application is None or not headlines:
                 return
             from app.models.database import get_session_factory
-            from app.services.kap_monitor_service import format_kap_alert
+            from app.services.kap_monitor_service import (
+                format_kap_alert,
+                kap_push_is_quiet,
+                mark_kap_headlines_delivered,
+            )
 
             db = get_session_factory()()
             try:
-                for headline in headlines[:8]:
+                quiet_minutes = int(getattr(settings, "kap_monitor_quiet_minutes", 120))
+                if kap_push_is_quiet(db, quiet_minutes=quiet_minutes):
+                    logger.info("KAP başlıkları sessizlik penceresinde; Telegram bildirimi atlandı.")
+                    return
+                maximum = max(1, min(3, int(getattr(settings, "kap_monitor_max_alerts_per_run", 1))))
+                delivered: list = []
+                for headline in headlines[:maximum]:
                     for chat_id in _scheduled_recipients(
                         db,
                         configured_chat_id=getattr(settings, "kap_monitor_chat_id", None),
@@ -574,8 +586,11 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
                                 text=format_kap_alert(headline),
                                 disable_web_page_preview=True,
                             )
+                            delivered.append(headline)
                         except Exception as exc:  # noqa: BLE001
                             logger.warning("KAP başlık bildirimi gönderilemedi chat=%s: %s", chat_id, exc)
+                if delivered:
+                    mark_kap_headlines_delivered(db, delivered)
             finally:
                 db.close()
 
@@ -651,7 +666,9 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
                 chart_path = render_report_chart(
                     frame,
                     spec,
-                    smart_money=primary.smart_money,
+                    # Sabah raporu işlem planı değil, tek bakışta endeks yönü
+                    # görünümüdür; OB/FVG/entry katmanları eklenmez.
+                    smart_money=None if kind == "morning" else primary.smart_money,
                     output_dir=settings.report_chart_output_dir,
                     dpi=settings.chart_dpi,
                 )

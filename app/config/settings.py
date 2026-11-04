@@ -290,10 +290,15 @@ class Settings(BaseSettings):
     # Midas sayfası yalnız robots.txt izin verirse başlık düzeyinde okunur;
     # ham haber metni kopyalanmaz ve Midas, resmî KAP yerine geçmez.
     kap_monitor_enabled: bool = Field(default=True)
+    # KAP akışı sürekli tek tek mesaj üretmez. Varsayılan kapalıdır; açılırsa
+    # yalnız kritik başlıklar, sessizlik penceresi ve tekli teslimle gider.
+    kap_monitor_push_enabled: bool = Field(default=False)
     kap_monitor_interval_minutes: int = Field(default=5, ge=5, le=60)
     kap_monitor_url: str = Field(default="https://www.getmidas.com/kap-haberleri/")
     kap_monitor_chat_id: int | None = Field(default=None)
-    kap_monitor_minimum_impact_score: int = Field(default=20, ge=1, le=100)
+    kap_monitor_minimum_impact_score: int = Field(default=75, ge=1, le=100)
+    kap_monitor_max_alerts_per_run: int = Field(default=1, ge=1, le=3)
+    kap_monitor_quiet_minutes: int = Field(default=120, ge=15, le=1440)
 
     # ---- VIOP egitim ve spot-dayanakli senaryo modulu ----
     # Bu liste canli sozlesme/veri akisi degil, resmi kaynaktan tarihli izleme
