@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
+from telegram.constants import ParseMode
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler
 
 from app.config.settings import get_settings
@@ -706,6 +707,7 @@ def _build_evening_scan_scheduler(settings, application: Application | None = No
                         await application.bot.send_message(
                             chat_id=user.telegram_user_id,
                             text=text,
+                            parse_mode=ParseMode.HTML if kind == "morning" else None,
                             disable_web_page_preview=True,
                         )
                     except Exception as exc:  # noqa: BLE001 - diğer alıcılara devam

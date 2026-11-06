@@ -5,6 +5,7 @@ import logging
 import re
 from dataclasses import asdict, dataclass, replace
 from datetime import date, datetime, time, timedelta, timezone
+from html import escape
 from typing import Sequence
 from zoneinfo import ZoneInfo
 
@@ -670,9 +671,9 @@ def format_morning_report(report: MorningReport) -> str:
         "<b>🌅 MONTANA FİNANS ROBOTU • SABAH PİYASA YÖNÜ</b>",
         f"<i>{report.report_date:%d.%m.%Y} • XU100 günlük görünüm</i>",
         "",
-        f"🧭 <b>Bugünün yönü: {direction}</b> • Güven {report.confidence.score:.0f}/100 ({report.confidence.label})",
+        f"🧭 <b>Bugünün yönü: {escape(direction)}</b> • Güven {report.confidence.score:.0f}/100 ({escape(str(report.confidence.label))})",
         f"📊 Dün: {summary.close:.2f} (%{summary.change_percent:+.2f}) • {summary.trend} yapı",
-        f"🧠 Gün özeti: {reason}",
+        f"🧠 Gün özeti: {escape(reason)}",
         "",
         "Bugün: İlk 15-30 dakikadaki açılış yapısı ve hacim, bu koşullu görünümü değiştirebilir.",
     ]
@@ -681,8 +682,8 @@ def format_morning_report(report: MorningReport) -> str:
         event = important[0]
         icon = "🔴" if event.impact == "high" else "🟠"
         stamp = event.event_time.strftime("%H:%M") if event.event_time else "--:--"
-        lines.append(f"{icon} Takvim: {stamp} {event.country} • {event.title[:100]}")
+        lines.append(f"{icon} Takvim: {stamp} {escape(event.country)} • {escape(event.title[:100])}")
     news_lines = format_report_news_impact(report.news_impact, timezone_name="Europe/Istanbul")
     if news_lines:
-        lines.append(news_lines[-1][:220])
+        lines.append(escape(news_lines[-1][:220]))
     return "\n".join(lines)[:1200]

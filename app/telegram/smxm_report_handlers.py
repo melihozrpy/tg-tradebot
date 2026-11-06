@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 
 from app.config.instruments import resolve_report_instruments, universe_symbols
@@ -262,7 +263,10 @@ async def cmd_sabah_raporu(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         )
         with open(chart_path, "rb") as image:
             await update.message.reply_photo(image, caption=f"🌅 {primary.symbol} • 09:00 SMXM görünümü")
-        await update.message.reply_text(format_morning_report(report))
+        await update.message.reply_text(
+            format_morning_report(report),
+            parse_mode=ParseMode.HTML,
+        )
         await wait.delete()
     except Exception as exc:  # noqa: BLE001
         await wait.edit_text(f"Sabah raporu üretilemedi: {type(exc).__name__}. /veri_durumu ile kaynağı kontrol et.")
